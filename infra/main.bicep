@@ -4,7 +4,7 @@ param envName string = 'dev'
 @description('Primary location for resources')
 param location string = resourceGroup().location
 
-@description('Location for monitoring resources (Log Analytics + App Insights). Must support Microsoft.OperationalInsights/workspaces.')
+@description('Location for monitoring resources (Log Analytics + App Insights).')
 param monitoringLocation string = 'westeurope'
 
 @description('Prefix for resource names')
@@ -28,11 +28,11 @@ var suffix = toLower('${uniqueString(subscription().id, rgName, envName)}')
 var baseName = toLower('${namePrefix}-${envName}-${suffix}')
 
 var acrName = take(replace('${namePrefix}${envName}${suffix}', '-', ''), 45)
-var saName = take(replace('${namePrefix}${envName}${suffix}sa', '-', ''), 24)
-var sbName = take('${baseName}-sb', 50)
-var kvName = take('${baseName}-kv', 24)
-var laName = take('${baseName}-la', 63)
-var aiName = take('${baseName}-ai', 63)
+var saName  = take(replace('${namePrefix}${envName}${suffix}sa', '-', ''), 24)
+var sbName  = take('${baseName}-sb', 50)
+var kvName  = take('${baseName}-kv', 24)
+var laName  = take('${baseName}-la', 63)
+var aiName  = take('${baseName}-ai', 63)
 var caEnvName = take('${baseName}-cae', 32)
 
 var pgServerName = take('${baseName}-pg', 63)
@@ -41,15 +41,13 @@ var pgDbName = 'opal'
 var amlName = take('${baseName}-aml', 32)
 
 //
-// Monitoring (MUST be in a region that supports OperationalInsights/workspaces)
+// Monitoring (Log Analytics + App Insights) in monitoringLocation
 //
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: laName
   location: monitoringLocation
   properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
+    sku: { name: 'PerGB2018' }
     retentionInDays: 30
   }
 }
@@ -65,23 +63,19 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 //
-// Key Vault
+// Key Vault (RBAC enabled)
 //
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: kvName
   location: location
   properties: {
     tenantId: subscription().tenantId
-    sku: {
-      family: 'A'
-      name: 'standard'
-    }
+    sku: { family: 'A', name: 'standard' }
     accessPolicies: []
     enabledForDeployment: false
     enabledForDiskEncryption: false
     enabledForTemplateDeployment: false
     enableRbacAuthorization: true
-    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -91,37 +85,28 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: saName
   location: location
-  sku: {
-    name: storageSku
-  }
+  sku: { name: storageSku }
   kind: 'StorageV2'
   properties: {
     allowBlobPublicAccess: false
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
-    publicNetworkAccess: 'Enabled'
   }
 }
 
 resource rawContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   name: '${storage.name}/default/raw'
-  properties: {
-    publicAccess: 'None'
-  }
+  properties: { publicAccess: 'None' }
 }
 
 resource outputsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   name: '${storage.name}/default/outputs'
-  properties: {
-    publicAccess: 'None'
-  }
+  properties: { publicAccess: 'None' }
 }
 
 resource exportsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
   name: '${storage.name}/default/exports'
-  properties: {
-    publicAccess: 'None'
-  }
+  properties: { publicAccess: 'None' }
 }
 
 //
@@ -130,13 +115,8 @@ resource exportsContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: sbName
   location: location
-  sku: {
-    name: 'Standard'
-    tier: 'Standard'
-  }
-  properties: {
-    publicNetworkAccess: 'Enabled'
-  }
+  sku: { name: 'Standard', tier: 'Standard' }
+  properties: {}
 }
 
 resource queueJobs 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
@@ -165,12 +145,9 @@ resource queueExports 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
   location: location
-  sku: {
-    name: 'Standard'
-  }
+  sku: { name: 'Standard' }
   properties: {
     adminUserEnabled: false
-    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -188,6 +165,10 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: listKeys(logAnalytics.id, logAnalytics.apiVersion).primarySharedKey
       }
     }
+
+    // IMPORTANT:
+    // Dedicated workload profiles require minimumCount/maximumCount.
+    // Without these, ARM validation fails with WorkloadProfileMinimumCountInvalid.
     workloadProfiles: [
       {
         name: 'consumption'
@@ -196,6 +177,8 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
       {
         name: 'dedicated'
         workloadProfileType: 'D4'
+        minimumCount: 0
+        maximumCount: 1
       }
     ]
   }
@@ -215,19 +198,12 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview'
     administratorLogin: postgresAdminUser
     administratorLoginPassword: postgresAdminPassword
     version: '15'
-    storage: {
-      storageSizeGB: 64
-    }
+    storage: { storageSizeGB: 64 }
     backup: {
       backupRetentionDays: 7
       geoRedundantBackup: 'Disabled'
     }
-    network: {
-      publicNetworkAccess: 'Enabled'
-    }
-    highAvailability: {
-      mode: 'Disabled'
-    }
+    highAvailability: { mode: 'Disabled' }
   }
 }
 
@@ -242,12 +218,9 @@ resource postgresDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-03
 resource aml 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   name: amlName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
+  identity: { type: 'SystemAssigned' }
   properties: {
     friendlyName: amlName
-    publicNetworkAccess: 'Enabled'
   }
 }
 
