@@ -9,7 +9,7 @@ permissions:
 
 env:
   ENV_NAME: dev
-  LOCATION: belgiumcentral
+  LOCATION: westeurope
   MONITORING_LOCATION: westeurope
   RG_NAME: opal-dev-rg
 

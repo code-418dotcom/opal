@@ -9,7 +9,7 @@ permissions:
 
 env:
   ENV_NAME: dev
-  LOCATION: belgiumcentral
+  LOCATION: westeurope
   RG_NAME: opal-dev-rg
   IMAGE_TAG: ${{ github.sha }}
 
@@ -31,7 +31,7 @@ jobs:
       - name: Load infra outputs
         run: |
           if [ ! -f infra_outputs.json ]; then
-            echo "infra_outputs.json not found. Run infra-deploy-dev first."
+            echo "infra_outputs.json not found. Run Deploy Infra (dev) first."
             exit 1
           fi
 
@@ -93,7 +93,6 @@ jobs:
               --registry-server "${ACR_LOGIN}" \
               --ingress external \
               --target-port 8080 \
-              --workload-profile-name consumption \
               --min-replicas 1 \
               --max-replicas 3
           done
