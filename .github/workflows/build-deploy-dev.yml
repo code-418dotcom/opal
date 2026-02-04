@@ -38,14 +38,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "=== Discovering resources in RG: ${RG_NAME} ==="
-
           ACR_NAME=$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv)
           if [ -z "${ACR_NAME}" ]; then
             echo "ERROR: No Container Registry found in RG ${RG_NAME}. Run Deploy Infra (dev) first."
             exit 1
           fi
           ACR_LOGIN=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "loginServer" -o tsv)
+          ACR_ID=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "id" -o tsv)
 
           STORAGE=$(az storage account list -g "${RG_NAME}" --query "[0].name" -o tsv)
           if [ -z "${STORAGE}" ]; then
@@ -65,12 +64,6 @@ jobs:
             exit 1
           fi
 
-          AML=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.MachineLearningServices/workspaces" --query "[0].name" -o tsv)
-          if [ -z "${AML}" ]; then
-            echo "ERROR: No Azure ML workspace found in RG ${RG_NAME}."
-            exit 1
-          fi
-
           PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[?contains(name,'-pg-ne')].name | [0]" -o tsv)
           if [ -z "${PG_SERVER}" ]; then
             PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[0].name" -o tsv)
@@ -80,23 +73,15 @@ jobs:
             exit 1
           fi
 
-          echo "ACR_NAME=${ACR_NAME}"
-          echo "ACR_LOGIN=${ACR_LOGIN}"
-          echo "STORAGE=${STORAGE}"
-          echo "SB=${SB}"
-          echo "CAE=${CAE}"
-          echo "AML=${AML}"
-          echo "PG_SERVER=${PG_SERVER}"
-
           echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_ENV
           echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
+          echo "ACR_ID=${ACR_ID}" >> $GITHUB_ENV
           echo "STORAGE=${STORAGE}" >> $GITHUB_ENV
           echo "SB=${SB}" >> $GITHUB_ENV
           echo "CAE=${CAE}" >> $GITHUB_ENV
-          echo "AML=${AML}" >> $GITHUB_ENV
           echo "PG_SERVER=${PG_SERVER}" >> $GITHUB_ENV
 
-      - name: Login to ACR
+      - name: Login to ACR (for docker push)
         run: |
           set -euo pipefail
           az acr login --name "${ACR_NAME}"
@@ -130,7 +115,7 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile . --push
 
-      - name: Create/Update Container Apps (correct env var flags + safe quoting)
+      - name: Create/Update Container Apps with managed identity + AcrPull
         run: |
           set -euo pipefail
 
@@ -153,35 +138,37 @@ jobs:
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
               echo "Updating ${NAME}..."
-              if [ "${INGRESS}" = "none" ]; then
-                az containerapp update -g "${RG_NAME}" -n "${NAME}" \
-                  --image "${IMAGE}" \
-                  --set-env-vars "${ENV_VARS[@]}"
-              else
-                az containerapp update -g "${RG_NAME}" -n "${NAME}" \
-                  --image "${IMAGE}" \
-                  --set-env-vars "${ENV_VARS[@]}" \
-                  --ingress "${INGRESS}" --target-port "${PORT}"
-              fi
+              az containerapp update -g "${RG_NAME}" -n "${NAME}" \
+                --image "${IMAGE}" \
+                --set-env-vars "${ENV_VARS[@]}" \
+                --registry-server "${ACR_LOGIN}" \
+                --registry-identity system \
+                $( [ "${INGRESS}" = "none" ] && echo "" || echo "--ingress ${INGRESS} --target-port ${PORT}" )
             else
               echo "Creating ${NAME}..."
-              if [ "${INGRESS}" = "none" ]; then
-                az containerapp create -g "${RG_NAME}" -n "${NAME}" \
-                  --environment "${CAE}" \
-                  --image "${IMAGE}" \
-                  --registry-server "${ACR_LOGIN}" \
-                  --min-replicas 1 --max-replicas 3 \
-                  --env-vars "${ENV_VARS[@]}"
-              else
-                az containerapp create -g "${RG_NAME}" -n "${NAME}" \
-                  --environment "${CAE}" \
-                  --image "${IMAGE}" \
-                  --registry-server "${ACR_LOGIN}" \
-                  --ingress "${INGRESS}" --target-port "${PORT}" \
-                  --min-replicas 1 --max-replicas 3 \
-                  --env-vars "${ENV_VARS[@]}"
-              fi
+              az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                --environment "${CAE}" \
+                --image "${IMAGE}" \
+                --registry-server "${ACR_LOGIN}" \
+                --registry-identity system \
+                --min-replicas 1 --max-replicas 3 \
+                --env-vars "${ENV_VARS[@]}" \
+                $( [ "${INGRESS}" = "none" ] && echo "" || echo "--ingress ${INGRESS} --target-port ${PORT}" )
             fi
+
+            # After create/update, ensure the system-assigned identity has AcrPull on the ACR
+            PRINCIPAL_ID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            if [ -z "${PRINCIPAL_ID}" ]; then
+              echo "ERROR: Could not read system-assigned identity principalId for ${NAME}"
+              exit 1
+            fi
+
+            # Role assignment is idempotent-ish: create may fail if exists; we ignore that.
+            az role assignment create \
+              --assignee-object-id "${PRINCIPAL_ID}" \
+              --assignee-principal-type ServicePrincipal \
+              --role "AcrPull" \
+              --scope "${ACR_ID}" 2>/dev/null || true
           }
 
           ensure_app "opal-web-api-${ENV_NAME}"          "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"          "external" 8080
