@@ -10,6 +10,9 @@ param monitoringLocation string = location
 @description('Location for Postgres Flexible Server (offer restrictions may apply per region).')
 param postgresLocation string = 'northeurope'
 
+@description('Optional suffix for Postgres server name (use to avoid conflicts when moving regions). Example: "ne".')
+param postgresNameSuffix string = 'ne'
+
 @description('Prefix for resource names')
 param namePrefix string = 'opal'
 
@@ -35,23 +38,21 @@ var baseName = toLower('${namePrefix}-${envName}-${suffix}')
 
 var acrName = take(replace('${namePrefix}${envName}${suffix}', '-', ''), 45)
 var saName  = take(replace('${namePrefix}${envName}${suffix}sa', '-', ''), 24)
-
-// IMPORTANT: Service Bus namespace cannot end with '-sb' (reserved). Use '-bus' instead.
 var sbName  = take('${baseName}-bus', 50)
-
 var kvName  = take('${baseName}-kv', 24)
 var laName  = take('${baseName}-la', 63)
 var aiName  = take('${baseName}-ai', 63)
 var caEnvName = take('${baseName}-cae', 32)
 
-var pgServerName = take('${baseName}-pg', 63)
-var pgDbName = 'opal'
+// IMPORTANT: if you already created a Postgres server with the original name,
+// you cannot recreate it in another region. Append a suffix.
+var pgServerName = postgresNameSuffix == ''
+  ? take('${baseName}-pg', 63)
+  : take('${baseName}-pg-${postgresNameSuffix}', 63)
 
+var pgDbName = 'opal'
 var amlName = take('${baseName}-aml', 32)
 
-//
-// Monitoring
-//
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: laName
   location: monitoringLocation
@@ -71,9 +72,6 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-//
-// Key Vault (RBAC enabled)
-//
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: kvName
   location: location
@@ -81,16 +79,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     tenantId: subscription().tenantId
     sku: { family: 'A', name: 'standard' }
     accessPolicies: []
-    enabledForDeployment: false
-    enabledForDiskEncryption: false
-    enabledForTemplateDeployment: false
     enableRbacAuthorization: true
   }
 }
 
-//
-// Storage
-//
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: saName
   location: location
@@ -118,9 +110,6 @@ resource exportsContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
   properties: { publicAccess: 'None' }
 }
 
-//
-// Service Bus (namespace name uses -bus, not -sb)
-//
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: sbName
   location: location
@@ -148,9 +137,6 @@ resource queueExports 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
   }
 }
 
-//
-// ACR
-//
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
   location: location
@@ -160,9 +146,6 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
 }
 
-//
-// Container Apps Environment
-//
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: caEnvName
   location: location
@@ -175,23 +158,12 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
       }
     }
     workloadProfiles: [
-      {
-        name: 'consumption'
-        workloadProfileType: 'Consumption'
-      }
-      {
-        name: 'dedicated'
-        workloadProfileType: 'D4'
-        minimumCount: 0
-        maximumCount: 1
-      }
+      { name: 'consumption', workloadProfileType: 'Consumption' }
+      { name: 'dedicated', workloadProfileType: 'D4', minimumCount: 0, maximumCount: 1 }
     ]
   }
 }
 
-//
-// Postgres Flexible Server (deploy to postgresLocation)
-//
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview' = {
   name: pgServerName
   location: postgresLocation
@@ -204,10 +176,7 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview'
     administratorLoginPassword: postgresAdminPassword
     version: '15'
     storage: { storageSizeGB: 64 }
-    backup: {
-      backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
-    }
+    backup: { backupRetentionDays: 7, geoRedundantBackup: 'Disabled' }
     highAvailability: { mode: 'Disabled' }
   }
 }
@@ -217,23 +186,16 @@ resource postgresDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-03
   properties: {}
 }
 
-//
-// Azure ML Workspace (explicit dependent resources to avoid "Missing dependent resources in workspace json")
-// NOTE: API versions vary; this pattern is robust across many subscriptions.
-//
 resource aml 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   name: amlName
   location: location
   identity: { type: 'SystemAssigned' }
   properties: {
     friendlyName: amlName
-
-    // Explicit dependencies
     storageAccount: storage.id
     keyVault: keyVault.id
     applicationInsights: appInsights.id
     containerRegistry: acr.id
-
     publicNetworkAccess: 'Enabled'
   }
 }
@@ -244,10 +206,6 @@ output acrName string = acr.name
 output storageAccountName string = storage.name
 output serviceBusNamespace string = serviceBus.name
 output postgresServerName string = postgres.name
-output keyVaultName string = keyVault.name
-output appInsightsName string = appInsights.name
 output amlWorkspaceName string = aml.name
-output monitoringLocationUsed string = monitoringLocation
 output postgresLocationUsed string = postgresLocation
-output postgresSkuUsed string = postgresSkuName
-output postgresTierUsed string = postgresTier
+output postgresNameSuffixUsed string = postgresNameSuffix
