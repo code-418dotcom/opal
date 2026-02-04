@@ -1,20 +1,20 @@
 FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY ../shared /app/shared
-COPY ./pyproject.toml /app/pyproject.toml
-COPY ./billing_service /app/billing_service
+COPY src/shared /app/shared
+COPY src/billing_service/requirements.txt /app/requirements.txt
+COPY src/billing_service/billing_service /app/billing_service
 
 RUN pip install --no-cache-dir -U pip \
- && pip install --no-cache-dir /app/shared \
- && pip install --no-cache-dir /app
+    && pip install --no-cache-dir -r /app/requirements.txt
 
-ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
-
 CMD ["uvicorn", "billing_service.main:app", "--host", "0.0.0.0", "--port", "8080"]
