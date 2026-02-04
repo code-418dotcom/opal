@@ -101,30 +101,35 @@ jobs:
           set -euo pipefail
           az acr login --name "${ACR_NAME}"
 
-      - name: Build & push images (linux/amd64)
+      - name: Set up Docker Buildx
         run: |
           set -euo pipefail
           docker buildx create --use
 
+      - name: Build & push images (linux/amd64) using repo root context
+        run: |
+          set -euo pipefail
+
+          # IMPORTANT: build context is repo root (.), so Dockerfiles can COPY shared/ etc.
           docker buildx build --platform linux/amd64 \
             -t "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
-            -f src/web_api/Dockerfile src/web_api --push
+            -f src/web_api/Dockerfile . --push
 
           docker buildx build --platform linux/amd64 \
             -t "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" \
-            -f src/orchestrator/Dockerfile src/orchestrator --push
+            -f src/orchestrator/Dockerfile . --push
 
           docker buildx build --platform linux/amd64 \
             -t "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" \
-            -f src/export_worker/Dockerfile src/export_worker --push
+            -f src/export_worker/Dockerfile . --push
 
           docker buildx build --platform linux/amd64 \
             -t "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" \
-            -f src/billing_service/Dockerfile src/billing_service --push
+            -f src/billing_service/Dockerfile . --push
 
           docker buildx build --platform linux/amd64 \
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
-            -f src/aml_sd_stub/Dockerfile src/aml_sd_stub --push
+            -f src/aml_sd_stub/Dockerfile . --push
 
       - name: Create/Update Container Apps
         run: |
@@ -175,10 +180,10 @@ jobs:
             fi
           }
 
-          ensure_app "opal-web-api-${ENV_NAME}"         "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"         "external" 8080
-          ensure_app "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "external" 8080
-          ensure_app "opal-orchestrator-${ENV_NAME}"    "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"    "internal" 8080
-          ensure_app "opal-export-worker-${ENV_NAME}"   "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"   "internal" 8080
+          ensure_app "opal-web-api-${ENV_NAME}"          "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"          "external" 8080
+          ensure_app "opal-billing-service-${ENV_NAME}"  "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"  "external" 8080
+          ensure_app "opal-orchestrator-${ENV_NAME}"     "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"     "internal" 8080
+          ensure_app "opal-export-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"    "internal" 8080
 
       - name: Print Web API URL
         run: |
