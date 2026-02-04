@@ -98,7 +98,7 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile . --push
 
-      - name: Create/Update Container Apps (private ACR safe, 2-phase create)
+      - name: Create/Update Container Apps (self-healing)
         run: |
           set -euo pipefail
 
@@ -113,7 +113,6 @@ jobs:
             "SERVICEBUS_NAMESPACE=${SB}"
           )
 
-          # Public placeholder image so creation never fails due to ACR auth timing
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
           ensure_identity () {
@@ -148,12 +147,10 @@ jobs:
 
             if [ "${MODE}" = "external" ]; then
               az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
-                --type external \
-                --target-port "${PORT}" >/dev/null
+                --type external --target-port "${PORT}" >/dev/null
             elif [ "${MODE}" = "internal" ]; then
               az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
-                --type internal \
-                --target-port "${PORT}" >/dev/null
+                --type internal --target-port "${PORT}" >/dev/null
             fi
           }
 
@@ -164,8 +161,15 @@ jobs:
             local PORT="$4"
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
-              echo "App exists: ${NAME}"
-            else
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv || true)
+              echo "App exists: ${NAME} (state: ${STATE})"
+              if [ "${STATE}" = "Failed" ]; then
+                echo "App is in Failed state. Deleting ${NAME} so it can be recreated cleanly..."
+                az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes
+              fi
+            fi
+
+            if ! az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
               echo "Creating ${NAME} with placeholder image..."
               az containerapp create -g "${RG_NAME}" -n "${NAME}" \
                 --environment "${CAE}" \
@@ -174,15 +178,11 @@ jobs:
                 --env-vars "${ENV_VARS[@]}" >/dev/null
             fi
 
-            # Ensure identity + ACR permissions BEFORE setting private image
             ensure_identity "${NAME}"
             ensure_acr_pull "${NAME}"
             ensure_registry_binding "${NAME}"
-
-            # Ingress can be configured anytime
             ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
 
-            # Now safe to deploy private image
             echo "Deploying private image for ${NAME}..."
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
