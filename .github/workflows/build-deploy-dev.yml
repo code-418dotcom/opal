@@ -28,35 +28,82 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Load infra outputs
+      - name: Install helper tools (jq + envsubst)
         run: |
-          if [ ! -f infra_outputs.json ]; then
-            echo "infra_outputs.json not found. Run Deploy Infra (dev) first."
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq gettext-base
+
+      - name: Discover infra in Azure (robust)
+        run: |
+          set -euo pipefail
+
+          echo "=== Discovering resources in RG: ${RG_NAME} ==="
+
+          ACR_NAME=$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          if [ -z "${ACR_NAME}" ]; then
+            echo "ERROR: No Container Registry found in RG ${RG_NAME}. Run Deploy Infra (dev) first."
+            exit 1
+          fi
+          ACR_LOGIN=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "loginServer" -o tsv)
+
+          STORAGE=$(az storage account list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          if [ -z "${STORAGE}" ]; then
+            echo "ERROR: No Storage Account found in RG ${RG_NAME}."
             exit 1
           fi
 
-          ACR_NAME=$(jq -r '.acrName.value' infra_outputs.json)
-          ACR_LOGIN=$(jq -r '.acrLoginServer.value' infra_outputs.json)
-          STORAGE=$(jq -r '.storageAccountName.value' infra_outputs.json)
-          SB=$(jq -r '.serviceBusNamespace.value' infra_outputs.json)
-          AML=$(jq -r '.amlWorkspaceName.value' infra_outputs.json)
-          CAE=$(jq -r '.containerAppsEnvironmentName.value' infra_outputs.json)
-          PG_SERVER=$(jq -r '.postgresServerName.value' infra_outputs.json)
+          SB=$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          if [ -z "${SB}" ]; then
+            echo "ERROR: No Service Bus Namespace found in RG ${RG_NAME}."
+            exit 1
+          fi
 
-          echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
-          echo "ACR_LOGIN=$ACR_LOGIN" >> $GITHUB_ENV
-          echo "STORAGE=$STORAGE" >> $GITHUB_ENV
-          echo "SB=$SB" >> $GITHUB_ENV
-          echo "AML=$AML" >> $GITHUB_ENV
-          echo "CAE=$CAE" >> $GITHUB_ENV
-          echo "PG_SERVER=$PG_SERVER" >> $GITHUB_ENV
+          CAE=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          if [ -z "${CAE}" ]; then
+            echo "ERROR: No Container Apps Environment found in RG ${RG_NAME}."
+            exit 1
+          fi
+
+          AML=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.MachineLearningServices/workspaces" --query "[0].name" -o tsv)
+          if [ -z "${AML}" ]; then
+            echo "ERROR: No Azure ML workspace found in RG ${RG_NAME}."
+            exit 1
+          fi
+
+          PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[?contains(name,'-pg-ne')].name | [0]" -o tsv)
+          if [ -z "${PG_SERVER}" ]; then
+            PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[0].name" -o tsv)
+          fi
+          if [ -z "${PG_SERVER}" ]; then
+            echo "ERROR: No Postgres Flexible Server found in RG ${RG_NAME}."
+            exit 1
+          fi
+
+          echo "ACR_NAME=${ACR_NAME}"
+          echo "ACR_LOGIN=${ACR_LOGIN}"
+          echo "STORAGE=${STORAGE}"
+          echo "SB=${SB}"
+          echo "CAE=${CAE}"
+          echo "AML=${AML}"
+          echo "PG_SERVER=${PG_SERVER}"
+
+          echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_ENV
+          echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
+          echo "STORAGE=${STORAGE}" >> $GITHUB_ENV
+          echo "SB=${SB}" >> $GITHUB_ENV
+          echo "CAE=${CAE}" >> $GITHUB_ENV
+          echo "AML=${AML}" >> $GITHUB_ENV
+          echo "PG_SERVER=${PG_SERVER}" >> $GITHUB_ENV
 
       - name: Login to ACR
         run: |
+          set -euo pipefail
           az acr login --name "${ACR_NAME}"
 
       - name: Build & push images (linux/amd64)
         run: |
+          set -euo pipefail
           docker buildx create --use
 
           docker buildx build --platform linux/amd64 \
@@ -79,133 +126,63 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile src/aml_sd_stub --push
 
-      - name: Ensure Container Apps exist
+      - name: Create/Update Container Apps
         run: |
-          for APP in web-api orchestrator export-worker billing-service; do
-            az containerapp show \
-              --resource-group "${RG_NAME}" \
-              --name "opal-${APP}-${ENV_NAME}" >/dev/null 2>&1 || \
-            az containerapp create \
-              --resource-group "${RG_NAME}" \
-              --name "opal-${APP}-${ENV_NAME}" \
-              --environment "${CAE}" \
-              --image "${ACR_LOGIN}/opal/${APP}:${IMAGE_TAG}" \
-              --registry-server "${ACR_LOGIN}" \
-              --ingress external \
-              --target-port 8080 \
-              --min-replicas 1 \
-              --max-replicas 3
-          done
+          set -euo pipefail
 
-      - name: Configure Container Apps
-        run: |
           DB_USER="opaladmin"
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
           COMMON_ENV="ENV_NAME=${ENV_NAME} DATABASE_URL=${DATABASE_URL} STORAGE_ACCOUNT_NAME=${STORAGE} SERVICEBUS_NAMESPACE=${SB}"
 
-          az containerapp update \
-            --resource-group "${RG_NAME}" \
-            --name "opal-web-api-${ENV_NAME}" \
-            --image "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
-            --set-env-vars ${COMMON_ENV} \
-            --ingress external --target-port 8080
+          ensure_app () {
+            local NAME="$1"
+            local IMAGE="$2"
+            local INGRESS="$3"
+            local PORT="$4"
 
-          az containerapp update \
-            --resource-group "${RG_NAME}" \
-            --name "opal-orchestrator-${ENV_NAME}" \
-            --image "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" \
-            --set-env-vars ${COMMON_ENV} \
-            --ingress internal --target-port 8080
+            if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
+              echo "Updating ${NAME}..."
+              if [ "${INGRESS}" = "none" ]; then
+                az containerapp update -g "${RG_NAME}" -n "${NAME}" \
+                  --image "${IMAGE}" \
+                  --set-env-vars ${COMMON_ENV}
+              else
+                az containerapp update -g "${RG_NAME}" -n "${NAME}" \
+                  --image "${IMAGE}" \
+                  --set-env-vars ${COMMON_ENV} \
+                  --ingress "${INGRESS}" --target-port "${PORT}"
+              fi
+            else
+              echo "Creating ${NAME}..."
+              if [ "${INGRESS}" = "none" ]; then
+                az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                  --environment "${CAE}" \
+                  --image "${IMAGE}" \
+                  --registry-server "${ACR_LOGIN}" \
+                  --min-replicas 1 --max-replicas 3 \
+                  --set-env-vars ${COMMON_ENV}
+              else
+                az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                  --environment "${CAE}" \
+                  --image "${IMAGE}" \
+                  --registry-server "${ACR_LOGIN}" \
+                  --ingress "${INGRESS}" --target-port "${PORT}" \
+                  --min-replicas 1 --max-replicas 3 \
+                  --set-env-vars ${COMMON_ENV}
+              fi
+            fi
+          }
 
-          az containerapp update \
-            --resource-group "${RG_NAME}" \
-            --name "opal-export-worker-${ENV_NAME}" \
-            --image "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" \
-            --set-env-vars ${COMMON_ENV} \
-            --ingress internal --target-port 8080
-
-          az containerapp update \
-            --resource-group "${RG_NAME}" \
-            --name "opal-billing-service-${ENV_NAME}" \
-            --image "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" \
-            --set-env-vars ${COMMON_ENV} \
-            --ingress external --target-port 8080
-
-      - name: Install Azure ML CLI
-        run: |
-          az extension add -n ml -y || az extension update -n ml
-
-      - name: Register noop model
-        run: |
-          echo "noop" > noop.txt
-          az ml model create \
-            --name noop-model \
-            --type custom_model \
-            --path noop.txt \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}" || true
-
-      - name: Create or update AML endpoint
-        run: |
-          az ml online-endpoint create \
-            --file ml/endpoint.yml \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}" || \
-          az ml online-endpoint update \
-            --file ml/endpoint.yml \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}"
-
-      - name: Deploy AML stub
-        run: |
-          export ACR_LOGIN_SERVER="${ACR_LOGIN}"
-          export IMAGE_TAG="${IMAGE_TAG}"
-
-          envsubst < ml/deployment.yml > ml/_deployment.yml
-
-          az ml online-deployment create \
-            --file ml/_deployment.yml \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}" || \
-          az ml online-deployment update \
-            --file ml/_deployment.yml \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}"
-
-          az ml online-endpoint update \
-            --name opal-sd-placement-dev \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}" \
-            --traffic blue=100
-
-      - name: Inject AML endpoint into Container Apps
-        run: |
-          SCORING_URI=$(az ml online-endpoint show \
-            --name opal-sd-placement-dev \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}" \
-            --query scoring_uri -o tsv)
-
-          KEY=$(az ml online-endpoint get-credentials \
-            --name opal-sd-placement-dev \
-            --resource-group "${RG_NAME}" \
-            --workspace-name "${AML}" \
-            --query primaryKey -o tsv)
-
-          az containerapp update \
-            --resource-group "${RG_NAME}" \
-            --name "opal-web-api-${ENV_NAME}" \
-            --set-env-vars AML_ENDPOINT_URL=${SCORING_URI} AML_ENDPOINT_KEY=${KEY}
-
-          az containerapp update \
-            --resource-group "${RG_NAME}" \
-            --name "opal-orchestrator-${ENV_NAME}" \
-            --set-env-vars AML_ENDPOINT_URL=${SCORING_URI} AML_ENDPOINT_KEY=${KEY}
+          ensure_app "opal-web-api-${ENV_NAME}"         "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"         "external" 8080
+          ensure_app "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "external" 8080
+          ensure_app "opal-orchestrator-${ENV_NAME}"    "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"    "internal" 8080
+          ensure_app "opal-export-worker-${ENV_NAME}"   "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"   "internal" 8080
 
       - name: Print Web API URL
         run: |
+          set -euo pipefail
           FQDN=$(az containerapp show \
             --resource-group "${RG_NAME}" \
             --name "opal-web-api-${ENV_NAME}" \
