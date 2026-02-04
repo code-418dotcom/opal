@@ -1,0 +1,20 @@
+[project]
+name = "opal-web-api"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.30",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.1",
+  "azure-identity>=1.17",
+  "azure-storage-blob>=12.20",
+  "azure-servicebus>=7.12",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.2",
+  "structlog>=24.1",
+  "opal-shared @ file:///app/shared"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

@@ -1,0 +1,170 @@
+name: Build & Deploy Apps + AML (dev)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENV_NAME: dev
+  LOCATION: westeurope
+  RG_NAME: opal-dev-rg
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Load infra outputs
+        run: |
+          if [ ! -f infra_outputs.json ]; then
+            echo "infra_outputs.json not found. Run infra workflow first OR download outputs artifact (not implemented yet)."
+            exit 1
+          fi
+
+          ACR_NAME=$(jq -r '.acrName.value' infra_outputs.json)
+          ACR_LOGIN=$(jq -r '.acrLoginServer.value' infra_outputs.json)
+          STORAGE=$(jq -r '.storageAccountName.value' infra_outputs.json)
+          SB=$(jq -r '.serviceBusNamespace.value' infra_outputs.json)
+          AML=$(jq -r '.amlWorkspaceName.value' infra_outputs.json)
+          CAE=$(jq -r '.containerAppsEnvironmentName.value' infra_outputs.json)
+
+          echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
+          echo "ACR_LOGIN=$ACR_LOGIN" >> $GITHUB_ENV
+          echo "STORAGE=$STORAGE" >> $GITHUB_ENV
+          echo "SB=$SB" >> $GITHUB_ENV
+          echo "AML=$AML" >> $GITHUB_ENV
+          echo "CAE=$CAE" >> $GITHUB_ENV
+
+      - name: ACR login
+        run: |
+          az acr login -n "${ACR_NAME}"
+
+      - name: Build & push images (amd64)
+        run: |
+          docker buildx create --use
+
+          docker buildx build --platform linux/amd64 -t "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" -f src/web_api/Dockerfile src/web_api --push
+          docker buildx build --platform linux/amd64 -t "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" -f src/orchestrator/Dockerfile src/orchestrator --push
+          docker buildx build --platform linux/amd64 -t "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" -f src/export_worker/Dockerfile src/export_worker --push
+          docker buildx build --platform linux/amd64 -t "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" -f src/billing_service/Dockerfile src/billing_service --push
+          docker buildx build --platform linux/amd64 -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" -f src/aml_sd_stub/Dockerfile src/aml_sd_stub --push
+
+      - name: Ensure Container Apps exist (create if missing)
+        run: |
+          # Create identity + env vars via az containerapp; keep it simple and explicit.
+          # NOTE: For production, move this to Bicep (apps module). For now, this lets you iterate fast.
+
+          for APP in web-api orchestrator export-worker billing-service; do
+            az containerapp show -g "${RG_NAME}" -n "opal-${APP}-${ENV_NAME}" >/dev/null 2>&1 || \
+            az containerapp create \
+              -g "${RG_NAME}" \
+              -n "opal-${APP}-${ENV_NAME}" \
+              --environment "${CAE}" \
+              --registry-server "${ACR_LOGIN}" \
+              --ingress external \
+              --target-port 8080 \
+              --workload-profile-name consumption \
+              --min-replicas 1 \
+              --max-replicas 3 \
+              --image "${ACR_LOGIN}/opal/${APP}:${IMAGE_TAG}" || true
+          done
+
+      - name: Configure Container Apps images + env vars
+        run: |
+          # Get AML endpoint URL + key after creation (later in this workflow).
+          # For now set placeholder; we'll update after AML deploy.
+
+          DB_HOST=$(jq -r '.postgresServerName.value' infra_outputs.json)
+          DB_NAME=$(jq -r '.postgresDbName.value' infra_outputs.json)
+          DB_USER="opaladmin"
+          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${DB_HOST}.postgres.database.azure.com:5432/opal?sslmode=require"
+
+          common_env="ENV_NAME=${ENV_NAME} DATABASE_URL=${DATABASE_URL} STORAGE_ACCOUNT_NAME=${STORAGE} SERVICEBUS_NAMESPACE=${SB} AML_ENDPOINT_URL=https://example.invalid/score AML_ENDPOINT_KEY=placeholder"
+
+          az containerapp update -g "${RG_NAME}" -n "opal-web-api-${ENV_NAME}" \
+            --image "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
+            --set-env-vars ${common_env} \
+            --ingress external --target-port 8080
+
+          # Orchestrator and export-worker don't need ingress; disable by setting ingress to none
+          az containerapp update -g "${RG_NAME}" -n "opal-orchestrator-${ENV_NAME}" \
+            --image "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" \
+            --set-env-vars ${common_env} \
+            --ingress internal --target-port 8080
+
+          az containerapp update -g "${RG_NAME}" -n "opal-export-worker-${ENV_NAME}" \
+            --image "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" \
+            --set-env-vars ${common_env} \
+            --ingress internal --target-port 8080
+
+          az containerapp update -g "${RG_NAME}" -n "opal-billing-service-${ENV_NAME}" \
+            --image "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" \
+            --set-env-vars ${common_env} \
+            --ingress external --target-port 8080
+
+      - name: Install Azure ML CLI extension
+        run: |
+          az extension add -n ml -y || az extension update -n ml
+
+      - name: Create/register noop model (once)
+        run: |
+          # Register a tiny "noop" model so deployment YAML can reference it.
+          # AML requires a model asset sometimes; this is a simple placeholder.
+          echo "noop" > noop.txt
+          az ml model create --name noop-model --type custom_model --path noop.txt \
+            -g "${RG_NAME}" -w "${AML}" || true
+
+      - name: Create AML endpoint (idempotent)
+        run: |
+          az ml online-endpoint create -f ml/endpoint.yml -g "${RG_NAME}" -w "${AML}" || \
+          az ml online-endpoint update -f ml/endpoint.yml -g "${RG_NAME}" -w "${AML}"
+
+      - name: Deploy AML deployment (blue)
+        run: |
+          export ACR_LOGIN_SERVER="${ACR_LOGIN}"
+          export IMAGE_TAG="${IMAGE_TAG}"
+
+          envsubst < ml/deployment.yml > ml/_deployment_rendered.yml
+
+          az ml online-deployment create -f ml/_deployment_rendered.yml -g "${RG_NAME}" -w "${AML}" || \
+          az ml online-deployment update -f ml/_deployment_rendered.yml -g "${RG_NAME}" -w "${AML}"
+
+          az ml online-endpoint update -n opal-sd-placement-dev -g "${RG_NAME}" -w "${AML}" --traffic blue=100
+
+      - name: Fetch AML scoring URI + key and update Container Apps
+        run: |
+          SCORING_URI=$(az ml online-endpoint show -n opal-sd-placement-dev -g "${RG_NAME}" -w "${AML}" --query "scoring_uri" -o tsv)
+          KEY=$(az ml online-endpoint get-credentials -n opal-sd-placement-dev -g "${RG_NAME}" -w "${AML}" --query "primaryKey" -o tsv)
+
+          echo "SCORING_URI=$SCORING_URI" >> $GITHUB_ENV
+
+          DB_HOST=$(jq -r '.postgresServerName.value' infra_outputs.json)
+          DB_USER="opaladmin"
+          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${DB_HOST}.postgres.database.azure.com:5432/opal?sslmode=require"
+
+          common_env="ENV_NAME=${ENV_NAME} DATABASE_URL=${DATABASE_URL} STORAGE_ACCOUNT_NAME=${STORAGE} SERVICEBUS_NAMESPACE=${SB} AML_ENDPOINT_URL=${SCORING_URI} AML_ENDPOINT_KEY=${KEY}"
+
+          az containerapp update -g "${RG_NAME}" -n "opal-web-api-${ENV_NAME}" --set-env-vars ${common_env}
+          az containerapp update -g "${RG_NAME}" -n "opal-orchestrator-${ENV_NAME}" --set-env-vars ${common_env}
+          az containerapp update -g "${RG_NAME}" -n "opal-export-worker-${ENV_NAME}" --set-env-vars ${common_env}
+          az containerapp update -g "${RG_NAME}" -n "opal-billing-service-${ENV_NAME}" --set-env-vars ${common_env}
+
+      - name: Print web-api URL
+        run: |
+          URL=$(az containerapp show -g "${RG_NAME}" -n "opal-web-api-${ENV_NAME}" --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "Web API: https://${URL}"
