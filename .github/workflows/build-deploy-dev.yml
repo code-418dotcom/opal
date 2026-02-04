@@ -110,7 +110,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # IMPORTANT: build context is repo root (.), so Dockerfiles can COPY shared/ etc.
           docker buildx build --platform linux/amd64 \
             -t "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
             -f src/web_api/Dockerfile . --push
@@ -131,7 +130,7 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile . --push
 
-      - name: Create/Update Container Apps
+      - name: Create/Update Container Apps (correct env var flags + safe quoting)
         run: |
           set -euo pipefail
 
@@ -139,7 +138,12 @@ jobs:
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
-          COMMON_ENV="ENV_NAME=${ENV_NAME} DATABASE_URL=${DATABASE_URL} STORAGE_ACCOUNT_NAME=${STORAGE} SERVICEBUS_NAMESPACE=${SB}"
+          ENV_VARS=(
+            "ENV_NAME=${ENV_NAME}"
+            "DATABASE_URL=${DATABASE_URL}"
+            "STORAGE_ACCOUNT_NAME=${STORAGE}"
+            "SERVICEBUS_NAMESPACE=${SB}"
+          )
 
           ensure_app () {
             local NAME="$1"
@@ -152,11 +156,11 @@ jobs:
               if [ "${INGRESS}" = "none" ]; then
                 az containerapp update -g "${RG_NAME}" -n "${NAME}" \
                   --image "${IMAGE}" \
-                  --set-env-vars ${COMMON_ENV}
+                  --set-env-vars "${ENV_VARS[@]}"
               else
                 az containerapp update -g "${RG_NAME}" -n "${NAME}" \
                   --image "${IMAGE}" \
-                  --set-env-vars ${COMMON_ENV} \
+                  --set-env-vars "${ENV_VARS[@]}" \
                   --ingress "${INGRESS}" --target-port "${PORT}"
               fi
             else
@@ -167,7 +171,7 @@ jobs:
                   --image "${IMAGE}" \
                   --registry-server "${ACR_LOGIN}" \
                   --min-replicas 1 --max-replicas 3 \
-                  --set-env-vars ${COMMON_ENV}
+                  --env-vars "${ENV_VARS[@]}"
               else
                 az containerapp create -g "${RG_NAME}" -n "${NAME}" \
                   --environment "${CAE}" \
@@ -175,7 +179,7 @@ jobs:
                   --registry-server "${ACR_LOGIN}" \
                   --ingress "${INGRESS}" --target-port "${PORT}" \
                   --min-replicas 1 --max-replicas 3 \
-                  --set-env-vars ${COMMON_ENV}
+                  --env-vars "${ENV_VARS[@]}"
               fi
             fi
           }
