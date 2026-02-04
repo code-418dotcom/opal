@@ -1,8 +1,11 @@
 @description('Environment name, e.g. dev, prod')
 param envName string = 'dev'
 
-@description('Location for all resources')
+@description('Primary location for resources')
 param location string = resourceGroup().location
+
+@description('Location for monitoring resources (Log Analytics + App Insights). Must support Microsoft.OperationalInsights/workspaces.')
+param monitoringLocation string = 'westeurope'
 
 @description('Prefix for resource names')
 param namePrefix string = 'opal'
@@ -37,9 +40,12 @@ var pgDbName = 'opal'
 
 var amlName = take('${baseName}-aml', 32)
 
+//
+// Monitoring (MUST be in a region that supports OperationalInsights/workspaces)
+//
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: laName
-  location: location
+  location: monitoringLocation
   properties: {
     sku: {
       name: 'PerGB2018'
@@ -50,7 +56,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: aiName
-  location: location
+  location: monitoringLocation
   kind: 'web'
   properties: {
     Application_Type: 'web'
@@ -58,6 +64,9 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+//
+// Key Vault
+//
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: kvName
   location: location
@@ -76,6 +85,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+//
+// Storage
+//
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: saName
   location: location
@@ -112,6 +124,9 @@ resource exportsContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
   }
 }
 
+//
+// Service Bus
+//
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: sbName
   location: location
@@ -144,6 +159,9 @@ resource queueExports 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
   }
 }
 
+//
+// ACR
+//
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
   location: location
@@ -156,6 +174,9 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
 }
 
+//
+// Container Apps Environment
+//
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: caEnvName
   location: location
@@ -180,6 +201,9 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
+//
+// Postgres Flexible Server
+//
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview' = {
   name: pgServerName
   location: location
@@ -212,6 +236,9 @@ resource postgresDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-03
   properties: {}
 }
 
+//
+// Azure ML Workspace
+//
 resource aml 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   name: amlName
   location: location
@@ -236,3 +263,4 @@ output postgresDbName string = postgresDb.name
 output keyVaultName string = keyVault.name
 output appInsightsName string = appInsights.name
 output amlWorkspaceName string = aml.name
+output monitoringLocationUsed string = monitoringLocation
