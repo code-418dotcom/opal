@@ -28,13 +28,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install helper tools (jq + envsubst)
+      - name: Install helper tools
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y jq gettext-base
 
-      - name: Discover infra in Azure (robust)
+      - name: Discover infra in Azure
         run: |
           set -euo pipefail
 
@@ -98,7 +98,7 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile . --push
 
-      - name: Create/Update Container Apps (CLI-compatible)
+      - name: Create/Update Container Apps (private ACR safe, 2-phase create)
         run: |
           set -euo pipefail
 
@@ -113,9 +113,11 @@ jobs:
             "SERVICEBUS_NAMESPACE=${SB}"
           )
 
+          # Public placeholder image so creation never fails due to ACR auth timing
+          PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+
           ensure_identity () {
             local NAME="$1"
-            # Ensure system identity exists
             az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null
           }
 
@@ -125,7 +127,6 @@ jobs:
             PRINCIPAL_ID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
             [ -n "${PRINCIPAL_ID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
 
-            # Requires your new UAA-with-condition grant (AcrPull only)
             az role assignment create \
               --assignee-object-id "${PRINCIPAL_ID}" \
               --assignee-principal-type ServicePrincipal \
@@ -135,7 +136,6 @@ jobs:
 
           ensure_registry_binding () {
             local NAME="$1"
-            # Bind ACR using system identity (separate command; works when update flags don't)
             az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
               --server "${ACR_LOGIN}" \
               --identity system >/dev/null
@@ -154,9 +154,6 @@ jobs:
               az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
                 --type internal \
                 --target-port "${PORT}" >/dev/null
-            else
-              # none: do nothing
-              true
             fi
           }
 
@@ -167,22 +164,26 @@ jobs:
             local PORT="$4"
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
-              echo "Updating ${NAME}..."
+              echo "App exists: ${NAME}"
             else
-              echo "Creating ${NAME}..."
+              echo "Creating ${NAME} with placeholder image..."
               az containerapp create -g "${RG_NAME}" -n "${NAME}" \
                 --environment "${CAE}" \
-                --image "${IMAGE}" \
+                --image "${PLACEHOLDER_IMAGE}" \
                 --min-replicas 1 --max-replicas 3 \
                 --env-vars "${ENV_VARS[@]}" >/dev/null
             fi
 
+            # Ensure identity + ACR permissions BEFORE setting private image
             ensure_identity "${NAME}"
             ensure_acr_pull "${NAME}"
             ensure_registry_binding "${NAME}"
+
+            # Ingress can be configured anytime
             ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
 
-            # Always update image + env vars idempotently
+            # Now safe to deploy private image
+            echo "Deploying private image for ${NAME}..."
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
@@ -200,5 +201,4 @@ jobs:
             --resource-group "${RG_NAME}" \
             --name "opal-web-api-${ENV_NAME}" \
             --query properties.configuration.ingress.fqdn -o tsv)
-
           echo "Web API available at: https://${FQDN}"
