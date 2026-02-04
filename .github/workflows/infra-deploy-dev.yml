@@ -9,7 +9,7 @@ permissions:
 
 env:
   ENV_NAME: dev
-  LOCATION: westeurope
+  LOCATION: belgiumcentral
   RG_NAME: opal-dev-rg
 
 jobs:
@@ -26,22 +26,27 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Create RG
+      - name: Create Resource Group (idempotent)
         run: |
-          az group create -n "${RG_NAME}" -l "${LOCATION}"
+          az group create \
+            --name "${RG_NAME}" \
+            --location "${LOCATION}"
 
       - name: Deploy Bicep
         run: |
-          # Replace password in parameters at runtime (keeps repo clean)
-          jq '.parameters.postgresAdminPassword.value = "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"' infra/main.parameters.json > infra/_params.json
+          # Inject Postgres password at runtime
+          jq '.parameters.postgresAdminPassword.value = "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"' \
+            infra/main.parameters.json > infra/_params.json
 
           az deployment group create \
             --resource-group "${RG_NAME}" \
             --template-file infra/main.bicep \
             --parameters @infra/_params.json \
             --parameters envName="${ENV_NAME}" location="${LOCATION}" namePrefix="opal" \
-            --query "properties.outputs" -o json | tee infra_outputs.json
+            --query "properties.outputs" \
+            -o json | tee infra_outputs.json
 
       - name: Print outputs
         run: |
+          echo "===== Infra Outputs ====="
           cat infra_outputs.json
