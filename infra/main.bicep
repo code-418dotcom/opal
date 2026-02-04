@@ -5,7 +5,10 @@ param envName string = 'dev'
 param location string = resourceGroup().location
 
 @description('Location for monitoring resources (Log Analytics + App Insights).')
-param monitoringLocation string = 'westeurope'
+param monitoringLocation string = location
+
+@description('Location for Postgres Flexible Server (offer restrictions may apply per region).')
+param postgresLocation string = 'northeurope'
 
 @description('Prefix for resource names')
 param namePrefix string = 'opal'
@@ -17,8 +20,11 @@ param postgresAdminPassword string
 @description('Postgres admin username')
 param postgresAdminUser string = 'opaladmin'
 
-@description('SKU name for Postgres Flexible Server')
-param postgresSkuName string = 'Standard_D2s_v3'
+@description('Postgres SKU name')
+param postgresSkuName string = 'Standard_B1ms'
+
+@description('Postgres tier')
+param postgresTier string = 'Burstable'
 
 @description('Storage account SKU')
 param storageSku string = 'Standard_LRS'
@@ -29,7 +35,10 @@ var baseName = toLower('${namePrefix}-${envName}-${suffix}')
 
 var acrName = take(replace('${namePrefix}${envName}${suffix}', '-', ''), 45)
 var saName  = take(replace('${namePrefix}${envName}${suffix}sa', '-', ''), 24)
-var sbName  = take('${baseName}-sb', 50)
+
+// IMPORTANT: Service Bus namespace cannot end with '-sb' (reserved). Use '-bus' instead.
+var sbName  = take('${baseName}-bus', 50)
+
 var kvName  = take('${baseName}-kv', 24)
 var laName  = take('${baseName}-la', 63)
 var aiName  = take('${baseName}-ai', 63)
@@ -41,7 +50,7 @@ var pgDbName = 'opal'
 var amlName = take('${baseName}-aml', 32)
 
 //
-// Monitoring (Log Analytics + App Insights) in monitoringLocation
+// Monitoring
 //
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: laName
@@ -110,7 +119,7 @@ resource exportsContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
 }
 
 //
-// Service Bus
+// Service Bus (namespace name uses -bus, not -sb)
 //
 resource serviceBus 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: sbName
@@ -165,10 +174,6 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: listKeys(logAnalytics.id, logAnalytics.apiVersion).primarySharedKey
       }
     }
-
-    // IMPORTANT:
-    // Dedicated workload profiles require minimumCount/maximumCount.
-    // Without these, ARM validation fails with WorkloadProfileMinimumCountInvalid.
     workloadProfiles: [
       {
         name: 'consumption'
@@ -185,14 +190,14 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 //
-// Postgres Flexible Server
+// Postgres Flexible Server (deploy to postgresLocation)
 //
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview' = {
   name: pgServerName
-  location: location
+  location: postgresLocation
   sku: {
     name: postgresSkuName
-    tier: 'GeneralPurpose'
+    tier: postgresTier
   }
   properties: {
     administratorLogin: postgresAdminUser
@@ -213,7 +218,8 @@ resource postgresDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-03
 }
 
 //
-// Azure ML Workspace
+// Azure ML Workspace (explicit dependent resources to avoid "Missing dependent resources in workspace json")
+// NOTE: API versions vary; this pattern is robust across many subscriptions.
 //
 resource aml 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   name: amlName
@@ -221,6 +227,14 @@ resource aml 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   identity: { type: 'SystemAssigned' }
   properties: {
     friendlyName: amlName
+
+    // Explicit dependencies
+    storageAccount: storage.id
+    keyVault: keyVault.id
+    applicationInsights: appInsights.id
+    containerRegistry: acr.id
+
+    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -229,11 +243,11 @@ output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
 output storageAccountName string = storage.name
 output serviceBusNamespace string = serviceBus.name
-output jobsQueueName string = queueJobs.name
-output exportsQueueName string = queueExports.name
 output postgresServerName string = postgres.name
-output postgresDbName string = postgresDb.name
 output keyVaultName string = keyVault.name
 output appInsightsName string = appInsights.name
 output amlWorkspaceName string = aml.name
 output monitoringLocationUsed string = monitoringLocation
+output postgresLocationUsed string = postgresLocation
+output postgresSkuUsed string = postgresSkuName
+output postgresTierUsed string = postgresTier

@@ -11,6 +11,7 @@ env:
   ENV_NAME: dev
   LOCATION: westeurope
   MONITORING_LOCATION: westeurope
+  POSTGRES_LOCATION: northeurope
   RG_NAME: opal-dev-rg
 
 jobs:
@@ -29,12 +30,12 @@ jobs:
 
       - name: Create Resource Group (idempotent)
         run: |
-          az group create \
-            --name "${RG_NAME}" \
-            --location "${LOCATION}"
+          set -euo pipefail
+          az group create --name "${RG_NAME}" --location "${LOCATION}" -o jsonc
 
       - name: Deploy Bicep
         run: |
+          set -euo pipefail
           jq '.parameters.postgresAdminPassword.value = "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"' \
             infra/main.parameters.json > infra/_params.json
 
@@ -42,7 +43,7 @@ jobs:
             --resource-group "${RG_NAME}" \
             --template-file infra/main.bicep \
             --parameters @infra/_params.json \
-            --parameters envName="${ENV_NAME}" location="${LOCATION}" monitoringLocation="${MONITORING_LOCATION}" namePrefix="opal" \
+            --parameters envName="${ENV_NAME}" location="${LOCATION}" monitoringLocation="${MONITORING_LOCATION}" postgresLocation="${POSTGRES_LOCATION}" namePrefix="opal" \
             --query "properties.outputs" \
             -o json | tee infra_outputs.json
 
