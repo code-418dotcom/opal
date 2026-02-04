@@ -98,7 +98,7 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile . --push
 
-      - name: Create/Update Container Apps (self-healing + ingress enable)
+      - name: Create/Update Container Apps (self-healing + ingress enable idempotent)
         run: |
           set -euo pipefail
 
@@ -142,31 +142,30 @@ jobs:
 
           ensure_ingress () {
             local NAME="$1"
-            local MODE="$2"
+            local MODE="$2"   # external|internal|none
             local PORT="$3"
 
             if [ "${MODE}" = "none" ]; then
               return 0
             fi
 
-            # Some CLI versions require 'enable' before 'update'
-            if ! az containerapp ingress show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
-              echo "Ingress not enabled yet for ${NAME}; enabling..."
-              az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
-                --type "${MODE}" \
-                --target-port "${PORT}" \
-                --transport auto >/dev/null
-            else
-              az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
-                --type "${MODE}" \
-                --target-port "${PORT}" >/dev/null
-            fi
+            # Idempotent across CLI versions:
+            # - enable may fail with "already enabled" -> ignore
+            # - update may fail if already correct -> ignore
+            az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
+              --type "${MODE}" \
+              --target-port "${PORT}" \
+              --transport auto >/dev/null 2>&1 || true
+
+            az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
+              --type "${MODE}" \
+              --target-port "${PORT}" >/dev/null 2>&1 || true
           }
 
           ensure_app () {
             local NAME="$1"
             local IMAGE="$2"
-            local INGRESS="$3"   # external|internal|none
+            local INGRESS="$3"
             local PORT="$4"
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
