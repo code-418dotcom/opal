@@ -52,7 +52,6 @@ jobs:
           CAE=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${CAE}" ] || (echo "ERROR: No Container Apps Environment in ${RG_NAME}"; exit 1)
 
-          # Prefer the NE-postfixed PG if present, otherwise first one
           PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[?contains(name,'-pg-ne')].name | [0]" -o tsv)
           [ -n "${PG_SERVER}" ] || PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[0].name" -o tsv)
           [ -n "${PG_SERVER}" ] || (echo "ERROR: No Postgres Flexible Server in ${RG_NAME}"; exit 1)
@@ -99,7 +98,7 @@ jobs:
             -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
             -f src/aml_sd_stub/Dockerfile . --push
 
-      - name: Create/Update Container Apps (self-healing + ingress enable idempotent + retries)
+      - name: Create/Update Container Apps (self-healing + ingress enable idempotent)
         run: |
           set -euo pipefail
 
@@ -107,31 +106,42 @@ jobs:
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
-          # NOTE: AML values are set to placeholders so the API can boot.
-          # Replace with real values once AML online endpoint is provisioned.
+          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
+          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
+
+          # Allow boot even if secrets are not set yet (so you can reach /healthz and iterate)
+          if [ -z "${AML_ENDPOINT_URL}" ]; then
+            echo "WARNING: AML_ENDPOINT_URL secret not set; using placeholder to allow container startup."
+            AML_ENDPOINT_URL="https://example.invalid"
+          fi
+          if [ -z "${AML_ENDPOINT_KEY}" ]; then
+            echo "WARNING: AML_ENDPOINT_KEY secret not set; using placeholder to allow container startup."
+            AML_ENDPOINT_KEY="placeholder"
+          fi
+
           ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
             "DATABASE_URL=${DATABASE_URL}"
             "STORAGE_ACCOUNT_NAME=${STORAGE}"
             "SERVICEBUS_NAMESPACE=${SB}"
-            "AML_ENDPOINT_URL=https://example.invalid"
-            "AML_ENDPOINT_KEY=dummy"
+            "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
+            "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
           )
 
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
           ensure_identity () {
             local NAME="$1"
+            # retry because you hit ServiceUnavailable
             for i in 1 2 3 4 5; do
               if az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null 2>&1; then
-                echo "Identity assigned for ${NAME}"
                 return 0
               fi
-              echo "Identity assign failed for ${NAME}. Retrying in 30s... (attempt ${i}/5)"
+              echo "Identity assign failed (attempt $i). Sleeping 30s..."
               sleep 30
             done
-            echo "ERROR: Identity assign kept failing for ${NAME}"
-            return 1
+            echo "ERROR: failed to assign identity to ${NAME} after retries"
+            exit 1
           }
 
           ensure_acr_pull () {
@@ -140,37 +150,18 @@ jobs:
             PRINCIPAL_ID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
             [ -n "${PRINCIPAL_ID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
 
-            for i in 1 2 3 4 5; do
-              if az role assignment create \
-                --assignee-object-id "${PRINCIPAL_ID}" \
-                --assignee-principal-type ServicePrincipal \
-                --role "AcrPull" \
-                --scope "${ACR_ID}" >/dev/null 2>&1; then
-                echo "AcrPull assigned for ${NAME}"
-                return 0
-              fi
-              echo "AcrPull assignment failed for ${NAME}. Retrying in 15s... (attempt ${i}/5)"
-              sleep 15
-            done
-
-            echo "WARNING: AcrPull assignment kept failing for ${NAME} (continuing)"
-            return 0
+            az role assignment create \
+              --assignee-object-id "${PRINCIPAL_ID}" \
+              --assignee-principal-type ServicePrincipal \
+              --role "AcrPull" \
+              --scope "${ACR_ID}" 2>/dev/null || true
           }
 
           ensure_registry_binding () {
             local NAME="$1"
-            for i in 1 2 3 4 5; do
-              if az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
-                --server "${ACR_LOGIN}" \
-                --identity system >/dev/null 2>&1; then
-                echo "Registry bound for ${NAME}"
-                return 0
-              fi
-              echo "Registry binding failed for ${NAME}. Retrying in 15s... (attempt ${i}/5)"
-              sleep 15
-            done
-            echo "ERROR: Registry binding kept failing for ${NAME}"
-            return 1
+            az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
+              --server "${ACR_LOGIN}" \
+              --identity system >/dev/null
           }
 
           ensure_ingress () {
@@ -227,10 +218,13 @@ jobs:
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
           }
 
+          # HTTP apps
           ensure_app "opal-web-api-${ENV_NAME}"          "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"          "external" 8080
           ensure_app "opal-billing-service-${ENV_NAME}"  "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"  "external" 8080
-          ensure_app "opal-orchestrator-${ENV_NAME}"     "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"     "internal" 8080
-          ensure_app "opal-export-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"    "internal" 8080
+
+          # Background workers (NO INGRESS)
+          ensure_app "opal-orchestrator-${ENV_NAME}"     "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"     "none" 0
+          ensure_app "opal-export-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"    "none" 0
 
       - name: Print Web API URL
         run: |
