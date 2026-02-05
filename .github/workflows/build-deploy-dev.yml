@@ -34,6 +34,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq gettext-base
 
+      - name: Sanity check required files
+        run: |
+          set -euo pipefail
+          test -f src/web_api/requirements.txt || (echo "Missing src/web_api/requirements.txt" && exit 1)
+          test -f src/export_worker/requirements.txt || (echo "Missing src/export_worker/requirements.txt" && exit 1)
+          test -f src/billing_service/requirements.txt || (echo "Missing src/billing_service/requirements.txt" && exit 1)
+          test -f src/orchestrator/requirements.txt || (echo "Missing src/orchestrator/requirements.txt" && exit 1)
+
       - name: Discover infra in Azure
         run: |
           set -euo pipefail
@@ -149,9 +157,6 @@ jobs:
               return 0
             fi
 
-            # Idempotent across CLI versions:
-            # - enable may fail with "already enabled" -> ignore
-            # - update may fail if already correct -> ignore
             az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
               --type "${MODE}" \
               --target-port "${PORT}" \

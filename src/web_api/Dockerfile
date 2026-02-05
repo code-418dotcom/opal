@@ -10,8 +10,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Your actual shared package is src/shared/shared/*
-# Copy it into /app/shared so `import shared.db` works.
+# Copy the actual shared Python package to /app/shared
+# so `import shared.db` works.
 COPY src/shared/shared /app/shared
 
 COPY src/web_api/requirements.txt /app/requirements.txt

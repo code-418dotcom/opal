@@ -1,7 +1,8 @@
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
@@ -9,19 +10,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Build context is repo root
-COPY src/shared /app/shared
-COPY src/billing_service /app/billing_service
+# Copy the actual shared Python package to /app/shared
+COPY src/shared/shared /app/shared
 
-# Baseline deps for FastAPI billing service + Mollie webhook handling
+COPY src/billing_service/requirements.txt /app/requirements.txt
+COPY src/billing_service/billing_service /app/billing_service
+
 RUN pip install --no-cache-dir -U pip \
-    && pip install --no-cache-dir \
-      "fastapi==0.115.0" \
-      "uvicorn[standard]==0.30.6" \
-      "pydantic==2.9.2" \
-      "httpx==0.27.2"
+    && pip install --no-cache-dir -r /app/requirements.txt
 
 EXPOSE 8080
-
-# Common entrypoint; adjust if your module name differs (next error will tell us)
 CMD ["uvicorn", "billing_service.main:app", "--host", "0.0.0.0", "--port", "8080"]
