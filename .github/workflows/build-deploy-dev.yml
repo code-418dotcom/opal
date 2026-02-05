@@ -107,11 +107,15 @@ jobs:
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
+          # NOTE: AML values are set to placeholders so the API can boot.
+          # Replace with real values once AML online endpoint is provisioned.
           ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
             "DATABASE_URL=${DATABASE_URL}"
             "STORAGE_ACCOUNT_NAME=${STORAGE}"
             "SERVICEBUS_NAMESPACE=${SB}"
+            "AML_ENDPOINT_URL=https://example.invalid"
+            "AML_ENDPOINT_KEY=dummy"
           )
 
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
@@ -149,8 +153,6 @@ jobs:
               sleep 15
             done
 
-            # We don't hard-fail here because RBAC can be eventually-consistent;
-            # the subsequent registry binding/update may still succeed if role was already present.
             echo "WARNING: AcrPull assignment kept failing for ${NAME} (continuing)"
             return 0
           }
@@ -180,13 +182,11 @@ jobs:
               return 0
             fi
 
-            # enable may fail with "already enabled" -> ignore
             az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
               --type "${MODE}" \
               --target-port "${PORT}" \
               --transport auto >/dev/null 2>&1 || true
 
-            # update may fail if already correct -> ignore
             az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
               --type "${MODE}" \
               --target-port "${PORT}" >/dev/null 2>&1 || true
