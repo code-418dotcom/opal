@@ -1,5 +1,9 @@
+# src/web_api/web_api/routes_health.py
+
 from fastapi import APIRouter
 from sqlalchemy import text
+
+from shared.config import settings
 from shared.db import SessionLocal
 from shared.storage import get_blob_service_client
 from shared.servicebus import get_client
@@ -19,11 +23,16 @@ def healthz():
         db_ok = False
 
     # Storage
+    #
+    # IMPORTANT:
+    # Using BlobServiceClient.get_account_information() often fails with
+    # AuthorizationPermissionMismatch even when blob-level RBAC is correct.
+    # A more reliable probe is a blob/container-level call that matches actual app access.
     storage_ok = False
     try:
         c = get_blob_service_client()
-        _ = c.get_account_information()
-        storage_ok = True
+        container = c.get_container_client(settings.STORAGE_RAW_CONTAINER)
+        storage_ok = bool(container.exists())
     except Exception:
         storage_ok = False
 
@@ -31,7 +40,7 @@ def healthz():
     sb_ok = False
     try:
         c = get_client()
-        # client opens successfully; avoid network heavy ops
+        # client opens successfully; avoid network-heavy ops
         sb_ok = True
         c.close()
     except Exception:
