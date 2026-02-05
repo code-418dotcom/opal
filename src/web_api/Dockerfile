@@ -1,21 +1,28 @@
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
 WORKDIR /app
 
+# System deps (build-essential helps for some wheels; keep it lean but safe for now)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Build context is repo root, so copy using src/... paths
+# IMPORTANT:
+# Build context is repo root in GitHub Actions (we build with: -f src/web_api/Dockerfile .)
+# So COPY paths must be relative to repo root.
+
+# Shared code
 COPY src/shared /app/shared
+
+# Python project definition for this service
 COPY src/web_api/pyproject.toml /app/pyproject.toml
+
+# Service code
 COPY src/web_api/web_api /app/web_api
 
+# Install deps + package
 RUN pip install --no-cache-dir -U pip \
-    && pip install --no-cache-dir "fastapi==0.115.0" "uvicorn[standard]==0.30.6" "pydantic==2.9.2" "psycopg[binary]==3.2.2" "azure-storage-blob==12.22.0" "azure-servicebus==7.12.2" "httpx==0.27.2" "python-multipart==0.0.12"
+    && pip install --no-cache-dir .
 
 EXPOSE 8080
 
