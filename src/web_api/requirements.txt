@@ -1,13 +1,13 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
-# shared deps
 pydantic==2.9.2
 pydantic-settings==2.5.2
+
 SQLAlchemy==2.0.36
 psycopg[binary]==3.2.2
 
-# azure libs used by shared/*
+azure-identity==1.16.1
 azure-storage-blob==12.22.0
 azure-servicebus==7.12.2
 
