@@ -7,7 +7,7 @@ on:
     paths:
       - "src/**"
       - ".github/workflows/build-deploy-dev.yml"
-      - "infra/**" # optional; does not redeploy infra, just allows workflow triggers if you tweak infra files
+      - ".github/workflows/build-only-dev.yml"
 
 permissions:
   id-token: write
@@ -32,7 +32,6 @@ jobs:
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Paths filter
         id: filter
         uses: dorny/paths-filter@v3
@@ -51,8 +50,8 @@ jobs:
             aml_sd_stub:
               - 'src/aml_sd_stub/**'
 
-  build_deploy:
-    name: Build & Deploy (dev)
+  build_and_deploy:
+    name: Build + Deploy (dev)
     runs-on: ubuntu-latest
     needs: [changes]
 
@@ -73,7 +72,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Decide what to deploy
+      - name: Decide what to build/deploy
         id: decide
         run: |
           set -euo pipefail
@@ -85,7 +84,7 @@ jobs:
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
 
-          # If shared changed, everything that imports shared must rebuild+redeploy
+          # If shared changed, everything rebuilds/redeploys
           if [ "${SHARED}" = "true" ]; then
             WEB_API=true
             EXPORT_WORKER=true
@@ -94,20 +93,13 @@ jobs:
             AML=true
           fi
 
-          echo "deploy_web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
-          echo "deploy_export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
-          echo "deploy_orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
-          echo "deploy_billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
-          echo "deploy_aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
+          echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
+          echo "export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
+          echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
+          echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
+          echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
 
-          echo "Will deploy:"
-          echo "  web_api=${WEB_API}"
-          echo "  export_worker=${EXPORT_WORKER}"
-          echo "  orchestrator=${ORCH}"
-          echo "  billing_service=${BILLING}"
-          echo "  aml_sd_stub=${AML}"
-
-      - name: Discover infra in Azure (RG resources)
+      - name: Discover infra in Azure (dev RG)
         run: |
           set -euo pipefail
 
@@ -118,11 +110,9 @@ jobs:
 
           STORAGE=$(az storage account list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${STORAGE}" ] || (echo "ERROR: No Storage Account in ${RG_NAME}"; exit 1)
-          STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
 
           SB=$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${SB}" ] || (echo "ERROR: No Service Bus Namespace in ${RG_NAME}"; exit 1)
-          SB_ID=$(az servicebus namespace show -g "${RG_NAME}" -n "${SB}" --query id -o tsv)
 
           CAE=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${CAE}" ] || (echo "ERROR: No Container Apps Environment in ${RG_NAME}"; exit 1)
@@ -135,9 +125,7 @@ jobs:
           echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
           echo "ACR_ID=${ACR_ID}" >> $GITHUB_ENV
           echo "STORAGE=${STORAGE}" >> $GITHUB_ENV
-          echo "STORAGE_ID=${STORAGE_ID}" >> $GITHUB_ENV
           echo "SB=${SB}" >> $GITHUB_ENV
-          echo "SB_ID=${SB_ID}" >> $GITHUB_ENV
           echo "CAE=${CAE}" >> $GITHUB_ENV
           echo "PG_SERVER=${PG_SERVER}" >> $GITHUB_ENV
 
@@ -162,27 +150,23 @@ jobs:
               -f "${DOCKERFILE}" . --push
           }
 
-          if [ "${{ steps.decide.outputs.deploy_web_api }}" = "true" ]; then
+          if [ "${{ steps.decide.outputs.web_api }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" "src/web_api/Dockerfile"
           fi
-
-          if [ "${{ steps.decide.outputs.deploy_orchestrator }}" = "true" ]; then
+          if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" "src/orchestrator/Dockerfile"
           fi
-
-          if [ "${{ steps.decide.outputs.deploy_export_worker }}" = "true" ]; then
+          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
           fi
-
-          if [ "${{ steps.decide.outputs.deploy_billing_service }}" = "true" ]; then
+          if [ "${{ steps.decide.outputs.billing_service }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
           fi
-
-          if [ "${{ steps.decide.outputs.deploy_aml_sd_stub }}" = "true" ]; then
+          if [ "${{ steps.decide.outputs.aml_sd_stub }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" "src/aml_sd_stub/Dockerfile"
           fi
 
-      - name: Create/Update Container Apps (only what changed)
+      - name: Create/Update Container Apps (only affected apps)
         run: |
           set -euo pipefail
 
@@ -190,73 +174,47 @@ jobs:
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
-          AML_URL="${{ secrets.AML_ENDPOINT_URL }}"
-          AML_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
-
-          if [ -z "${AML_URL}" ] || [ -z "${AML_KEY}" ]; then
-            echo "WARNING: AML secrets not set. Using placeholders so containers can start."
-            AML_URL="https://example.invalid"
-            AML_KEY="placeholder"
-          fi
+          # IMPORTANT: Option A = we accept these as secrets (until AML is real).
+          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
+          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
 
           ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
             "DATABASE_URL=${DATABASE_URL}"
             "STORAGE_ACCOUNT_NAME=${STORAGE}"
             "SERVICEBUS_NAMESPACE=${SB}"
-            "AML_ENDPOINT_URL=${AML_URL}"
-            "AML_ENDPOINT_KEY=${AML_KEY}"
+            "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
+            "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
           )
 
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
-          role_assign_try () {
-            # Args: principalId, roleName, scope
-            local PID="$1"
-            local ROLE="$2"
-            local SCOPE="$3"
+          ensure_identity () {
+            local NAME="$1"
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null
+          }
 
-            # Prefer object-id form (avoids Graph lookups). If not supported, fallback.
-            if az role assignment create \
-              --assignee-object-id "${PID}" \
-              --assignee-principal-type ServicePrincipal \
-              --role "${ROLE}" \
-              --scope "${SCOPE}" >/dev/null 2>&1; then
-              return 0
-            fi
+          ensure_role () {
+            local NAME="$1"
+            local SCOPE="$2"
+            local ROLE="$3"
 
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
+
+            # idempotent: ignore if exists
             az role assignment create \
               --assignee "${PID}" \
               --role "${ROLE}" \
               --scope "${SCOPE}" >/dev/null 2>&1 || true
           }
 
-          ensure_identity () {
-            local NAME="$1"
-            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
-          }
-
-          ensure_roles () {
-            local NAME="$1"
-            local PID
-            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
-            [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
-
-            # ACR pull
-            role_assign_try "${PID}" "AcrPull" "${ACR_ID}"
-
-            # Storage for blobs + delegation key
-            role_assign_try "${PID}" "Storage Blob Data Contributor" "${STORAGE_ID}"
-
-            # Service Bus (v0.1: simplest, avoids “it can’t receive/send” surprises)
-            role_assign_try "${PID}" "Azure Service Bus Data Owner" "${SB_ID}"
-          }
-
           ensure_registry_binding () {
             local NAME="$1"
             az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
               --server "${ACR_LOGIN}" \
-              --identity system >/dev/null || true
+              --identity system >/dev/null
           }
 
           ensure_ingress () {
@@ -278,17 +236,16 @@ jobs:
               --target-port "${PORT}" >/dev/null 2>&1 || true
           }
 
-          ensure_app () {
+          ensure_app_exists () {
             local NAME="$1"
-            local IMAGE="$2"
-            local INGRESS="$3"
-            local PORT="$4"
+            local INGRESS="$2"
+            local PORT="$3"
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
               STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv || true)
               echo "App exists: ${NAME} (state: ${STATE})"
               if [ "${STATE}" = "Failed" ]; then
-                echo "App is in Failed state. Deleting ${NAME} so it can be recreated cleanly..."
+                echo "App is Failed -> deleting so it can be recreated cleanly..."
                 az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes
               fi
             fi
@@ -303,35 +260,54 @@ jobs:
             fi
 
             ensure_identity "${NAME}"
-            ensure_roles "${NAME}"
             ensure_registry_binding "${NAME}"
-            ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
 
-            echo "Deploying image for ${NAME}: ${IMAGE}"
+            # ACR pull
+            ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
+
+            # Storage access (fixes your blob auth issues)
+            STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+
+            ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
+          }
+
+          deploy_image () {
+            local NAME="$1"
+            local IMAGE="$2"
+            echo "Deploying ${NAME} -> ${IMAGE}"
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
           }
 
-          # Deploy only what changed
-          if [ "${{ steps.decide.outputs.deploy_web_api }}" = "true" ]; then
-            ensure_app "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" "external" 8080
+          WEB="opal-web-api-${ENV_NAME}"
+          BILL="opal-billing-service-${ENV_NAME}"
+          ORCH="opal-orchestrator-${ENV_NAME}"
+          WORK="opal-export-worker-${ENV_NAME}"
+
+          # Ensure apps exist (only if they are impacted OR missing)
+          if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
+            ensure_app_exists "${WEB}" "external" 8080
+            deploy_image "${WEB}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
           fi
 
-          if [ "${{ steps.decide.outputs.deploy_billing_service }}" = "true" ]; then
-            ensure_app "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "external" 8080
+          if [ "${{ steps.decide.outputs.billing_service }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${BILL}" >/dev/null 2>&1; then
+            ensure_app_exists "${BILL}" "external" 8080
+            deploy_image "${BILL}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
           fi
 
-          if [ "${{ steps.decide.outputs.deploy_orchestrator }}" = "true" ]; then
-            ensure_app "opal-orchestrator-${ENV_NAME}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" "internal" 8080
+          if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${ORCH}" >/dev/null 2>&1; then
+            ensure_app_exists "${ORCH}" "internal" 8080
+            deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
           fi
 
-          if [ "${{ steps.decide.outputs.deploy_export_worker }}" = "true" ]; then
-            ensure_app "opal-export-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "internal" 8080
+          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WORK}" >/dev/null 2>&1; then
+            ensure_app_exists "${WORK}" "internal" 8080
+            deploy_image "${WORK}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           fi
 
-      - name: Print Web API URL (if deployed)
-        if: ${{ steps.decide.outputs.deploy_web_api == 'true' }}
+      - name: Print Web API URL
         run: |
           set -euo pipefail
           FQDN=$(az containerapp show \
