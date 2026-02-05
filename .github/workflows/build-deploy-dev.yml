@@ -1,7 +1,12 @@
-name: Build & Deploy Apps + AML (dev)
+name: Build & Deploy Apps (dev)
 
 on:
   workflow_dispatch: {}
+  push:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - ".github/workflows/build-deploy-dev.yml"
 
 permissions:
   id-token: write
@@ -9,7 +14,6 @@ permissions:
 
 env:
   ENV_NAME: dev
-  LOCATION: westeurope
   RG_NAME: opal-dev-rg
   IMAGE_TAG: ${{ github.sha }}
 
@@ -32,7 +36,49 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y jq gettext-base
+          sudo apt-get install -y jq
+
+      # Detect which components changed
+      - name: Detect changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared:
+              - "src/shared/**"
+            web_api:
+              - "src/web_api/**"
+            export_worker:
+              - "src/export_worker/**"
+            orchestrator:
+              - "src/orchestrator/**"
+            billing_service:
+              - "src/billing_service/**"
+            aml_sd_stub:
+              - "src/aml_sd_stub/**"
+
+      - name: Compute build/deploy targets
+        id: targets
+        run: |
+          set -euo pipefail
+
+          # If shared changes, rebuild/redeploy everything that depends on it
+          if [ "${{ steps.changes.outputs.shared }}" = "true" ]; then
+            echo "web_api=true" >> $GITHUB_OUTPUT
+            echo "export_worker=true" >> $GITHUB_OUTPUT
+            echo "orchestrator=true" >> $GITHUB_OUTPUT
+            echo "billing_service=true" >> $GITHUB_OUTPUT
+            echo "aml_sd_stub=true" >> $GITHUB_OUTPUT
+          else
+            echo "web_api=${{ steps.changes.outputs.web_api }}" >> $GITHUB_OUTPUT
+            echo "export_worker=${{ steps.changes.outputs.export_worker }}" >> $GITHUB_OUTPUT
+            echo "orchestrator=${{ steps.changes.outputs.orchestrator }}" >> $GITHUB_OUTPUT
+            echo "billing_service=${{ steps.changes.outputs.billing_service }}" >> $GITHUB_OUTPUT
+            echo "aml_sd_stub=${{ steps.changes.outputs.aml_sd_stub }}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Targets:"
+          cat $GITHUB_OUTPUT
 
       - name: Discover infra in Azure
         run: |
@@ -74,31 +120,41 @@ jobs:
           set -euo pipefail
           docker buildx create --use
 
-      - name: Build & push images (linux/amd64) using repo root context
+      - name: Build & push images (only what changed)
         run: |
           set -euo pipefail
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
-            -f src/web_api/Dockerfile . --push
+          if [ "${{ steps.targets.outputs.web_api }}" = "true" ]; then
+            docker buildx build --platform linux/amd64 \
+              -t "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
+              -f src/web_api/Dockerfile . --push
+          fi
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" \
-            -f src/orchestrator/Dockerfile . --push
+          if [ "${{ steps.targets.outputs.orchestrator }}" = "true" ]; then
+            docker buildx build --platform linux/amd64 \
+              -t "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" \
+              -f src/orchestrator/Dockerfile . --push
+          fi
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" \
-            -f src/export_worker/Dockerfile . --push
+          if [ "${{ steps.targets.outputs.export_worker }}" = "true" ]; then
+            docker buildx build --platform linux/amd64 \
+              -t "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" \
+              -f src/export_worker/Dockerfile . --push
+          fi
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" \
-            -f src/billing_service/Dockerfile . --push
+          if [ "${{ steps.targets.outputs.billing_service }}" = "true" ]; then
+            docker buildx build --platform linux/amd64 \
+              -t "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" \
+              -f src/billing_service/Dockerfile . --push
+          fi
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
-            -f src/aml_sd_stub/Dockerfile . --push
+          if [ "${{ steps.targets.outputs.aml_sd_stub }}" = "true" ]; then
+            docker buildx build --platform linux/amd64 \
+              -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
+              -f src/aml_sd_stub/Dockerfile . --push
+          fi
 
-      - name: Create/Update Container Apps (self-healing + ingress enable idempotent)
+      - name: Create/Update Container Apps (only what changed)
         run: |
           set -euo pipefail
 
@@ -106,18 +162,8 @@ jobs:
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
-          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
-          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
-
-          # Allow boot even if secrets are not set yet (so you can reach /healthz and iterate)
-          if [ -z "${AML_ENDPOINT_URL}" ]; then
-            echo "WARNING: AML_ENDPOINT_URL secret not set; using placeholder to allow container startup."
-            AML_ENDPOINT_URL="https://example.invalid"
-          fi
-          if [ -z "${AML_ENDPOINT_KEY}" ]; then
-            echo "WARNING: AML_ENDPOINT_KEY secret not set; using placeholder to allow container startup."
-            AML_ENDPOINT_KEY="placeholder"
-          fi
+          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL || 'https://aml-stub.local' }}"
+          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY || 'stub' }}"
 
           ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
@@ -132,16 +178,7 @@ jobs:
 
           ensure_identity () {
             local NAME="$1"
-            # retry because you hit ServiceUnavailable
-            for i in 1 2 3 4 5; do
-              if az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null 2>&1; then
-                return 0
-              fi
-              echo "Identity assign failed (attempt $i). Sleeping 30s..."
-              sleep 30
-            done
-            echo "ERROR: failed to assign identity to ${NAME} after retries"
-            exit 1
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null
           }
 
           ensure_acr_pull () {
@@ -218,15 +255,25 @@ jobs:
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
           }
 
-          # HTTP apps
-          ensure_app "opal-web-api-${ENV_NAME}"          "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"          "external" 8080
-          ensure_app "opal-billing-service-${ENV_NAME}"  "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"  "external" 8080
+          # Only deploy what changed
+          if [ "${{ steps.targets.outputs.web_api }}" = "true" ]; then
+            ensure_app "opal-web-api-${ENV_NAME}"         "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"          "external" 8080
+          fi
 
-          # Background workers (NO INGRESS)
-          ensure_app "opal-orchestrator-${ENV_NAME}"     "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"     "none" 0
-          ensure_app "opal-export-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"    "none" 0
+          if [ "${{ steps.targets.outputs.billing_service }}" = "true" ]; then
+            ensure_app "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"  "external" 8080
+          fi
 
-      - name: Print Web API URL
+          if [ "${{ steps.targets.outputs.orchestrator }}" = "true" ]; then
+            ensure_app "opal-orchestrator-${ENV_NAME}"    "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"     "internal" 8080
+          fi
+
+          if [ "${{ steps.targets.outputs.export_worker }}" = "true" ]; then
+            ensure_app "opal-export-worker-${ENV_NAME}"   "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"    "internal" 8080
+          fi
+
+      - name: Print Web API URL (if web_api deployed)
+        if: ${{ steps.targets.outputs.web_api == 'true' }}
         run: |
           set -euo pipefail
           FQDN=$(az containerapp show \
@@ -234,3 +281,4 @@ jobs:
             --name "opal-web-api-${ENV_NAME}" \
             --query properties.configuration.ingress.fqdn -o tsv)
           echo "Web API available at: https://${FQDN}"
+          echo "Health: https://${FQDN}/healthz"

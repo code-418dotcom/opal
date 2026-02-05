@@ -1,0 +1,61 @@
+name: Deploy Infra (dev)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+    paths:
+      - "infra/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENV_NAME: dev
+  LOCATION: westeurope
+  MONITORING_LOCATION: westeurope
+  POSTGRES_LOCATION: northeurope
+  RG_NAME: opal-dev-rg
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group (idempotent)
+        run: |
+          set -euo pipefail
+          az group create --name "${RG_NAME}" --location "${LOCATION}" -o jsonc
+
+      - name: Deploy Bicep
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+          jq '.parameters.postgresAdminPassword.value = "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"' \
+            infra/main.parameters.json > infra/_params.json
+
+          az deployment group create \
+            --resource-group "${RG_NAME}" \
+            --template-file infra/main.bicep \
+            --parameters @infra/_params.json \
+            --parameters envName="${ENV_NAME}" location="${LOCATION}" monitoringLocation="${MONITORING_LOCATION}" postgresLocation="${POSTGRES_LOCATION}" namePrefix="opal" \
+            --query "properties.outputs" \
+            -o json | tee infra_outputs.json
+
+      - name: Print outputs
+        run: |
+          echo "===== Infra Outputs ====="
+          cat infra_outputs.json
