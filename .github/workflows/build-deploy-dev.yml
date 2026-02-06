@@ -119,8 +119,9 @@ jobs:
 
           SB=$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${SB}" ] || (echo "ERROR: No Service Bus Namespace in ${RG_NAME}"; exit 1)
+
           SB_ID=$(az servicebus namespace show -g "${RG_NAME}" -n "${SB}" --query id -o tsv)
-          [ -n "${SB_ID}" ] || (echo "ERROR: Could not resolve Service Bus ID"; exit 1)
+          [ -n "${SB_ID}" ] || (echo "ERROR: No Service Bus ID in ${RG_NAME}"; exit 1)
 
           CAE=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${CAE}" ] || (echo "ERROR: No Container Apps Environment in ${RG_NAME}"; exit 1)
@@ -182,9 +183,34 @@ jobs:
         run: |
           set -euo pipefail
 
-          run_az () {
-            # Prevent infinite hangs in GitHub Actions
-            timeout 240s az "$@" --only-show-errors
+          wait_ready () {
+            local NAME="$1"
+            local MAX="${2:-60}"
+            local SLEEP="${3:-5}"
+
+            echo "Waiting for ${NAME} to be ready (provisioningState=Succeeded)..."
+            for i in $(seq 1 "${MAX}"); do
+              local STATE
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv 2>/dev/null || true)
+
+              if [ "${STATE}" = "Succeeded" ]; then
+                echo "${NAME} is ready."
+                return 0
+              fi
+
+              if [ "${STATE}" = "Failed" ]; then
+                echo "ERROR: ${NAME} provisioningState=Failed"
+                az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
+                return 1
+              fi
+
+              echo "  ${NAME}: provisioningState=${STATE:-<none>} (attempt ${i}/${MAX})"
+              sleep "${SLEEP}"
+            done
+
+            echo "ERROR: Timeout waiting for ${NAME} to reach provisioningState=Succeeded"
+            az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
+            return 1
           }
 
           DB_USER="opaladmin"
@@ -207,7 +233,8 @@ jobs:
 
           ensure_identity () {
             local NAME="$1"
-            run_az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null
+            wait_ready "${NAME}"
           }
 
           ensure_role () {
@@ -216,11 +243,10 @@ jobs:
             local ROLE="$3"
 
             local PID
-            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || true)
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
             [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
 
-            # idempotent: ignore if exists
-            run_az role assignment create \
+            az role assignment create \
               --assignee "${PID}" \
               --role "${ROLE}" \
               --scope "${SCOPE}" >/dev/null 2>&1 || true
@@ -228,18 +254,11 @@ jobs:
 
           ensure_registry_binding () {
             local NAME="$1"
-
-            local HAS
-            HAS=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.configuration.registries[0].identity" -o tsv 2>/dev/null || true)
-            if [ "${HAS}" = "system" ]; then
-              echo "Registry already bound for ${NAME}."
-              return 0
-            fi
-
             echo "Binding registry for ${NAME}..."
-            run_az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
+            az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
               --server "${ACR_LOGIN}" \
-              --identity system >/dev/null || true
+              --identity system >/dev/null
+            wait_ready "${NAME}"
           }
 
           ensure_ingress () {
@@ -248,18 +267,21 @@ jobs:
             local PORT="$3"
 
             if [ "${MODE}" = "none" ]; then
-              # IMPORTANT: For workers, we do NOT enable ingress at all.
               return 0
             fi
 
-            run_az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
+            az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
               --type "${MODE}" \
               --target-port "${PORT}" \
               --transport auto >/dev/null 2>&1 || true
 
-            run_az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
+            wait_ready "${NAME}"
+
+            az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
               --type "${MODE}" \
               --target-port "${PORT}" >/dev/null 2>&1 || true
+
+            wait_ready "${NAME}"
           }
 
           ensure_app_exists () {
@@ -268,22 +290,23 @@ jobs:
             local PORT="$3"
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
-              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv 2>/dev/null || true)
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv || true)
               echo "App exists: ${NAME} (state: ${STATE})"
               if [ "${STATE}" = "Failed" ]; then
                 echo "App is Failed -> deleting so it can be recreated cleanly..."
-                run_az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes || true
+                az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes
               fi
             fi
 
             if ! az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
               echo "Creating ${NAME} with placeholder image..."
-              # DO NOT specify ingress here. Workers will stay with ingress = null.
-              run_az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+              # NOTE: no ingress on create; default is none
+              az containerapp create -g "${RG_NAME}" -n "${NAME}" \
                 --environment "${CAE}" \
                 --image "${PLACEHOLDER_IMAGE}" \
                 --min-replicas 1 --max-replicas 3 \
                 --env-vars "${ENV_VARS[@]}" >/dev/null
+              wait_ready "${NAME}"
             fi
 
             ensure_identity "${NAME}"
@@ -292,13 +315,11 @@ jobs:
             # ACR pull
             ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
 
-            # Storage access (safe to grant broadly for now)
-            STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv 2>/dev/null || true)
-            if [ -n "${STORAGE_ID}" ]; then
-              ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
-            fi
+            # Storage access
+            STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
 
-            # Service Bus (namespace scope)
+            # Service Bus access (MI auth)
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
 
@@ -309,9 +330,13 @@ jobs:
             local NAME="$1"
             local IMAGE="$2"
             echo "Deploying ${NAME} -> ${IMAGE}"
-            run_az containerapp update -g "${RG_NAME}" -n "${NAME}" \
+            wait_ready "${NAME}"
+
+            az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
+
+            wait_ready "${NAME}"
           }
 
           WEB="opal-web-api-${ENV_NAME}"
@@ -320,31 +345,26 @@ jobs:
           EXPORT="opal-export-worker-${ENV_NAME}"
           JOBS="opal-jobs-worker-${ENV_NAME}"
 
-          # Web API (external ingress)
           if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
             ensure_app_exists "${WEB}" "external" 8080
             deploy_image "${WEB}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
           fi
 
-          # Billing service (external ingress)
           if [ "${{ steps.decide.outputs.billing_service }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${BILL}" >/dev/null 2>&1; then
             ensure_app_exists "${BILL}" "external" 8080
             deploy_image "${BILL}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
           fi
 
-          # Orchestrator (internal ingress - optional, but allowed)
           if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${ORCH}" >/dev/null 2>&1; then
             ensure_app_exists "${ORCH}" "internal" 8080
             deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
           fi
 
-          # Export worker (NO ingress)
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${EXPORT}" >/dev/null 2>&1; then
             ensure_app_exists "${EXPORT}" "none" 0
             deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           fi
 
-          # Jobs worker (NO ingress)
           if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${JOBS}" >/dev/null 2>&1; then
             ensure_app_exists "${JOBS}" "none" 0
             deploy_image "${JOBS}" "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}"
