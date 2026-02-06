@@ -1,84 +1,84 @@
 import json
 import logging
+import os
 import time
-from azure.servicebus import ServiceBusMessage, ServiceBusReceiveMode
+from typing import Any, Dict
 
+from azure.servicebus import ServiceBusMessage, ServiceBusReceiveMode
 from shared.config import settings
 from shared.servicebus import get_client
 
+LOG = logging.getLogger("jobs_worker")
 
-log = logging.getLogger("jobs_worker")
+
+def _setup_logging() -> None:
+    level = (os.getenv("LOG_LEVEL") or settings.LOG_LEVEL or "INFO").upper()
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    LOG.info("jobs_worker starting (LOG_LEVEL=%s)", level)
+    LOG.info(
+        "Queues: jobs=%s exports=%s",
+        settings.SERVICEBUS_JOBS_QUEUE,
+        settings.SERVICEBUS_EXPORTS_QUEUE,
+    )
 
 
-def _extract_payload(m) -> dict:
-    """
-    Supports:
-    - JSON body like {"job_id":"...", "tenant_id":"demo"}
-    - plain text body containing job_id only
-    """
-    body = b"".join([b for b in m.body]) if hasattr(m.body, "__iter__") else bytes(m.body)
-    text = body.decode("utf-8", errors="ignore").strip()
-
-    if not text:
-        return {}
-
+def _parse_message_body(m) -> Dict[str, Any]:
+    # Service Bus SDK may return body as generator of bytes chunks
     try:
-        data = json.loads(text)
-        if isinstance(data, dict):
-            return data
+        raw = b"".join([b for b in m.body])
+        return json.loads(raw.decode("utf-8"))
     except Exception:
-        pass
-
-    # fallback: treat as job_id only
-    return {"job_id": text}
+        # fallback: try string
+        return {"raw": str(m)}
 
 
-def main():
-    logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
-    log.info("Starting jobs_worker. jobs_queue=%s exports_queue=%s namespace=%s",
-             settings.SERVICEBUS_JOBS_QUEUE, settings.SERVICEBUS_EXPORTS_QUEUE, settings.SERVICEBUS_NAMESPACE)
+def main() -> None:
+    _setup_logging()
 
     while True:
         try:
             with get_client() as client:
                 receiver = client.get_queue_receiver(
                     queue_name=settings.SERVICEBUS_JOBS_QUEUE,
-                    receive_mode=ServiceBusReceiveMode.PEEK_LOCK,
                     max_wait_time=20,
+                    receive_mode=ServiceBusReceiveMode.PEEK_LOCK,
                 )
                 sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_EXPORTS_QUEUE)
 
                 with receiver, sender:
-                    messages = receiver.receive_messages(max_message_count=10, max_wait_time=20)
+                    messages = receiver.receive_messages(
+                        max_message_count=10,
+                        max_wait_time=20,
+                    )
+
                     if not messages:
                         continue
 
                     for m in messages:
                         try:
-                            payload = _extract_payload(m)
+                            payload = _parse_message_body(m)
+                            LOG.info("Received job message: %s", payload)
 
-                            job_id = payload.get("job_id")
-                            tenant_id = payload.get("tenant_id")
+                            # Forward as-is (Option A foundation)
+                            out = ServiceBusMessage(json.dumps(payload))
+                            sender.send_messages(out)
 
-                            if not job_id:
-                                log.warning("Received job message without job_id; completing to avoid poison loop.")
-                                receiver.complete_message(m)
-                                continue
-
-                            out = {"job_id": job_id}
-                            if tenant_id:
-                                out["tenant_id"] = tenant_id
-
-                            sender.send_messages(ServiceBusMessage(json.dumps(out)))
                             receiver.complete_message(m)
+                            LOG.info("Forwarded to exports and completed job msg.")
+                        except Exception as e:
+                            # Don't lose message; release lock so it can retry
+                            LOG.exception("Failed processing message; abandoning. error=%s", e)
+                            try:
+                                receiver.abandon_message(m)
+                            except Exception:
+                                # If abandon fails, lock will eventually expire
+                                pass
 
-                            log.info("Forwarded job_id=%s tenant_id=%s to exports queue", job_id, tenant_id)
-                        except Exception:
-                            log.exception("Failed processing message. Abandoning.")
-                            receiver.abandon_message(m)
-
-        except Exception:
-            log.exception("Top-level loop error. Sleeping 5s.")
+        except Exception as e:
+            LOG.exception("Worker loop error, sleeping. error=%s", e)
             time.sleep(5)
 
 
