@@ -1,14 +1,15 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from shared.db import SessionLocal, engine
-from shared.models import Base, Job, JobItem, JobStatus, ItemStatus
+from shared.db import SessionLocal
+from shared.models import Job, JobItem, JobStatus, ItemStatus
 from shared.util import new_id, new_correlation_id
 from shared.servicebus import send_job_message
 
 router = APIRouter(prefix="/v1", tags=["jobs"])
 
-# Create tables on startup (simple MVP; later use migrations)
-Base.metadata.create_all(bind=engine)
+# IMPORTANT:
+# Do NOT create DB tables at import time. This can crash the whole app if DB is unavailable.
+# Migrations later; for MVP we’ll do a *non-fatal* init in startup (see main.py).
 
 
 class ItemIn(BaseModel):
@@ -101,6 +102,7 @@ def enqueue_job(job_id: str, tenant_id: str):
                         "correlation_id": job.correlation_id,
                     }
                 )
+
         job.status = JobStatus.processing
         s.commit()
 

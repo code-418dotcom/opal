@@ -1,9 +1,5 @@
-# src/web_api/web_api/routes_health.py
-
 from fastapi import APIRouter
 from sqlalchemy import text
-
-from shared.config import settings
 from shared.db import SessionLocal
 from shared.storage import get_blob_service_client
 from shared.servicebus import get_client
@@ -11,44 +7,64 @@ from shared.servicebus import get_client
 router = APIRouter()
 
 
-@router.get("/healthz")
-def healthz():
-    # DB
-    db_ok = False
+def _check_db() -> bool:
     try:
         with SessionLocal() as s:
             s.execute(text("SELECT 1"))
-        db_ok = True
+        return True
     except Exception:
-        db_ok = False
+        return False
 
-    # Storage
-    #
-    # IMPORTANT:
-    # Using BlobServiceClient.get_account_information() often fails with
-    # AuthorizationPermissionMismatch even when blob-level RBAC is correct.
-    # A more reliable probe is a blob/container-level call that matches actual app access.
-    storage_ok = False
+
+def _check_storage() -> bool:
     try:
         c = get_blob_service_client()
-        container = c.get_container_client(settings.STORAGE_RAW_CONTAINER)
-        storage_ok = bool(container.exists())
+        _ = c.get_account_information()
+        return True
     except Exception:
-        storage_ok = False
+        return False
 
-    # Service Bus
-    sb_ok = False
+
+def _check_servicebus() -> bool:
     try:
         c = get_client()
-        # client opens successfully; avoid network-heavy ops
-        sb_ok = True
         c.close()
+        return True
     except Exception:
-        sb_ok = False
+        return False
+
+
+@router.get("/healthz")
+def healthz():
+    db_ok = _check_db()
+    storage_ok = _check_storage()
+    sb_ok = _check_servicebus()
 
     return {
         "status": "ok" if (db_ok and storage_ok and sb_ok) else "degraded",
         "db": "ok" if db_ok else "fail",
         "storage": "ok" if storage_ok else "fail",
         "service_bus": "ok" if sb_ok else "fail",
+    }
+
+
+@router.get("/readyz")
+def readyz():
+    """
+    Readiness should be strict: if dependencies aren't reachable, return degraded.
+    Your ingress/probes can use this later.
+    """
+    db_ok = _check_db()
+    storage_ok = _check_storage()
+    sb_ok = _check_servicebus()
+
+    if db_ok and storage_ok and sb_ok:
+        return {"status": "ok"}
+
+    # Keeping response body helpful; if you want 503, we can switch to Response(status_code=503)
+    return {
+        "status": "not-ready",
+        "db": db_ok,
+        "storage": storage_ok,
+        "service_bus": sb_ok,
     }

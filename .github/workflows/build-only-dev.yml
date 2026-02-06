@@ -1,0 +1,167 @@
+name: Build Images Only (dev) - Smart
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ "main" ]
+    paths:
+      - "src/**"
+      - ".github/workflows/build-only-dev.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENV_NAME: dev
+  LOCATION: westeurope
+  RG_NAME: opal-dev-rg
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      web_api: ${{ steps.filter.outputs.web_api }}
+      export_worker: ${{ steps.filter.outputs.export_worker }}
+      orchestrator: ${{ steps.filter.outputs.orchestrator }}
+      billing_service: ${{ steps.filter.outputs.billing_service }}
+      aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared:
+              - 'src/shared/**'
+            web_api:
+              - 'src/web_api/**'
+            export_worker:
+              - 'src/export_worker/**'
+            orchestrator:
+              - 'src/orchestrator/**'
+            billing_service:
+              - 'src/billing_service/**'
+            aml_sd_stub:
+              - 'src/aml_sd_stub/**'
+
+  build_only:
+    name: Build & Push (dev)
+    runs-on: ubuntu-latest
+    needs: [changes]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install helper tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Decide what to build
+        id: decide
+        run: |
+          set -euo pipefail
+
+          SHARED="${{ needs.changes.outputs.shared }}"
+          WEB_API="${{ needs.changes.outputs.web_api }}"
+          EXPORT_WORKER="${{ needs.changes.outputs.export_worker }}"
+          ORCH="${{ needs.changes.outputs.orchestrator }}"
+          BILLING="${{ needs.changes.outputs.billing_service }}"
+          AML="${{ needs.changes.outputs.aml_sd_stub }}"
+
+          # If shared changed, everything that imports shared must rebuild
+          if [ "${SHARED}" = "true" ]; then
+            WEB_API=true
+            EXPORT_WORKER=true
+            ORCH=true
+            BILLING=true
+            AML=true
+          fi
+
+          echo "build_web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
+          echo "build_export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
+          echo "build_orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
+          echo "build_billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
+          echo "build_aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
+
+          echo "Will build:"
+          echo "  web_api=${WEB_API}"
+          echo "  export_worker=${EXPORT_WORKER}"
+          echo "  orchestrator=${ORCH}"
+          echo "  billing_service=${BILLING}"
+          echo "  aml_sd_stub=${AML}"
+
+      - name: Discover ACR in Azure
+        run: |
+          set -euo pipefail
+          ACR_NAME=$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${ACR_NAME}" ] || (echo "ERROR: No ACR in ${RG_NAME}"; exit 1)
+          ACR_LOGIN=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "loginServer" -o tsv)
+
+          echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_ENV
+          echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
+
+      - name: Login to ACR (for docker push)
+        run: |
+          set -euo pipefail
+          az acr login --name "${ACR_NAME}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push images (only what changed)
+        run: |
+          set -euo pipefail
+
+          build_push () {
+            local IMAGE="$1"
+            local DOCKERFILE="$2"
+            echo "Building ${IMAGE} using ${DOCKERFILE}"
+            docker buildx build --platform linux/amd64 \
+              -t "${IMAGE}" \
+              -f "${DOCKERFILE}" . --push
+          }
+
+          if [ "${{ steps.decide.outputs.build_web_api }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" "src/web_api/Dockerfile"
+          fi
+
+          if [ "${{ steps.decide.outputs.build_orchestrator }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" "src/orchestrator/Dockerfile"
+          fi
+
+          if [ "${{ steps.decide.outputs.build_export_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
+          fi
+
+          if [ "${{ steps.decide.outputs.build_billing_service }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
+          fi
+
+          if [ "${{ steps.decide.outputs.build_aml_sd_stub }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" "src/aml_sd_stub/Dockerfile"
+          fi
+
+      - name: Summary
+        run: |
+          echo "Pushed tags:"
+          echo "  ${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}"

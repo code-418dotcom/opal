@@ -1,29 +1,21 @@
-import json
+from __future__ import annotations
+
 from azure.identity import DefaultAzureCredential
-from azure.servicebus import ServiceBusClient, ServiceBusMessage
-from .config import settings
+from azure.servicebus import ServiceBusClient
+
+from shared.config import settings
 
 
-def _fqdn() -> str:
-    return f"{settings.SERVICEBUS_NAMESPACE}.servicebus.windows.net"
+def get_fully_qualified_namespace() -> str:
+    # settings.SERVICEBUS_NAMESPACE is like: "opal-xxx-bus"
+    # Service Bus client needs: "<namespace>.servicebus.windows.net"
+    ns = settings.SERVICEBUS_NAMESPACE.strip()
+    if ns.endswith(".servicebus.windows.net"):
+        return ns
+    return f"{ns}.servicebus.windows.net"
 
 
 def get_client() -> ServiceBusClient:
-    cred = DefaultAzureCredential()
-    return ServiceBusClient(fully_qualified_namespace=_fqdn(), credential=cred)
-
-
-def send_job_message(payload: dict) -> None:
-    body = json.dumps(payload)
-    with get_client() as client:
-        sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_JOBS_QUEUE)
-        with sender:
-            sender.send_messages(ServiceBusMessage(body))
-
-
-def send_export_message(payload: dict) -> None:
-    body = json.dumps(payload)
-    with get_client() as client:
-        sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_EXPORTS_QUEUE)
-        with sender:
-            sender.send_messages(ServiceBusMessage(body))
+    fqns = get_fully_qualified_namespace()
+    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+    return ServiceBusClient(fully_qualified_namespace=fqns, credential=credential)

@@ -1,0 +1,148 @@
+name: Deploy Apps (dev)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which service(s) to deploy"
+        required: true
+        default: "web-api"
+        type: choice
+        options:
+          - web-api
+          - orchestrator
+          - export-worker
+          - billing-service
+          - aml-sd-stub
+          - all
+      image_tag:
+        description: "Image tag to deploy (default = Git SHA)"
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENV_NAME: dev
+  LOCATION: westeurope
+  RG_NAME: opal-dev-rg
+
+jobs:
+  deploy_apps:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install helper tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq gettext-base
+
+      - name: Discover infra in Azure
+        run: |
+          set -euo pipefail
+
+          ACR_NAME=$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${ACR_NAME}" ] || (echo "ERROR: No ACR in ${RG_NAME}"; exit 1)
+          ACR_LOGIN=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "loginServer" -o tsv)
+
+          STORAGE=$(az storage account list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${STORAGE}" ] || (echo "ERROR: No Storage Account in ${RG_NAME}"; exit 1)
+
+          SB=$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${SB}" ] || (echo "ERROR: No Service Bus Namespace in ${RG_NAME}"; exit 1)
+
+          PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[?contains(name,'-pg-ne')].name | [0]" -o tsv)
+          [ -n "${PG_SERVER}" ] || PG_SERVER=$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[0].name" -o tsv)
+          [ -n "${PG_SERVER}" ] || (echo "ERROR: No Postgres Flexible Server in ${RG_NAME}"; exit 1)
+
+          echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_ENV
+          echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
+          echo "STORAGE=${STORAGE}" >> $GITHUB_ENV
+          echo "SB=${SB}" >> $GITHUB_ENV
+          echo "PG_SERVER=${PG_SERVER}" >> $GITHUB_ENV
+
+      - name: Resolve image tag
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "IMAGE_TAG=${{ inputs.image_tag }}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+          fi
+
+      - name: Update selected Container App(s) (no create/identity/ingress changes)
+        run: |
+          set -euo pipefail
+
+          DB_USER="opaladmin"
+          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
+
+          # AML values come from GitHub Secrets (create these):
+          # AML_ENDPOINT_URL, AML_ENDPOINT_KEY
+          ENV_VARS=(
+            "ENV_NAME=${ENV_NAME}"
+            "DATABASE_URL=${DATABASE_URL}"
+            "STORAGE_ACCOUNT_NAME=${STORAGE}"
+            "SERVICEBUS_NAMESPACE=${SB}"
+            "AML_ENDPOINT_URL=${{ secrets.AML_ENDPOINT_URL }}"
+            "AML_ENDPOINT_KEY=${{ secrets.AML_ENDPOINT_KEY }}"
+          )
+
+          update_one () {
+            local APP_NAME="$1"
+            local IMAGE_PATH="$2"
+
+            echo "==> Updating ${APP_NAME} -> ${IMAGE_PATH}"
+            az containerapp update -g "${RG_NAME}" -n "${APP_NAME}" \
+              --image "${IMAGE_PATH}" \
+              --set-env-vars "${ENV_VARS[@]}" >/dev/null
+
+            echo "OK: ${APP_NAME}"
+          }
+
+          TARGET="${{ inputs.target }}"
+
+          if [ "${TARGET}" = "web-api" ] || [ "${TARGET}" = "all" ]; then
+            update_one "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
+          fi
+
+          if [ "${TARGET}" = "billing-service" ] || [ "${TARGET}" = "all" ]; then
+            update_one "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
+          fi
+
+          if [ "${TARGET}" = "orchestrator" ] || [ "${TARGET}" = "all" ]; then
+            update_one "opal-orchestrator-${ENV_NAME}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
+          fi
+
+          if [ "${TARGET}" = "export-worker" ] || [ "${TARGET}" = "all" ]; then
+            update_one "opal-export-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+          fi
+
+          if [ "${TARGET}" = "aml-sd-stub" ] || [ "${TARGET}" = "all" ]; then
+            update_one "opal-aml-sd-stub-${ENV_NAME}" "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}"
+          fi
+
+      - name: Print Web API URL (if web-api deployed)
+        if: ${{ inputs.target == 'web-api' || inputs.target == 'all' }}
+        run: |
+          set -euo pipefail
+          FQDN=$(az containerapp show \
+            --resource-group "${RG_NAME}" \
+            --name "opal-web-api-${ENV_NAME}" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "Web API available at: https://${FQDN}"
+          echo "Health: https://${FQDN}/healthz"

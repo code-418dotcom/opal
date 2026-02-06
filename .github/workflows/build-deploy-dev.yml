@@ -1,7 +1,13 @@
-name: Build & Deploy Apps + AML (dev)
+name: Build & Deploy Apps (dev) - Smart
 
 on:
   workflow_dispatch: {}
+  push:
+    branches: [ "main" ]
+    paths:
+      - "src/**"
+      - ".github/workflows/build-deploy-dev.yml"
+      - ".github/workflows/build-only-dev.yml"
 
 permissions:
   id-token: write
@@ -14,8 +20,43 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  build_deploy:
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      web_api: ${{ steps.filter.outputs.web_api }}
+      export_worker: ${{ steps.filter.outputs.export_worker }}
+      jobs_worker: ${{ steps.filter.outputs.jobs_worker }}
+      orchestrator: ${{ steps.filter.outputs.orchestrator }}
+      billing_service: ${{ steps.filter.outputs.billing_service }}
+      aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared:
+              - 'src/shared/**'
+            web_api:
+              - 'src/web_api/**'
+            export_worker:
+              - 'src/export_worker/**'
+            jobs_worker:
+              - 'src/jobs_worker/**'
+            orchestrator:
+              - 'src/orchestrator/**'
+            billing_service:
+              - 'src/billing_service/**'
+            aml_sd_stub:
+              - 'src/aml_sd_stub/**'
+
+  build_and_deploy:
+    name: Build + Deploy (dev)
+    runs-on: ubuntu-latest
+    needs: [changes]
 
     steps:
       - name: Checkout
@@ -32,9 +73,39 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y jq gettext-base
+          sudo apt-get install -y jq
 
-      - name: Discover infra in Azure
+      - name: Decide what to build/deploy
+        id: decide
+        run: |
+          set -euo pipefail
+
+          SHARED="${{ needs.changes.outputs.shared }}"
+          WEB_API="${{ needs.changes.outputs.web_api }}"
+          EXPORT_WORKER="${{ needs.changes.outputs.export_worker }}"
+          JOBS_WORKER="${{ needs.changes.outputs.jobs_worker }}"
+          ORCH="${{ needs.changes.outputs.orchestrator }}"
+          BILLING="${{ needs.changes.outputs.billing_service }}"
+          AML="${{ needs.changes.outputs.aml_sd_stub }}"
+
+          # If shared changed, everything rebuilds/redeploys
+          if [ "${SHARED}" = "true" ]; then
+            WEB_API=true
+            EXPORT_WORKER=true
+            JOBS_WORKER=true
+            ORCH=true
+            BILLING=true
+            AML=true
+          fi
+
+          echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
+          echo "export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
+          echo "jobs_worker=${JOBS_WORKER}" >> "$GITHUB_OUTPUT"
+          echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
+          echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
+          echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
+
+      - name: Discover infra in Azure (dev RG)
         run: |
           set -euo pipefail
 
@@ -48,6 +119,7 @@ jobs:
 
           SB=$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${SB}" ] || (echo "ERROR: No Service Bus Namespace in ${RG_NAME}"; exit 1)
+          SB_ID=$(az servicebus namespace show -g "${RG_NAME}" -n "${SB}" --query id -o tsv)
 
           CAE=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${CAE}" ] || (echo "ERROR: No Container Apps Environment in ${RG_NAME}"; exit 1)
@@ -61,6 +133,7 @@ jobs:
           echo "ACR_ID=${ACR_ID}" >> $GITHUB_ENV
           echo "STORAGE=${STORAGE}" >> $GITHUB_ENV
           echo "SB=${SB}" >> $GITHUB_ENV
+          echo "SB_ID=${SB_ID}" >> $GITHUB_ENV
           echo "CAE=${CAE}" >> $GITHUB_ENV
           echo "PG_SERVER=${PG_SERVER}" >> $GITHUB_ENV
 
@@ -70,35 +143,41 @@ jobs:
           az acr login --name "${ACR_NAME}"
 
       - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push images (only what changed)
         run: |
           set -euo pipefail
-          docker buildx create --use
 
-      - name: Build & push images (linux/amd64) using repo root context
-        run: |
-          set -euo pipefail
+          build_push () {
+            local IMAGE="$1"
+            local DOCKERFILE="$2"
+            echo "Building ${IMAGE} using ${DOCKERFILE}"
+            docker buildx build --platform linux/amd64 \
+              -t "${IMAGE}" \
+              -f "${DOCKERFILE}" . --push
+          }
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" \
-            -f src/web_api/Dockerfile . --push
+          if [ "${{ steps.decide.outputs.web_api }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" "src/web_api/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" "src/orchestrator/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}" "src/jobs_worker/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.billing_service }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.aml_sd_stub }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" "src/aml_sd_stub/Dockerfile"
+          fi
 
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" \
-            -f src/orchestrator/Dockerfile . --push
-
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" \
-            -f src/export_worker/Dockerfile . --push
-
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" \
-            -f src/billing_service/Dockerfile . --push
-
-          docker buildx build --platform linux/amd64 \
-            -t "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" \
-            -f src/aml_sd_stub/Dockerfile . --push
-
-      - name: Create/Update Container Apps (self-healing + ingress enable idempotent)
+      - name: Create/Update Container Apps (only affected apps)
         run: |
           set -euo pipefail
 
@@ -109,52 +188,39 @@ jobs:
           AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
           AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
 
-          # Allow boot even if secrets are not set yet (so you can reach /healthz and iterate)
-          if [ -z "${AML_ENDPOINT_URL}" ]; then
-            echo "WARNING: AML_ENDPOINT_URL secret not set; using placeholder to allow container startup."
-            AML_ENDPOINT_URL="https://example.invalid"
-          fi
-          if [ -z "${AML_ENDPOINT_KEY}" ]; then
-            echo "WARNING: AML_ENDPOINT_KEY secret not set; using placeholder to allow container startup."
-            AML_ENDPOINT_KEY="placeholder"
-          fi
-
-          ENV_VARS=(
+          ENV_VARS_COMMON=(
             "ENV_NAME=${ENV_NAME}"
-            "DATABASE_URL=${DATABASE_URL}"
             "STORAGE_ACCOUNT_NAME=${STORAGE}"
             "SERVICEBUS_NAMESPACE=${SB}"
             "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
             "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
           )
 
+          ENV_VARS_WITH_DB=(
+            "${ENV_VARS_COMMON[@]}"
+            "DATABASE_URL=${DATABASE_URL}"
+          )
+
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
           ensure_identity () {
             local NAME="$1"
-            # retry because you hit ServiceUnavailable
-            for i in 1 2 3 4 5; do
-              if az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null 2>&1; then
-                return 0
-              fi
-              echo "Identity assign failed (attempt $i). Sleeping 30s..."
-              sleep 30
-            done
-            echo "ERROR: failed to assign identity to ${NAME} after retries"
-            exit 1
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null
           }
 
-          ensure_acr_pull () {
+          ensure_role () {
             local NAME="$1"
-            local PRINCIPAL_ID
-            PRINCIPAL_ID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
-            [ -n "${PRINCIPAL_ID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
+            local SCOPE="$2"
+            local ROLE="$3"
+
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
 
             az role assignment create \
-              --assignee-object-id "${PRINCIPAL_ID}" \
-              --assignee-principal-type ServicePrincipal \
-              --role "AcrPull" \
-              --scope "${ACR_ID}" 2>/dev/null || true
+              --assignee "${PID}" \
+              --role "${ROLE}" \
+              --scope "${SCOPE}" >/dev/null 2>&1 || true
           }
 
           ensure_registry_binding () {
@@ -164,67 +230,98 @@ jobs:
               --identity system >/dev/null
           }
 
-          ensure_ingress () {
+          ensure_app_exists () {
             local NAME="$1"
-            local MODE="$2"   # external|internal|none
+            local HAS_INGRESS="$2"   # true|false
             local PORT="$3"
-
-            if [ "${MODE}" = "none" ]; then
-              return 0
-            fi
-
-            az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
-              --type "${MODE}" \
-              --target-port "${PORT}" \
-              --transport auto >/dev/null 2>&1 || true
-
-            az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
-              --type "${MODE}" \
-              --target-port "${PORT}" >/dev/null 2>&1 || true
-          }
-
-          ensure_app () {
-            local NAME="$1"
-            local IMAGE="$2"
-            local INGRESS="$3"
-            local PORT="$4"
+            shift 3
+            local ENV_VARS=("$@")
 
             if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
               STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv || true)
               echo "App exists: ${NAME} (state: ${STATE})"
               if [ "${STATE}" = "Failed" ]; then
-                echo "App is in Failed state. Deleting ${NAME} so it can be recreated cleanly..."
+                echo "App is Failed -> deleting so it can be recreated cleanly..."
                 az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes
               fi
             fi
 
             if ! az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
               echo "Creating ${NAME} with placeholder image..."
-              az containerapp create -g "${RG_NAME}" -n "${NAME}" \
-                --environment "${CAE}" \
-                --image "${PLACEHOLDER_IMAGE}" \
-                --min-replicas 1 --max-replicas 3 \
-                --env-vars "${ENV_VARS[@]}" >/dev/null
+              if [ "${HAS_INGRESS}" = "true" ]; then
+                az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                  --environment "${CAE}" \
+                  --image "${PLACEHOLDER_IMAGE}" \
+                  --ingress external --target-port "${PORT}" \
+                  --min-replicas 1 --max-replicas 3 \
+                  --env-vars "${ENV_VARS[@]}" >/dev/null
+              else
+                az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                  --environment "${CAE}" \
+                  --image "${PLACEHOLDER_IMAGE}" \
+                  --ingress disabled \
+                  --min-replicas 1 --max-replicas 3 \
+                  --env-vars "${ENV_VARS[@]}" >/dev/null
+              fi
             fi
 
             ensure_identity "${NAME}"
-            ensure_acr_pull "${NAME}"
             ensure_registry_binding "${NAME}"
-            ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
 
-            echo "Deploying private image for ${NAME}..."
+            # ACR pull
+            ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
+
+            # Storage access (needed for most apps; harmless if unused)
+            STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+
+            # Service Bus RBAC (namespace scope)
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
+          }
+
+          deploy_image () {
+            local NAME="$1"
+            local IMAGE="$2"
+            shift 2
+            local ENV_VARS=("$@")
+
+            echo "Deploying ${NAME} -> ${IMAGE}"
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
           }
 
-          # HTTP apps
-          ensure_app "opal-web-api-${ENV_NAME}"          "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"          "external" 8080
-          ensure_app "opal-billing-service-${ENV_NAME}"  "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"  "external" 8080
+          WEB="opal-web-api-${ENV_NAME}"
+          BILL="opal-billing-service-${ENV_NAME}"
+          ORCH="opal-orchestrator-${ENV_NAME}"
+          EXPORTW="opal-export-worker-${ENV_NAME}"
+          JOBSW="opal-jobs-worker-${ENV_NAME}"
 
-          # Background workers (NO INGRESS)
-          ensure_app "opal-orchestrator-${ENV_NAME}"     "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"     "none" 0
-          ensure_app "opal-export-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"    "none" 0
+          if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
+            ensure_app_exists "${WEB}" "true" 8080 "${ENV_VARS_WITH_DB[@]}"
+            deploy_image "${WEB}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" "${ENV_VARS_WITH_DB[@]}"
+          fi
+
+          if [ "${{ steps.decide.outputs.billing_service }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${BILL}" >/dev/null 2>&1; then
+            ensure_app_exists "${BILL}" "true" 8080 "${ENV_VARS_WITH_DB[@]}"
+            deploy_image "${BILL}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "${ENV_VARS_WITH_DB[@]}"
+          fi
+
+          if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${ORCH}" >/dev/null 2>&1; then
+            ensure_app_exists "${ORCH}" "false" 8080 "${ENV_VARS_WITH_DB[@]}"
+            deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" "${ENV_VARS_WITH_DB[@]}"
+          fi
+
+          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${EXPORTW}" >/dev/null 2>&1; then
+            ensure_app_exists "${EXPORTW}" "false" 8080 "${ENV_VARS_WITH_DB[@]}"
+            deploy_image "${EXPORTW}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "${ENV_VARS_WITH_DB[@]}"
+          fi
+
+          if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${JOBSW}" >/dev/null 2>&1; then
+            ensure_app_exists "${JOBSW}" "false" 8080 "${ENV_VARS_COMMON[@]}"
+            deploy_image "${JOBSW}" "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}" "${ENV_VARS_COMMON[@]}"
+          fi
 
       - name: Print Web API URL
         run: |
@@ -234,3 +331,4 @@ jobs:
             --name "opal-web-api-${ENV_NAME}" \
             --query properties.configuration.ingress.fqdn -o tsv)
           echo "Web API available at: https://${FQDN}"
+          echo "Try: https://${FQDN}/healthz"
