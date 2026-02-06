@@ -27,6 +27,7 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
       web_api: ${{ steps.filter.outputs.web_api }}
       export_worker: ${{ steps.filter.outputs.export_worker }}
+      jobs_worker: ${{ steps.filter.outputs.jobs_worker }}
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
@@ -43,6 +44,8 @@ jobs:
               - 'src/web_api/**'
             export_worker:
               - 'src/export_worker/**'
+            jobs_worker:
+              - 'src/jobs_worker/**'
             orchestrator:
               - 'src/orchestrator/**'
             billing_service:
@@ -80,14 +83,15 @@ jobs:
           SHARED="${{ needs.changes.outputs.shared }}"
           WEB_API="${{ needs.changes.outputs.web_api }}"
           EXPORT_WORKER="${{ needs.changes.outputs.export_worker }}"
+          JOBS_WORKER="${{ needs.changes.outputs.jobs_worker }}"
           ORCH="${{ needs.changes.outputs.orchestrator }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
 
-          # If shared changed, everything rebuilds/redeploys
           if [ "${SHARED}" = "true" ]; then
             WEB_API=true
             EXPORT_WORKER=true
+            JOBS_WORKER=true
             ORCH=true
             BILLING=true
             AML=true
@@ -95,6 +99,7 @@ jobs:
 
           echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
           echo "export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
+          echo "jobs_worker=${JOBS_WORKER}" >> "$GITHUB_OUTPUT"
           echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
           echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
@@ -159,6 +164,9 @@ jobs:
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
           fi
+          if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}" "src/jobs_worker/Dockerfile"
+          fi
           if [ "${{ steps.decide.outputs.billing_service }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
           fi
@@ -174,7 +182,6 @@ jobs:
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
           DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
 
-          # IMPORTANT: Option A = we accept these as secrets (until AML is real).
           AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
           AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
 
@@ -185,6 +192,7 @@ jobs:
             "SERVICEBUS_NAMESPACE=${SB}"
             "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
             "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
+            "LOG_LEVEL=INFO"
           )
 
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
@@ -203,7 +211,6 @@ jobs:
             PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
             [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
 
-            # idempotent: ignore if exists
             az role assignment create \
               --assignee "${PID}" \
               --role "${ROLE}" \
@@ -217,12 +224,18 @@ jobs:
               --identity system >/dev/null
           }
 
+          disable_ingress () {
+            local NAME="$1"
+            az containerapp ingress disable -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1 || true
+          }
+
           ensure_ingress () {
             local NAME="$1"
             local MODE="$2"   # external|internal|none
             local PORT="$3"
 
             if [ "${MODE}" = "none" ]; then
+              disable_ingress "${NAME}"
               return 0
             fi
 
@@ -255,19 +268,21 @@ jobs:
               az containerapp create -g "${RG_NAME}" -n "${NAME}" \
                 --environment "${CAE}" \
                 --image "${PLACEHOLDER_IMAGE}" \
-                --min-replicas 1 --max-replicas 3 \
+                --min-replicas 1 --max-replicas 1 \
                 --env-vars "${ENV_VARS[@]}" >/dev/null
             fi
 
             ensure_identity "${NAME}"
             ensure_registry_binding "${NAME}"
 
-            # ACR pull
             ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
 
-            # Storage access (fixes your blob auth issues)
             STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
             ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+
+            SB_ID=$(az servicebus namespace show -g "${RG_NAME}" -n "${SB}" --query id -o tsv)
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
 
             ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
           }
@@ -284,9 +299,9 @@ jobs:
           WEB="opal-web-api-${ENV_NAME}"
           BILL="opal-billing-service-${ENV_NAME}"
           ORCH="opal-orchestrator-${ENV_NAME}"
-          WORK="opal-export-worker-${ENV_NAME}"
+          JOBS="opal-jobs-worker-${ENV_NAME}"
+          EXP="opal-export-worker-${ENV_NAME}"
 
-          # Ensure apps exist (only if they are impacted OR missing)
           if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
             ensure_app_exists "${WEB}" "external" 8080
             deploy_image "${WEB}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
@@ -302,9 +317,15 @@ jobs:
             deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
           fi
 
-          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WORK}" >/dev/null 2>&1; then
-            ensure_app_exists "${WORK}" "internal" 8080
-            deploy_image "${WORK}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+          # workers: NO ingress
+          if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${JOBS}" >/dev/null 2>&1; then
+            ensure_app_exists "${JOBS}" "none" 0
+            deploy_image "${JOBS}" "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}"
+          fi
+
+          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${EXP}" >/dev/null 2>&1; then
+            ensure_app_exists "${EXP}" "none" 0
+            deploy_image "${EXP}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           fi
 
       - name: Print Web API URL

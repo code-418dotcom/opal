@@ -7,6 +7,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: opal-infra-dev
+  cancel-in-progress: false
+
 env:
   ENV_NAME: dev
   LOCATION: westeurope
@@ -17,6 +21,13 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    outputs:
+      acr_name: ${{ steps.outputs.outputs.acr_name }}
+      storage_name: ${{ steps.outputs.outputs.storage_name }}
+      servicebus_name: ${{ steps.outputs.outputs.servicebus_name }}
+      cae_name: ${{ steps.outputs.outputs.cae_name }}
+      postgres_server_name: ${{ steps.outputs.outputs.postgres_server_name }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,18 +47,66 @@ jobs:
       - name: Deploy Bicep
         run: |
           set -euo pipefail
-          jq '.parameters.postgresAdminPassword.value = "${{ secrets.POSTGRES_ADMIN_PASSWORD }}"' \
-            infra/main.parameters.json > infra/_params.json
 
+          # IMPORTANT: do NOT write secrets into repo/workspace files.
+          # Pass secrets as parameters directly.
           az deployment group create \
             --resource-group "${RG_NAME}" \
             --template-file infra/main.bicep \
-            --parameters @infra/_params.json \
-            --parameters envName="${ENV_NAME}" location="${LOCATION}" monitoringLocation="${MONITORING_LOCATION}" postgresLocation="${POSTGRES_LOCATION}" namePrefix="opal" \
+            --parameters @infra/main.parameters.json \
+            --parameters \
+              envName="${ENV_NAME}" \
+              location="${LOCATION}" \
+              monitoringLocation="${MONITORING_LOCATION}" \
+              postgresLocation="${POSTGRES_LOCATION}" \
+              namePrefix="opal" \
+              postgresAdminPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD }}" \
             --query "properties.outputs" \
             -o json | tee infra_outputs.json
 
-      - name: Print outputs
+      - name: Print outputs (non-secret)
         run: |
+          set -euo pipefail
           echo "===== Infra Outputs ====="
           cat infra_outputs.json
+
+      - name: Export outputs for other jobs/workflows
+        id: outputs
+        run: |
+          set -euo pipefail
+
+          # Try to read from bicep outputs first (preferred),
+          # but fall back to discovery in RG if output keys don't exist.
+          get_out () {
+            local KEY="$1"
+            jq -r --arg k "${KEY}" '.[$k].value // empty' infra_outputs.json
+          }
+
+          ACR_NAME="$(get_out acrName)"
+          STORAGE_NAME="$(get_out storageAccountName)"
+          SERVICEBUS_NAME="$(get_out serviceBusNamespaceName)"
+          CAE_NAME="$(get_out containerAppsEnvName)"
+          POSTGRES_SERVER_NAME="$(get_out postgresServerName)"
+
+          # Fallback discovery if your bicep doesn't output these yet
+          if [ -z "${ACR_NAME}" ]; then
+            ACR_NAME="$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv || true)"
+          fi
+          if [ -z "${STORAGE_NAME}" ]; then
+            STORAGE_NAME="$(az storage account list -g "${RG_NAME}" --query "[0].name" -o tsv || true)"
+          fi
+          if [ -z "${SERVICEBUS_NAME}" ]; then
+            SERVICEBUS_NAME="$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv || true)"
+          fi
+          if [ -z "${CAE_NAME}" ]; then
+            CAE_NAME="$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv || true)"
+          fi
+          if [ -z "${POSTGRES_SERVER_NAME}" ]; then
+            POSTGRES_SERVER_NAME="$(az resource list -g "${RG_NAME}" --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" --query "[0].name" -o tsv || true)"
+          fi
+
+          echo "acr_name=${ACR_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "storage_name=${STORAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "servicebus_name=${SERVICEBUS_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "cae_name=${CAE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "postgres_server_name=${POSTGRES_SERVER_NAME}" >> "${GITHUB_OUTPUT}"

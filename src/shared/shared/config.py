@@ -28,9 +28,5 @@ class Settings(BaseSettings):
     # App behavior
     LOG_LEVEL: str = "INFO"
 
-    # Mollie (billing-service only; optional for now)
-    MOLLIE_API_KEY: str | None = None
-    MOLLIE_WEBHOOK_SECRET: str | None = None
-
 
 settings = Settings()

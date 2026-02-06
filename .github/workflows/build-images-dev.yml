@@ -1,0 +1,127 @@
+name: Build Images (dev)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which service(s) to build"
+        required: true
+        default: "web-api"
+        type: choice
+        options:
+          - web-api
+          - orchestrator
+          - export-worker
+          - billing-service
+          - aml-sd-stub
+          - all
+      image_tag:
+        description: "Override image tag (default = Git SHA)"
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENV_NAME: dev
+  LOCATION: westeurope
+  RG_NAME: opal-dev-rg
+
+jobs:
+  build_images:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install helper tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq gettext-base
+
+      - name: Discover infra in Azure
+        run: |
+          set -euo pipefail
+
+          ACR_NAME=$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${ACR_NAME}" ] || (echo "ERROR: No ACR in ${RG_NAME}"; exit 1)
+          ACR_LOGIN=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "loginServer" -o tsv)
+
+          echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_ENV
+          echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
+
+      - name: Login to ACR (for docker push)
+        run: |
+          set -euo pipefail
+          az acr login --name "${ACR_NAME}"
+
+      - name: Set up Docker Buildx
+        run: |
+          set -euo pipefail
+          docker buildx create --use
+
+      - name: Resolve image tag
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "IMAGE_TAG=${{ inputs.image_tag }}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build & push selected image(s) (linux/amd64) using repo root context
+        run: |
+          set -euo pipefail
+
+          build_one () {
+            local NAME="$1"
+            local DOCKERFILE="$2"
+            local IMAGE="${ACR_LOGIN}/opal/${NAME}:${IMAGE_TAG}"
+
+            echo "==> Building ${NAME} -> ${IMAGE}"
+            docker buildx build --platform linux/amd64 \
+              -t "${IMAGE}" \
+              -f "${DOCKERFILE}" . --push
+          }
+
+          TARGET="${{ inputs.target }}"
+
+          if [ "${TARGET}" = "web-api" ] || [ "${TARGET}" = "all" ]; then
+            build_one "web-api" "src/web_api/Dockerfile"
+          fi
+
+          if [ "${TARGET}" = "orchestrator" ] || [ "${TARGET}" = "all" ]; then
+            build_one "orchestrator" "src/orchestrator/Dockerfile"
+          fi
+
+          if [ "${TARGET}" = "export-worker" ] || [ "${TARGET}" = "all" ]; then
+            build_one "export-worker" "src/export_worker/Dockerfile"
+          fi
+
+          if [ "${TARGET}" = "billing-service" ] || [ "${TARGET}" = "all" ]; then
+            build_one "billing-service" "src/billing_service/Dockerfile"
+          fi
+
+          if [ "${TARGET}" = "aml-sd-stub" ] || [ "${TARGET}" = "all" ]; then
+            build_one "aml-sd-stub" "src/aml_sd_stub/Dockerfile"
+          fi
+
+      - name: Summary (what to deploy)
+        run: |
+          set -euo pipefail
+          echo "Built target: ${{ inputs.target }}"
+          echo "Tag: ${IMAGE_TAG}"
+          echo "ACR: ${ACR_LOGIN}"
+          echo ""
+          echo "Next: run 'Deploy Apps (dev)' with the same tag."
