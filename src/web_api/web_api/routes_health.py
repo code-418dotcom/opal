@@ -23,7 +23,9 @@ def _check_db() -> bool:
 def _check_storage() -> bool:
     try:
         c = get_blob_service_client()
-        _ = c.get_account_information()
+        # List containers instead of get_account_information()
+        # This works with Storage Blob Data Contributor role
+        list(c.list_containers(max_results=1))
         return True
     except Exception as e:
         LOG.error(f"Storage health check failed: {e}")
