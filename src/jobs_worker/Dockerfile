@@ -9,11 +9,14 @@ WORKDIR /app
 COPY src/jobs_worker/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy code (including shared package)
-COPY src/shared /app/shared
-COPY src/jobs_worker /app/jobs_worker
+# Copy shared package (the inner shared/ directory that has the actual Python package)
+COPY src/shared/shared /app/shared
+
+# Copy jobs_worker package (the inner jobs_worker/ directory that has the actual Python package)
+COPY src/jobs_worker/jobs_worker /app/jobs_worker
 
 # Ensure /app is on PYTHONPATH so "shared" can be imported
 ENV PYTHONPATH=/app
 
+# Run the worker
 CMD ["python", "-m", "jobs_worker.worker"]
