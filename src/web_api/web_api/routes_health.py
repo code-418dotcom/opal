@@ -1,10 +1,13 @@
 from fastapi import APIRouter
 from sqlalchemy import text
+import logging
+
 from shared.db import SessionLocal
 from shared.storage import get_blob_service_client
 from shared.servicebus import get_client
 
 router = APIRouter()
+LOG = logging.getLogger(__name__)
 
 
 def _check_db() -> bool:
@@ -12,7 +15,8 @@ def _check_db() -> bool:
         with SessionLocal() as s:
             s.execute(text("SELECT 1"))
         return True
-    except Exception:
+    except Exception as e:
+        LOG.error(f"DB health check failed: {e}")
         return False
 
 
@@ -21,7 +25,8 @@ def _check_storage() -> bool:
         c = get_blob_service_client()
         _ = c.get_account_information()
         return True
-    except Exception:
+    except Exception as e:
+        LOG.error(f"Storage health check failed: {e}")
         return False
 
 
@@ -30,7 +35,8 @@ def _check_servicebus() -> bool:
         c = get_client()
         c.close()
         return True
-    except Exception:
+    except Exception as e:
+        LOG.error(f"ServiceBus health check failed: {e}")
         return False
 
 
@@ -50,18 +56,13 @@ def healthz():
 
 @router.get("/readyz")
 def readyz():
-    """
-    Readiness should be strict: if dependencies aren't reachable, return degraded.
-    Your ingress/probes can use this later.
-    """
     db_ok = _check_db()
     storage_ok = _check_storage()
     sb_ok = _check_servicebus()
-
+    
     if db_ok and storage_ok and sb_ok:
         return {"status": "ok"}
-
-    # Keeping response body helpful; if you want 503, we can switch to Response(status_code=503)
+    
     return {
         "status": "not-ready",
         "db": db_ok,
