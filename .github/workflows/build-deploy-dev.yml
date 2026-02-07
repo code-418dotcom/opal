@@ -27,7 +27,6 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
       web_api: ${{ steps.filter.outputs.web_api }}
       export_worker: ${{ steps.filter.outputs.export_worker }}
-      # REMOVED:       jobs_worker: ${{ steps.filter.outputs.jobs_worker }}
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
@@ -44,8 +43,6 @@ jobs:
               - 'src/web_api/**'
             export_worker:
               - 'src/export_worker/**'
-            # REMOVED:             jobs_worker:
-            # REMOVED:               - 'src/jobs_worker/**'
             orchestrator:
               - 'src/orchestrator/**'
             billing_service:
@@ -83,7 +80,6 @@ jobs:
           SHARED="${{ needs.changes.outputs.shared }}"
           WEB_API="${{ needs.changes.outputs.web_api }}"
           EXPORT_WORKER="${{ needs.changes.outputs.export_worker }}"
-          # REMOVED:           JOBS_WORKER="${{ needs.changes.outputs.jobs_worker }}"
           ORCH="${{ needs.changes.outputs.orchestrator }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
@@ -92,7 +88,6 @@ jobs:
           if [ "${SHARED}" = "true" ]; then
             WEB_API=true
             EXPORT_WORKER=true
-            # REMOVED:             JOBS_WORKER=true
             ORCH=true
             BILLING=true
             AML=true
@@ -100,7 +95,6 @@ jobs:
 
           echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
           echo "export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
-          # REMOVED:           echo "jobs_worker=${JOBS_WORKER}" >> "$GITHUB_OUTPUT"
           echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
           echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
@@ -168,9 +162,6 @@ jobs:
           fi
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
-          fi
-          # REMOVED:           if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ]; then
-          # REMOVED:             build_push "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}" "src/jobs_worker/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.billing_service }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
@@ -343,7 +334,6 @@ jobs:
           BILL="opal-billing-service-${ENV_NAME}"
           ORCH="opal-orchestrator-${ENV_NAME}"
           EXPORT="opal-export-worker-${ENV_NAME}"
-          # REMOVED (jobs_worker deprecated - orchestrator now sends to exports directly):           JOBS="opal-jobs-worker-${ENV_NAME}"
 
           if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
             ensure_app_exists "${WEB}" "external" 8080
@@ -365,10 +355,6 @@ jobs:
             deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           fi
 
-          # REMOVED:           if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${JOBS}" >/dev/null 2>&1; then
-          # REMOVED:             ensure_app_exists "${JOBS}" "none" 0
-          # REMOVED:             deploy_image "${JOBS}" "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}"
-          # REMOVED:           fi
 
       - name: Print Web API URL
         run: |
