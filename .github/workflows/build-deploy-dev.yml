@@ -27,7 +27,7 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
       web_api: ${{ steps.filter.outputs.web_api }}
       export_worker: ${{ steps.filter.outputs.export_worker }}
-      jobs_worker: ${{ steps.filter.outputs.jobs_worker }}
+      # REMOVED:       jobs_worker: ${{ steps.filter.outputs.jobs_worker }}
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
@@ -44,8 +44,8 @@ jobs:
               - 'src/web_api/**'
             export_worker:
               - 'src/export_worker/**'
-            jobs_worker:
-              - 'src/jobs_worker/**'
+            # REMOVED:             jobs_worker:
+            # REMOVED:               - 'src/jobs_worker/**'
             orchestrator:
               - 'src/orchestrator/**'
             billing_service:
@@ -83,7 +83,7 @@ jobs:
           SHARED="${{ needs.changes.outputs.shared }}"
           WEB_API="${{ needs.changes.outputs.web_api }}"
           EXPORT_WORKER="${{ needs.changes.outputs.export_worker }}"
-          JOBS_WORKER="${{ needs.changes.outputs.jobs_worker }}"
+          # REMOVED:           JOBS_WORKER="${{ needs.changes.outputs.jobs_worker }}"
           ORCH="${{ needs.changes.outputs.orchestrator }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
@@ -92,7 +92,7 @@ jobs:
           if [ "${SHARED}" = "true" ]; then
             WEB_API=true
             EXPORT_WORKER=true
-            JOBS_WORKER=true
+            # REMOVED:             JOBS_WORKER=true
             ORCH=true
             BILLING=true
             AML=true
@@ -100,7 +100,7 @@ jobs:
 
           echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
           echo "export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
-          echo "jobs_worker=${JOBS_WORKER}" >> "$GITHUB_OUTPUT"
+          # REMOVED:           echo "jobs_worker=${JOBS_WORKER}" >> "$GITHUB_OUTPUT"
           echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
           echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
@@ -169,8 +169,8 @@ jobs:
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
           fi
-          if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}" "src/jobs_worker/Dockerfile"
+          # REMOVED:           if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ]; then
+          # REMOVED:             build_push "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}" "src/jobs_worker/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.billing_service }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
@@ -343,7 +343,7 @@ jobs:
           BILL="opal-billing-service-${ENV_NAME}"
           ORCH="opal-orchestrator-${ENV_NAME}"
           EXPORT="opal-export-worker-${ENV_NAME}"
-          JOBS="opal-jobs-worker-${ENV_NAME}"
+          # REMOVED (jobs_worker deprecated - orchestrator now sends to exports directly):           JOBS="opal-jobs-worker-${ENV_NAME}"
 
           if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
             ensure_app_exists "${WEB}" "external" 8080
@@ -365,10 +365,10 @@ jobs:
             deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           fi
 
-          if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${JOBS}" >/dev/null 2>&1; then
-            ensure_app_exists "${JOBS}" "none" 0
-            deploy_image "${JOBS}" "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}"
-          fi
+          # REMOVED:           if [ "${{ steps.decide.outputs.jobs_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${JOBS}" >/dev/null 2>&1; then
+          # REMOVED:             ensure_app_exists "${JOBS}" "none" 0
+          # REMOVED:             deploy_image "${JOBS}" "${ACR_LOGIN}/opal/jobs-worker:${IMAGE_TAG}"
+          # REMOVED:           fi
 
       - name: Print Web API URL
         run: |
@@ -379,3 +379,89 @@ jobs:
             --query properties.configuration.ingress.fqdn -o tsv)
           echo "Web API available at: https://${FQDN}"
           echo "Try: https://${FQDN}/healthz"
+
+      - name: Deploy/Update Azure ML Endpoint (if aml_sd_stub changed)
+        if: steps.decide.outputs.aml_sd_stub == 'true'
+        run: |
+          set -euo pipefail
+          
+          # Discover AML workspace
+          AML_WORKSPACE=$(az ml workspace list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${AML_WORKSPACE}" ] || (echo "ERROR: No AML Workspace in ${RG_NAME}"; exit 1)
+          
+          echo "AML Workspace: ${AML_WORKSPACE}"
+          
+          # Substitute variables in deployment.yml
+          export ACR_LOGIN_SERVER="${ACR_LOGIN}"
+          export IMAGE_TAG="${IMAGE_TAG}"
+          
+          sed "s|\${ACR_LOGIN_SERVER}|${ACR_LOGIN_SERVER}|g; s|\${IMAGE_TAG}|${IMAGE_TAG}|g" \
+            ml/deployment-stub.yml > /tmp/deployment-resolved.yml
+          
+          # Create or update endpoint
+          echo "Creating/updating endpoint opal-sd-placement-dev..."
+          az ml online-endpoint create \
+            --file ml/endpoint.yml \
+            --resource-group "${RG_NAME}" \
+            --workspace-name "${AML_WORKSPACE}" \
+            --name opal-sd-placement-dev \
+            || az ml online-endpoint update \
+              --file ml/endpoint.yml \
+              --resource-group "${RG_NAME}" \
+              --workspace-name "${AML_WORKSPACE}" \
+              --name opal-sd-placement-dev
+          
+          # Wait for endpoint to be ready
+          echo "Waiting for endpoint to be ready..."
+          for i in {1..30}; do
+            STATE=$(az ml online-endpoint show \
+              --name opal-sd-placement-dev \
+              --resource-group "${RG_NAME}" \
+              --workspace-name "${AML_WORKSPACE}" \
+              --query "provisioning_state" -o tsv 2>/dev/null || echo "")
+            
+            if [ "${STATE}" = "Succeeded" ]; then
+              echo "Endpoint is ready"
+              break
+            fi
+            
+            echo "Endpoint state: ${STATE} (attempt ${i}/30)"
+            sleep 10
+          done
+          
+          # Create or update deployment
+          echo "Creating/updating deployment blue..."
+          az ml online-deployment create \
+            --file /tmp/deployment-resolved.yml \
+            --resource-group "${RG_NAME}" \
+            --workspace-name "${AML_WORKSPACE}" \
+            --all-traffic \
+            || az ml online-deployment update \
+              --file /tmp/deployment-resolved.yml \
+              --resource-group "${RG_NAME}" \
+              --workspace-name "${AML_WORKSPACE}"
+          
+          # Get endpoint URL and key
+          ENDPOINT_URL=$(az ml online-endpoint show \
+            --name opal-sd-placement-dev \
+            --resource-group "${RG_NAME}" \
+            --workspace-name "${AML_WORKSPACE}" \
+            --query "scoring_uri" -o tsv)
+          
+          ENDPOINT_KEY=$(az ml online-endpoint get-credentials \
+            --name opal-sd-placement-dev \
+            --resource-group "${RG_NAME}" \
+            --workspace-name "${AML_WORKSPACE}" \
+            --query "primaryKey" -o tsv)
+          
+          echo "::add-mask::${ENDPOINT_KEY}"
+          echo "AML Endpoint deployed successfully!"
+          echo "Scoring URI: ${ENDPOINT_URL}"
+          echo ""
+          echo "⚠️  IMPORTANT: Update GitHub secrets with:"
+          echo "AML_ENDPOINT_URL=${ENDPOINT_URL}"
+          echo "AML_ENDPOINT_KEY=<masked>"
+          echo ""
+          echo "Run this command to update secrets:"
+          echo "gh secret set AML_ENDPOINT_URL --body '${ENDPOINT_URL}'"
+          echo "gh secret set AML_ENDPOINT_KEY --body '${ENDPOINT_KEY}'"
