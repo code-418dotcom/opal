@@ -451,3 +451,4 @@ jobs:
           echo "Run this command to update secrets:"
           echo "gh secret set AML_ENDPOINT_URL --body '${ENDPOINT_URL}'"
           echo "gh secret set AML_ENDPOINT_KEY --body '${ENDPOINT_KEY}'"
+
