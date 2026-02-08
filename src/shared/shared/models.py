@@ -24,25 +24,32 @@ class JobStatus(str, enum.Enum):
 class Job(Base):
     __tablename__ = 'jobs'
 
-    job_id = Column(String, primary_key=True)
+    # CRITICAL: Use 'id' to match existing database schema
+    id = Column(String, primary_key=True, name='id')
     tenant_id = Column(String, nullable=False, index=True)
     brand_profile_id = Column(String, nullable=False)
     correlation_id = Column(String, nullable=False, index=True)
-    status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.created, index=True)
+    status = Column(String, nullable=False, default='created', index=True)  # Will be enum after migration
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     items = relationship('JobItem', back_populates='job', lazy='select')
+    
+    # Add property for backward compatibility
+    @property
+    def job_id(self):
+        return self.id
 
     def __repr__(self):
-        return f'<Job {self.job_id} status={self.status}>'
+        return f'<Job {self.id} status={self.status}>'
 
 
 class JobItem(Base):
     __tablename__ = 'job_items'
 
-    item_id = Column(String, primary_key=True)
-    job_id = Column(String, ForeignKey('jobs.job_id'), nullable=False, index=True)
+    # CRITICAL: Use 'id' to match existing database schema
+    id = Column(String, primary_key=True, name='id')
+    job_id = Column(String, ForeignKey('jobs.id'), nullable=False, index=True)
     tenant_id = Column(String, nullable=False, index=True)
     filename = Column(String, nullable=False)
     status = Column(SQLEnum(ItemStatus), nullable=False, default=ItemStatus.created, index=True)
@@ -53,6 +60,11 @@ class JobItem(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     job = relationship('Job', back_populates='items')
+    
+    # Add property for backward compatibility
+    @property
+    def item_id(self):
+        return self.id
 
     def __repr__(self):
-        return f'<JobItem {self.item_id} status={self.status}>'
+        return f'<JobItem {self.id} status={self.status}>'
