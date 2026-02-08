@@ -2,9 +2,12 @@ $schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.sch
 name: blue
 endpoint_name: opal-sd-placement-dev
 model: azureml:noop-model:1
+code_configuration:
+  code: ./noop-model
+  scoring_script: score.py
 environment:
-  image: ${ACR_LOGIN_SERVER}/opal/aml-sd-stub:${IMAGE_TAG}
-# For stub: use cheap CPU instance instead of expensive GPU
+  conda_file: ./noop-model/conda.yml
+  image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
 instance_type: Standard_DS2_v2
 instance_count: 1
 request_settings:
