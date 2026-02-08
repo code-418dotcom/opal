@@ -19,4 +19,5 @@ COPY src/orchestrator/orchestrator /app/orchestrator
 RUN pip install --no-cache-dir -U pip \
     && pip install --no-cache-dir -r /app/requirements.txt
 
-CMD ["python", "-m", "orchestrator.main"]
+# FIXED: Run orchestrator.worker instead of orchestrator.main
+CMD ["python", "-m", "orchestrator.worker"]
