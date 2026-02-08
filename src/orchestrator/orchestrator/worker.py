@@ -2,6 +2,7 @@ import json
 import time
 import logging
 import httpx
+import base64
 from tenacity import retry, stop_after_attempt, wait_exponential
 from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 from shared.config import settings
@@ -14,31 +15,19 @@ from shared.util import new_id
 LOG = logging.getLogger(__name__)
 
 
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(min=1, max=10))
-def call_aml_sd(input_image_sas: str, tenant_id: str, job_id: str, item_id: str, correlation_id: str) -> dict:
-    headers = {
-        'Authorization': f'Bearer {settings.AML_ENDPOINT_KEY}',
-        'Content-Type': 'application/json',
-        'X-Correlation-Id': correlation_id,
-    }
-    payload = {
-        'tenant_id': tenant_id,
-        'job_id': job_id,
-        'item_id': item_id,
-        'input_image_sas': input_image_sas,
-        'prompt': 'lifestyle placement stub',
-    }
-    with httpx.Client(timeout=180) as client:
-        r = client.post(settings.AML_ENDPOINT_URL, headers=headers, json=payload)
-        r.raise_for_status()
-        return r.json()
-
-
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
 def upload_blob_via_sas(sas_url: str, data: bytes) -> None:
     with httpx.Client(timeout=60) as client:
         r = client.put(sas_url, content=data, headers={'x-ms-blob-type': 'BlockBlob'})
         r.raise_for_status()
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
+def download_blob_via_sas(sas_url: str) -> bytes:
+    with httpx.Client(timeout=60) as client:
+        r = client.get(sas_url)
+        r.raise_for_status()
+        return r.content
 
 
 def process_message(data: dict):
@@ -47,25 +36,22 @@ def process_message(data: dict):
     item_id = data['item_id']
     correlation_id = data.get('correlation_id', '')
 
-    LOG.info(
-        'Processing job message: tenant_id=%s job_id=%s item_id=%s correlation_id=%s',
-        tenant_id, job_id, item_id, correlation_id
-    )
+    LOG.info('Processing: tenant_id=%s job_id=%s item_id=%s', tenant_id, job_id, item_id)
 
     with SessionLocal() as s:
         item = s.get(JobItem, item_id)
         if not item:
-            LOG.warning('Item not found: item_id=%s', item_id)
+            LOG.warning('Item not found: %s', item_id)
             return
         if item.status in (ItemStatus.processing, ItemStatus.completed):
-            LOG.info('Item already %s, skipping: item_id=%s', item.status, item_id)
+            LOG.info('Item already %s: %s', item.status, item_id)
             return
 
         item.status = ItemStatus.processing
         s.commit()
 
         if not item.raw_blob_path:
-            LOG.error('Missing raw_blob_path for item_id=%s', item_id)
+            LOG.error('Missing raw_blob_path: %s', item_id)
             item.status = ItemStatus.failed
             item.error_message = 'Missing raw_blob_path'
             s.commit()
@@ -73,48 +59,34 @@ def process_message(data: dict):
 
         raw_read_sas = generate_read_sas(container='raw', blob_path=item.raw_blob_path)
 
-    LOG.info('Calling AML endpoint for item_id=%s', item_id)
-    result = call_aml_sd(raw_read_sas, tenant_id, job_id, item_id, correlation_id)
-
-    image_b64 = result.get('image_bytes_b64')
-    if not image_b64:
-        LOG.error('AML returned no image bytes for item_id=%s', item_id)
-        with SessionLocal() as s:
-            item = s.get(JobItem, item_id)
-            item.status = ItemStatus.failed
-            item.error_message = 'AML returned no image bytes'
-            s.commit()
-        return
-
-    # CRITICAL FIX: Call new_id() outside the f-string
+    # PHASE 2 TODO: Replace with Azure AI Vision + Stable Diffusion
+    # For now: Download input, create stub output
+    LOG.info('Downloading input image: %s', item_id)
+    input_bytes = download_blob_via_sas(raw_read_sas)
+    
+    # Create stub output (Phase 2: real AI processing)
+    output_bytes = input_bytes  # Just copy for now
+    
     item_out_id = new_id('out')
     out_name = f'{item_out_id}.png'
     out_path = build_output_blob_path(tenant_id, job_id, item_id, out_name)
     out_write_sas = generate_write_sas(container='outputs', blob_path=out_path)
 
-    import base64
-    img_bytes = base64.b64decode(image_b64)
-
-    LOG.info('Uploading output blob: item_id=%s path=%s', item_id, out_path)
-    upload_blob_via_sas(out_write_sas, img_bytes)
+    LOG.info('Uploading output: %s -> %s', item_id, out_path)
+    upload_blob_via_sas(out_write_sas, output_bytes)
 
     with SessionLocal() as s:
         item = s.get(JobItem, item_id)
         item.output_blob_path = out_path
         item.status = ItemStatus.completed
         s.commit()
-        LOG.info('Item completed: item_id=%s output_path=%s', item_id, out_path)
+        LOG.info('Item completed: %s', item_id)
 
     try:
-        send_export_message({
-            'tenant_id': tenant_id,
-            'job_id': job_id,
-            'item_id': item_id,
-            'correlation_id': correlation_id,
-        })
-        LOG.info('Sent export message for job_id=%s', job_id)
+        send_export_message({'tenant_id': tenant_id, 'job_id': job_id, 'item_id': item_id, 'correlation_id': correlation_id})
+        LOG.info('Export message sent: %s', job_id)
     except Exception as e:
-        LOG.error('Failed to send export message: job_id=%s error=%s', job_id, e)
+        LOG.error('Export message failed: %s - %s', job_id, e)
 
 
 def finalize_job_status(job_id: str):
@@ -128,89 +100,69 @@ def finalize_job_status(job_id: str):
             return
         
         statuses = [item.status for item in items]
-        completed_count = statuses.count(ItemStatus.completed)
-        failed_count = statuses.count(ItemStatus.failed)
-        processing_count = statuses.count(ItemStatus.processing)
+        completed = statuses.count(ItemStatus.completed)
+        failed = statuses.count(ItemStatus.failed)
+        processing = statuses.count(ItemStatus.processing)
         
-        if completed_count == len(items):
+        if completed == len(items):
             job.status = JobStatus.completed
-            LOG.info('Job completed: job_id=%s', job_id)
-        elif processing_count > 0:
+            LOG.info('Job COMPLETED: %s', job_id)
+        elif processing > 0:
             job.status = JobStatus.processing
-        elif failed_count == len(items):
+        elif failed == len(items):
             job.status = JobStatus.failed
-            LOG.info('Job failed: job_id=%s', job_id)
-        elif failed_count > 0:
+        elif failed > 0:
             job.status = JobStatus.partial
-            LOG.info('Job partially completed: job_id=%s completed=%d failed=%d', 
-                    job_id, completed_count, failed_count)
         
         s.commit()
 
 
 def main():
-    logging.basicConfig(
-        level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-        format='%(asctime)s %(levelname)s %(name)s - %(message)s',
-    )
-    LOG.info('Orchestrator worker starting (LOG_LEVEL=%s)', settings.LOG_LEVEL)
-    LOG.info('Jobs queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
-    LOG.info('Exports queue: %s', settings.SERVICEBUS_EXPORTS_QUEUE)
-    LOG.info('AML endpoint: %s', settings.AML_ENDPOINT_URL or 'NOT SET')
+    logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO), format='%(asctime)s %(levelname)s - %(message)s')
+    LOG.info('Orchestrator starting')
+    LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
 
     while True:
         try:
             with get_client() as client:
-                receiver = client.get_queue_receiver(
-                    queue_name=settings.SERVICEBUS_JOBS_QUEUE,
-                    max_wait_time=20,
-                    receive_mode=ServiceBusReceiveMode.PEEK_LOCK,
-                )
-                
+                receiver = client.get_queue_receiver(queue_name=settings.SERVICEBUS_JOBS_QUEUE, max_wait_time=20, receive_mode=ServiceBusReceiveMode.PEEK_LOCK)
                 renewer = AutoLockRenewer()
                 
                 with receiver:
                     messages = receiver.receive_messages(max_message_count=10, max_wait_time=20)
                     for m in messages:
                         try:
-                            message_body = str(m)
-                            data = json.loads(message_body)
-                            
+                            data = json.loads(str(m))
                             renewer.register(receiver, m, max_lock_renewal_duration=300)
                             
                             process_message(data)
                             finalize_job_status(data['job_id'])
                             
                             receiver.complete_message(m)
-                            LOG.info('Message completed: job_id=%s item_id=%s', 
-                                   data.get('job_id'), data.get('item_id'))
-                                   
+                            LOG.info('Message completed: %s', data.get('job_id'))
                         except json.JSONDecodeError as e:
-                            LOG.error('Invalid JSON in message: %s', e)
-                            receiver.dead_letter_message(m, reason='InvalidJSON', 
-                                                       error_description=str(e))
+                            LOG.error('Invalid JSON: %s', e)
+                            receiver.dead_letter_message(m, reason='InvalidJSON', error_description=str(e))
                         except Exception as e:
-                            LOG.exception('Failed to process message: %s', e)
+                            LOG.exception('Processing failed: %s', e)
                             try:
-                                item_id = data.get('item_id')
-                                if item_id:
+                                if 'item_id' in data:
                                     with SessionLocal() as s:
-                                        it = s.get(JobItem, item_id)
-                                        if it and it.status != ItemStatus.completed:
-                                            it.status = ItemStatus.failed
-                                            it.error_message = str(e)[:4000]
+                                        item = s.get(JobItem, data['item_id'])
+                                        if item and item.status != ItemStatus.completed:
+                                            item.status = ItemStatus.failed
+                                            item.error_message = str(e)[:4000]
                                             s.commit()
-                            except Exception as db_err:
-                                LOG.error('Failed to update item status in DB: %s', db_err)
+                            except:
+                                pass
                             receiver.abandon_message(m)
                         finally:
                             try:
                                 renewer.close()
                             except:
                                 pass
-                            
         except Exception as e:
-            LOG.exception('Worker loop error, sleeping 5s: %s', e)
+            LOG.exception('Worker loop error: %s', e)
             time.sleep(5)
 
 
