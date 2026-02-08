@@ -2,6 +2,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # Azure AI Vision
+    AZURE_VISION_ENDPOINT: str = Field(default='', env='AZURE_VISION_ENDPOINT')
+    AZURE_VISION_KEY: str = Field(default='', env='AZURE_VISION_KEY')
+    
     # Container Apps: everything comes from env vars, not a .env file
     model_config = SettingsConfigDict(env_file=None)
 
@@ -30,3 +34,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

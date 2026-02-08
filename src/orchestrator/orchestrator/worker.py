@@ -30,6 +30,33 @@ def download_blob_via_sas(sas_url: str) -> bytes:
         return r.content
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
+def remove_background(image_bytes: bytes) -> bytes:
+    """Remove background using Azure AI Vision 4.0 Image Segmentation"""
+    vision_endpoint = settings.AZURE_VISION_ENDPOINT
+    vision_key = settings.AZURE_VISION_KEY
+    
+    # Azure AI Vision 4.0 API endpoint for image segmentation
+    url = f"{vision_endpoint.rstrip('/')}/computervision/imageanalysis:segment?api-version=2023-02-01-preview&mode=backgroundRemoval"
+    
+    headers = {
+        'Ocp-Apim-Subscription-Key': vision_key,
+        'Content-Type': 'application/octet-stream'
+    }
+    
+    LOG.info('Calling Azure AI Vision for background removal')
+    
+    with httpx.Client(timeout=120) as client:
+        response = client.post(url, headers=headers, content=image_bytes)
+        
+        if response.status_code == 200:
+            LOG.info('Background removal successful')
+            return response.content
+        else:
+            LOG.error('Background removal failed: %s - %s', response.status_code, response.text)
+            raise Exception(f'Azure Vision API error: {response.status_code}')
+
+
 def process_message(data: dict):
     tenant_id = data['tenant_id']
     job_id = data['job_id']
@@ -59,34 +86,53 @@ def process_message(data: dict):
 
         raw_read_sas = generate_read_sas(container='raw', blob_path=item.raw_blob_path)
 
-    # PHASE 2 TODO: Replace with Azure AI Vision + Stable Diffusion
-    # For now: Download input, create stub output
-    LOG.info('Downloading input image: %s', item_id)
-    input_bytes = download_blob_via_sas(raw_read_sas)
-    
-    # Create stub output (Phase 2: real AI processing)
-    output_bytes = input_bytes  # Just copy for now
-    
-    item_out_id = new_id('out')
-    out_name = f'{item_out_id}.png'
-    out_path = build_output_blob_path(tenant_id, job_id, item_id, out_name)
-    out_write_sas = generate_write_sas(container='outputs', blob_path=out_path)
-
-    LOG.info('Uploading output: %s -> %s', item_id, out_path)
-    upload_blob_via_sas(out_write_sas, output_bytes)
-
-    with SessionLocal() as s:
-        item = s.get(JobItem, item_id)
-        item.output_blob_path = out_path
-        item.status = ItemStatus.completed
-        s.commit()
-        LOG.info('Item completed: %s', item_id)
-
     try:
-        send_export_message({'tenant_id': tenant_id, 'job_id': job_id, 'item_id': item_id, 'correlation_id': correlation_id})
-        LOG.info('Export message sent: %s', job_id)
+        # Download input image
+        LOG.info('Downloading input image: %s', item_id)
+        input_bytes = download_blob_via_sas(raw_read_sas)
+        
+        # Remove background using Azure AI Vision
+        LOG.info('Removing background: %s', item_id)
+        output_bytes = remove_background(input_bytes)
+        
+        # Upload processed image
+        item_out_id = new_id('out')
+        out_name = f'{item_out_id}.png'
+        out_path = build_output_blob_path(tenant_id, job_id, item_id, out_name)
+        out_write_sas = generate_write_sas(container='outputs', blob_path=out_path)
+
+        LOG.info('Uploading output: %s -> %s', item_id, out_path)
+        upload_blob_via_sas(out_write_sas, output_bytes)
+
+        # Mark as completed
+        with SessionLocal() as s:
+            item = s.get(JobItem, item_id)
+            item.output_blob_path = out_path
+            item.status = ItemStatus.completed
+            s.commit()
+            LOG.info('Item completed: %s', item_id)
+
+        # Send to exports queue
+        try:
+            send_export_message({
+                'tenant_id': tenant_id,
+                'job_id': job_id,
+                'item_id': item_id,
+                'correlation_id': correlation_id
+            })
+            LOG.info('Export message sent: %s', job_id)
+        except Exception as e:
+            LOG.error('Export message failed: %s - %s', job_id, e)
+            
     except Exception as e:
-        LOG.error('Export message failed: %s - %s', job_id, e)
+        LOG.exception('Processing failed: %s', e)
+        with SessionLocal() as s:
+            item = s.get(JobItem, item_id)
+            if item:
+                item.status = ItemStatus.failed
+                item.error_message = str(e)[:4000]
+                s.commit()
+        raise
 
 
 def finalize_job_status(job_id: str):
@@ -118,14 +164,22 @@ def finalize_job_status(job_id: str):
 
 
 def main():
-    logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO), format='%(asctime)s %(levelname)s - %(message)s')
-    LOG.info('Orchestrator starting')
+    logging.basicConfig(
+        level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+        format='%(asctime)s %(levelname)s - %(message)s'
+    )
+    LOG.info('Orchestrator starting with Azure AI Vision')
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
+    LOG.info('Vision Endpoint: %s', settings.AZURE_VISION_ENDPOINT)
 
     while True:
         try:
             with get_client() as client:
-                receiver = client.get_queue_receiver(queue_name=settings.SERVICEBUS_JOBS_QUEUE, max_wait_time=20, receive_mode=ServiceBusReceiveMode.PEEK_LOCK)
+                receiver = client.get_queue_receiver(
+                    queue_name=settings.SERVICEBUS_JOBS_QUEUE,
+                    max_wait_time=20,
+                    receive_mode=ServiceBusReceiveMode.PEEK_LOCK
+                )
                 renewer = AutoLockRenewer()
                 
                 with receiver:
@@ -144,17 +198,7 @@ def main():
                             LOG.error('Invalid JSON: %s', e)
                             receiver.dead_letter_message(m, reason='InvalidJSON', error_description=str(e))
                         except Exception as e:
-                            LOG.exception('Processing failed: %s', e)
-                            try:
-                                if 'item_id' in data:
-                                    with SessionLocal() as s:
-                                        item = s.get(JobItem, data['item_id'])
-                                        if item and item.status != ItemStatus.completed:
-                                            item.status = ItemStatus.failed
-                                            item.error_message = str(e)[:4000]
-                                            s.commit()
-                            except:
-                                pass
+                            LOG.exception('Message processing failed: %s', e)
                             receiver.abandon_message(m)
                         finally:
                             try:
