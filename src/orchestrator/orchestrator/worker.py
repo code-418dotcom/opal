@@ -103,7 +103,7 @@ def process_message(data: dict):
         return
 
     # Write output to blob using SAS (so orchestrator doesn't need account keys)
-    out_name = f'{new_id(\"out\")}.png'
+    out_name = f'{new_id('out')}.png'
     out_path = build_output_blob_path(tenant_id, job_id, item_id, out_name)
     out_write_sas = generate_write_sas(container='outputs', blob_path=out_path)
 
@@ -250,4 +250,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
