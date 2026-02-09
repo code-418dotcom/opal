@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     AZURE_VISION_ENDPOINT: str = Field(default='', env='AZURE_VISION_ENDPOINT')
     AZURE_VISION_KEY: str = Field(default='', env='AZURE_VISION_KEY')
     
+    # Background Removal Provider
+    BACKGROUND_REMOVAL_PROVIDER: str = Field(default='rembg', env='BACKGROUND_REMOVAL_PROVIDER')
+    REMOVEBG_API_KEY: str = Field(default='', env='REMOVEBG_API_KEY')
+    
     # Container Apps: everything comes from env vars, not a .env file
     model_config = SettingsConfigDict(env_file=None)
 
@@ -35,3 +39,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

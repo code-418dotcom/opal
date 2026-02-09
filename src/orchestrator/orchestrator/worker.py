@@ -1,9 +1,8 @@
-# Updated: 2026-02-09 08:55
+# Updated: 2026-02-09 - Pluggable background removal
 import json
 import time
 import logging
 import httpx
-import base64
 from tenacity import retry, stop_after_attempt, wait_exponential
 from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 from shared.config import settings
@@ -12,8 +11,22 @@ from shared.models import Job, JobItem, ItemStatus, JobStatus
 from shared.storage import build_output_blob_path, generate_read_sas, generate_write_sas
 from shared.servicebus import get_client, send_export_message
 from shared.util import new_id
+from shared.background_removal import get_provider
 
 LOG = logging.getLogger(__name__)
+
+# Initialize background removal provider
+try:
+    bg_provider = get_provider(
+        provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
+        api_key=settings.REMOVEBG_API_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'remove.bg' else None,
+        endpoint=settings.AZURE_VISION_ENDPOINT if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None,
+        key=settings.AZURE_VISION_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None
+    )
+    LOG.info(f'Background removal provider: {bg_provider.name}')
+except Exception as e:
+    LOG.error(f'Failed to initialize background removal provider: {e}')
+    bg_provider = None
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
@@ -29,33 +42,6 @@ def download_blob_via_sas(sas_url: str) -> bytes:
         r = client.get(sas_url)
         r.raise_for_status()
         return r.content
-
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
-def remove_background(image_bytes: bytes) -> bytes:
-    """Remove background using Azure AI Vision 4.0 Image Segmentation"""
-    vision_endpoint = settings.AZURE_VISION_ENDPOINT
-    vision_key = settings.AZURE_VISION_KEY
-    
-    # Azure AI Vision 4.0 API endpoint for image segmentation
-    url = f"{vision_endpoint.rstrip('/')}/computervision/imageanalysis:segment?api-version=2024-02-01&mode=backgroundRemoval"
-    
-    headers = {
-        'Ocp-Apim-Subscription-Key': vision_key,
-        'Content-Type': 'application/octet-stream'
-    }
-    
-    LOG.info('Calling Azure AI Vision for background removal')
-    
-    with httpx.Client(timeout=120) as client:
-        response = client.post(url, headers=headers, content=image_bytes)
-        
-        if response.status_code == 200:
-            LOG.info('Background removal successful')
-            return response.content
-        else:
-            LOG.error('Background removal failed: %s - %s', response.status_code, response.text)
-            raise Exception(f'Azure Vision API error: {response.status_code}')
 
 
 def process_message(data: dict):
@@ -89,12 +75,16 @@ def process_message(data: dict):
 
     try:
         # Download input image
-        LOG.info('Downloading input image: %s', item_id)
+        LOG.info('Downloading input: %s', item_id)
         input_bytes = download_blob_via_sas(raw_read_sas)
         
-        # Remove background using Azure AI Vision
-        LOG.info('Removing background: %s', item_id)
-        output_bytes = remove_background(input_bytes)
+        # Remove background using configured provider
+        if bg_provider:
+            LOG.info('Removing background with %s: %s', bg_provider.name, item_id)
+            output_bytes = bg_provider.remove_background(input_bytes)
+        else:
+            LOG.warning('No background removal provider - copying input')
+            output_bytes = input_bytes
         
         # Upload processed image
         item_out_id = new_id('out')
@@ -169,9 +159,12 @@ def main():
         level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
         format='%(asctime)s %(levelname)s - %(message)s'
     )
-    LOG.info('Orchestrator starting with Azure AI Vision')
+    LOG.info('Orchestrator starting')
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
-    LOG.info('Vision Endpoint: %s', settings.AZURE_VISION_ENDPOINT)
+    if bg_provider:
+        LOG.info('Background removal: %s', bg_provider.name)
+    else:
+        LOG.warning('Background removal: DISABLED')
 
     while True:
         try:
@@ -213,5 +206,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
