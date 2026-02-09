@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     REPLICATE_API_KEY: str = Field(default='', env='REPLICATE_API_KEY')
     HUGGINGFACE_API_KEY: str = Field(default='', env='HUGGINGFACE_API_KEY')
     
+    # Image Upscaling
+    UPSCALE_PROVIDER: str = Field(default='realesrgan', env='UPSCALE_PROVIDER')
+    UPSCALE_ENABLED: bool = Field(default=True, env='UPSCALE_ENABLED')
+    
     # Container Apps: everything comes from env vars, not a .env file
     model_config = SettingsConfigDict(env_file=None)
 
@@ -45,5 +49,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
 
 

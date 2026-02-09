@@ -1,4 +1,4 @@
-# Updated: 2026-02-09 - Full product placement pipeline
+# Updated: 2026-02-09 - Added upscaling (5-step pipeline)
 import json
 import time
 import logging
@@ -15,12 +15,14 @@ from shared.servicebus import get_client, send_export_message
 from shared.util import new_id
 from shared.background_removal import get_provider
 from shared.image_generation import get_image_gen_provider
+from shared.upscaling import get_upscaling_provider
 
 LOG = logging.getLogger(__name__)
 
 # Providers will be initialized in main() after logging is setup
 bg_provider = None
 img_gen_provider = None
+upscale_provider = None
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
@@ -96,20 +98,20 @@ def process_message(data: dict):
 
     try:
         # Step 1: Download input
-        LOG.info('[1/4] Downloading input: %s', item_id)
+        LOG.info('[1/5] Downloading input: %s', item_id)
         input_bytes = download_blob_via_sas(raw_read_sas)
         
         # Step 2: Remove background
         if bg_provider:
-            LOG.info('[2/4] Removing background with %s: %s', bg_provider.name, item_id)
+            LOG.info('[2/5] Removing background with %s: %s', bg_provider.name, item_id)
             product_png = bg_provider.remove_background(input_bytes)
         else:
-            LOG.warning('[2/4] No background removal - using input')
+            LOG.warning('[2/5] No background removal - using input')
             product_png = input_bytes
         
         # Step 3: Generate lifestyle scene
         if img_gen_provider:
-            LOG.info('[3/4] Generating lifestyle scene with %s: %s', img_gen_provider.name, item_id)
+            LOG.info('[3/5] Generating lifestyle scene with %s: %s', img_gen_provider.name, item_id)
             
             # TODO: Get prompt from brand profile (for now, use default)
             prompt = "modern minimalist living room, bright natural lighting, wooden floor, white walls, plants, photorealistic, high quality"
@@ -117,11 +119,19 @@ def process_message(data: dict):
             scene_bytes = img_gen_provider.generate(prompt)
             
             # Step 4: Composite product onto scene
-            LOG.info('[4/4] Compositing product onto scene: %s', item_id)
-            final_bytes = composite_product_on_scene(product_png, scene_bytes)
+            LOG.info('[4/5] Compositing product onto scene: %s', item_id)
+            composited_bytes = composite_product_on_scene(product_png, scene_bytes)
         else:
-            LOG.warning('[3/4] No image generation - using background-removed product')
-            final_bytes = product_png
+            LOG.warning('[3/5] No image generation - using background-removed product')
+            composited_bytes = product_png
+        
+        # Step 5: Upscale final image
+        if upscale_provider and settings.UPSCALE_ENABLED:
+            LOG.info('[5/5] Upscaling with %s: %s', upscale_provider.name, item_id)
+            final_bytes = upscale_provider.upscale(composited_bytes)
+        else:
+            LOG.warning('[5/5] Upscaling disabled - using composited image')
+            final_bytes = composited_bytes
         
         # Upload final result
         item_out_id = new_id('out')
@@ -192,7 +202,7 @@ def finalize_job_status(job_id: str):
 
 
 def main():
-    global bg_provider, img_gen_provider
+    global bg_provider, img_gen_provider, upscale_provider
     
     # Configure logging FIRST
     logging.basicConfig(
@@ -205,7 +215,7 @@ def main():
     LOG.info('=' * 50)
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
     
-    # NOW initialize providers AFTER logging is configured
+    # Initialize providers AFTER logging is configured
     try:
         bg_provider = get_provider(
             provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
@@ -227,6 +237,18 @@ def main():
     except Exception as e:
         LOG.error('❌ Failed to init image generation: %s', e, exc_info=True)
         img_gen_provider = None
+    
+    try:
+        if settings.UPSCALE_ENABLED:
+            upscale_provider = get_upscaling_provider(
+                provider_name=settings.UPSCALE_PROVIDER
+            )
+            LOG.info('✅ Upscaling: %s', upscale_provider.name)
+        else:
+            LOG.info('⚠️  Upscaling: DISABLED')
+    except Exception as e:
+        LOG.error('❌ Failed to init upscaling: %s', e, exc_info=True)
+        upscale_provider = None
     
     if not bg_provider and not img_gen_provider:
         LOG.warning('⚠️  No AI providers configured - will pass through images')
