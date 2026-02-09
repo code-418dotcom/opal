@@ -1,4 +1,4 @@
-# Updated: 2026-02-09 - Full product placement pipeline
+﻿# Updated: 2026-02-09 - Full product placement pipeline
 import json
 import time
 import logging
@@ -161,7 +161,7 @@ def process_message(data: dict):
             item.output_blob_path = out_path
             item.status = ItemStatus.completed
             s.commit()
-            LOG.info('✅ Item completed: %s', item_id)
+            LOG.info('âœ… Item completed: %s', item_id)
 
         # Send to exports queue
         try:
@@ -203,7 +203,7 @@ def finalize_job_status(job_id: str):
         
         if completed == len(items):
             job.status = JobStatus.completed
-            LOG.info('🎉 Job COMPLETED: %s', job_id)
+            LOG.info('ðŸŽ‰ Job COMPLETED: %s', job_id)
         elif processing > 0:
             job.status = JobStatus.processing
         elif failed == len(items):
@@ -223,7 +223,7 @@ def main():
         level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
         format='%(asctime)s %(levelname)s - %(message)s'
     )
-    LOG.info('🚀 OPAL Orchestrator starting')
+    LOG.info('ðŸš€ OPAL Orchestrator starting')
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
     if bg_provider:
         LOG.info('Background removal: %s', bg_provider.name)
@@ -231,7 +231,7 @@ def main():
         LOG.info('Image generation: %s', img_gen_provider.name)
     
     if not bg_provider and not img_gen_provider:
-        LOG.warning('⚠️  No AI providers configured - will pass through images')
+        LOG.warning('âš ï¸  No AI providers configured - will pass through images')
 
     while True:
         try:
@@ -254,7 +254,7 @@ def main():
                             finalize_job_status(data['job_id'])
                             
                             receiver.complete_message(m)
-                            LOG.info('✅ Message completed: %s', data.get('job_id'))
+                            LOG.info('âœ… Message completed: %s', data.get('job_id'))
                         except json.JSONDecodeError as e:
                             LOG.error('Invalid JSON: %s', e)
                             receiver.dead_letter_message(m, reason='InvalidJSON', error_description=str(e))
@@ -273,4 +273,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
