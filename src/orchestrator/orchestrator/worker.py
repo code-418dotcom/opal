@@ -38,7 +38,7 @@ def remove_background(image_bytes: bytes) -> bytes:
     vision_key = settings.AZURE_VISION_KEY
     
     # Azure AI Vision 4.0 API endpoint for image segmentation
-    url = f"{vision_endpoint.rstrip('/')}/computervision/imageanalysis:segment?api-version=2023-02-01-preview&mode=backgroundRemoval"
+    url = f"{vision_endpoint.rstrip('/')}/computervision/imageanalysis:segment?api-version=2024-02-01&mode=backgroundRemoval"
     
     headers = {
         'Ocp-Apim-Subscription-Key': vision_key,
@@ -213,4 +213,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
