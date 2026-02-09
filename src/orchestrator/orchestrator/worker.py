@@ -18,7 +18,10 @@ from shared.image_generation import get_image_gen_provider
 
 LOG = logging.getLogger(__name__)
 
-# Initialize providers
+# Initialize providers with error handling
+import sys
+import traceback
+
 try:
     bg_provider = get_provider(
         provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
@@ -38,7 +41,8 @@ try:
     )
     LOG.info(f'Image generation: {img_gen_provider.name}')
 except Exception as e:
-    LOG.error(f'Failed to init image generation: {e}')
+    print(f"ERROR initializing image generation: {e}", file=sys.stderr)
+    traceback.print_exc()
     img_gen_provider = None
 
 
@@ -211,6 +215,10 @@ def finalize_job_status(job_id: str):
 
 
 def main():
+    # Print to stdout immediately to confirm startup
+    print("=" * 50, flush=True)
+    print("OPAL ORCHESTRATOR STARTING", flush=True)
+    print("=" * 50, flush=True)
     logging.basicConfig(
         level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
         format='%(asctime)s %(levelname)s - %(message)s'
@@ -265,3 +273,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
