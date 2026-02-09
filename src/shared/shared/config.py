@@ -1,4 +1,4 @@
-from pydantic import Field
+﻿from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     # Background Removal Provider
     BACKGROUND_REMOVAL_PROVIDER: str = Field(default='rembg', env='BACKGROUND_REMOVAL_PROVIDER')
     REMOVEBG_API_KEY: str = Field(default='', env='REMOVEBG_API_KEY')
+    
+    # Image Generation
+    IMAGE_GEN_PROVIDER: str = Field(default='fal', env='IMAGE_GEN_PROVIDER')
+    FAL_API_KEY: str = Field(default='', env='FAL_API_KEY')
+    REPLICATE_API_KEY: str = Field(default='', env='REPLICATE_API_KEY')
+    HUGGINGFACE_API_KEY: str = Field(default='', env='HUGGINGFACE_API_KEY')
     
     # Container Apps: everything comes from env vars, not a .env file
     model_config = SettingsConfigDict(env_file=None)
@@ -39,4 +45,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
 

@@ -1,0 +1,13 @@
+artifact_path: model
+flavors:
+  python_function:
+    env:
+      conda: conda.yml
+    loader_module: mlflow.pyfunc.model
+    python_version: 3.11
+mlflow_version: 2.9.0
+model_uuid: 00000000000000000000000000000000
+run_id: noop
+signature:
+  inputs: '[{"name": "input", "type": "string"}]'
+  outputs: '[{"name": "output", "type": "string"}]'

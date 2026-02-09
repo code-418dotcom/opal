@@ -1,8 +1,10 @@
-# Updated: 2026-02-09 - Pluggable background removal
+# Updated: 2026-02-09 - Full product placement pipeline
 import json
 import time
 import logging
 import httpx
+from io import BytesIO
+from PIL import Image
 from tenacity import retry, stop_after_attempt, wait_exponential
 from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 from shared.config import settings
@@ -12,10 +14,11 @@ from shared.storage import build_output_blob_path, generate_read_sas, generate_w
 from shared.servicebus import get_client, send_export_message
 from shared.util import new_id
 from shared.background_removal import get_provider
+from shared.image_generation import get_image_gen_provider
 
 LOG = logging.getLogger(__name__)
 
-# Initialize background removal provider
+# Initialize providers
 try:
     bg_provider = get_provider(
         provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
@@ -23,10 +26,20 @@ try:
         endpoint=settings.AZURE_VISION_ENDPOINT if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None,
         key=settings.AZURE_VISION_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None
     )
-    LOG.info(f'Background removal provider: {bg_provider.name}')
+    LOG.info(f'Background removal: {bg_provider.name}')
 except Exception as e:
-    LOG.error(f'Failed to initialize background removal provider: {e}')
+    LOG.error(f'Failed to init background removal: {e}')
     bg_provider = None
+
+try:
+    img_gen_provider = get_image_gen_provider(
+        provider_name=settings.IMAGE_GEN_PROVIDER,
+        api_key=getattr(settings, f'{settings.IMAGE_GEN_PROVIDER.upper().replace(".", "_")}_API_KEY', '')
+    )
+    LOG.info(f'Image generation: {img_gen_provider.name}')
+except Exception as e:
+    LOG.error(f'Failed to init image generation: {e}')
+    img_gen_provider = None
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
@@ -42,6 +55,33 @@ def download_blob_via_sas(sas_url: str) -> bytes:
         r = client.get(sas_url)
         r.raise_for_status()
         return r.content
+
+
+def composite_product_on_scene(product_png: bytes, scene_jpg: bytes) -> bytes:
+    """Composite transparent product onto generated scene"""
+    # Load images
+    product_img = Image.open(BytesIO(product_png)).convert('RGBA')
+    scene_img = Image.open(BytesIO(scene_jpg)).convert('RGBA')
+    
+    # Resize product to fit scene (max 60% of scene dimensions)
+    max_width = int(scene_img.width * 0.6)
+    max_height = int(scene_img.height * 0.6)
+    
+    product_img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+    
+    # Center product on scene
+    x = (scene_img.width - product_img.width) // 2
+    y = (scene_img.height - product_img.height) // 2
+    
+    # Composite
+    scene_img.paste(product_img, (x, y), product_img)
+    
+    # Convert to RGB and save as PNG
+    output = BytesIO()
+    final_img = scene_img.convert('RGB')
+    final_img.save(output, format='PNG', optimize=True)
+    
+    return output.getvalue()
 
 
 def process_message(data: dict):
@@ -74,26 +114,42 @@ def process_message(data: dict):
         raw_read_sas = generate_read_sas(container='raw', blob_path=item.raw_blob_path)
 
     try:
-        # Download input image
-        LOG.info('Downloading input: %s', item_id)
+        # Step 1: Download input
+        LOG.info('[1/4] Downloading input: %s', item_id)
         input_bytes = download_blob_via_sas(raw_read_sas)
         
-        # Remove background using configured provider
+        # Step 2: Remove background
         if bg_provider:
-            LOG.info('Removing background with %s: %s', bg_provider.name, item_id)
-            output_bytes = bg_provider.remove_background(input_bytes)
+            LOG.info('[2/4] Removing background with %s: %s', bg_provider.name, item_id)
+            product_png = bg_provider.remove_background(input_bytes)
         else:
-            LOG.warning('No background removal provider - copying input')
-            output_bytes = input_bytes
+            LOG.warning('[2/4] No background removal - using input')
+            product_png = input_bytes
         
-        # Upload processed image
+        # Step 3: Generate lifestyle scene
+        if img_gen_provider:
+            LOG.info('[3/4] Generating lifestyle scene with %s: %s', img_gen_provider.name, item_id)
+            
+            # TODO: Get prompt from brand profile (for now, use default)
+            prompt = "modern minimalist living room, bright natural lighting, wooden floor, white walls, plants, photorealistic, high quality"
+            
+            scene_bytes = img_gen_provider.generate(prompt)
+            
+            # Step 4: Composite product onto scene
+            LOG.info('[4/4] Compositing product onto scene: %s', item_id)
+            final_bytes = composite_product_on_scene(product_png, scene_bytes)
+        else:
+            LOG.warning('[3/4] No image generation - using background-removed product')
+            final_bytes = product_png
+        
+        # Upload final result
         item_out_id = new_id('out')
         out_name = f'{item_out_id}.png'
         out_path = build_output_blob_path(tenant_id, job_id, item_id, out_name)
         out_write_sas = generate_write_sas(container='outputs', blob_path=out_path)
 
-        LOG.info('Uploading output: %s -> %s', item_id, out_path)
-        upload_blob_via_sas(out_write_sas, output_bytes)
+        LOG.info('Uploading final output: %s -> %s', item_id, out_path)
+        upload_blob_via_sas(out_write_sas, final_bytes)
 
         # Mark as completed
         with SessionLocal() as s:
@@ -101,7 +157,7 @@ def process_message(data: dict):
             item.output_blob_path = out_path
             item.status = ItemStatus.completed
             s.commit()
-            LOG.info('Item completed: %s', item_id)
+            LOG.info('✅ Item completed: %s', item_id)
 
         # Send to exports queue
         try:
@@ -143,7 +199,7 @@ def finalize_job_status(job_id: str):
         
         if completed == len(items):
             job.status = JobStatus.completed
-            LOG.info('Job COMPLETED: %s', job_id)
+            LOG.info('🎉 Job COMPLETED: %s', job_id)
         elif processing > 0:
             job.status = JobStatus.processing
         elif failed == len(items):
@@ -159,12 +215,15 @@ def main():
         level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
         format='%(asctime)s %(levelname)s - %(message)s'
     )
-    LOG.info('Orchestrator starting')
+    LOG.info('🚀 OPAL Orchestrator starting')
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
     if bg_provider:
         LOG.info('Background removal: %s', bg_provider.name)
-    else:
-        LOG.warning('Background removal: DISABLED')
+    if img_gen_provider:
+        LOG.info('Image generation: %s', img_gen_provider.name)
+    
+    if not bg_provider and not img_gen_provider:
+        LOG.warning('⚠️  No AI providers configured - will pass through images')
 
     while True:
         try:
@@ -187,7 +246,7 @@ def main():
                             finalize_job_status(data['job_id'])
                             
                             receiver.complete_message(m)
-                            LOG.info('Message completed: %s', data.get('job_id'))
+                            LOG.info('✅ Message completed: %s', data.get('job_id'))
                         except json.JSONDecodeError as e:
                             LOG.error('Invalid JSON: %s', e)
                             receiver.dead_letter_message(m, reason='InvalidJSON', error_description=str(e))
