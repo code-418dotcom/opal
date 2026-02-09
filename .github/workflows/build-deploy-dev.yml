@@ -366,16 +366,11 @@ jobs:
           echo "Web API available at: https://${FQDN}"
           echo "Try: https://${FQDN}/healthz"
 
-      - name: Deploy/Update Azure ML Endpoint (if aml_sd_stub changed)
         if: steps.decide.outputs.aml_sd_stub == 'true'
         run: |
           set -euo pipefail
           
-          # Discover AML workspace
-          AML_WORKSPACE=$(az ml workspace list -g "${RG_NAME}" --query "[0].name" -o tsv)
-          [ -n "${AML_WORKSPACE}" ] || (echo "ERROR: No AML Workspace in ${RG_NAME}"; exit 1)
           
-          echo "AML Workspace: ${AML_WORKSPACE}"
           
           # Substitute variables in deployment.yml
           export ACR_LOGIN_SERVER="${ACR_LOGIN}"
@@ -385,23 +380,16 @@ jobs:
             ml/deployment-stub.yml > /tmp/deployment-resolved.yml
           
           # Create or update endpoint
-          echo "Creating/updating endpoint opal-sd-placement-dev..."
-          az ml online-endpoint create \
             --file ml/endpoint.yml \
             --resource-group "${RG_NAME}" \
             --workspace-name "${AML_WORKSPACE}" \
-            --name opal-sd-placement-dev \
-            || az ml online-endpoint update \
               --file ml/endpoint.yml \
               --resource-group "${RG_NAME}" \
               --workspace-name "${AML_WORKSPACE}" \
-              --name opal-sd-placement-dev
           
           # Wait for endpoint to be ready
           echo "Waiting for endpoint to be ready..."
           for i in {1..30}; do
-            STATE=$(az ml online-endpoint show \
-              --name opal-sd-placement-dev \
               --resource-group "${RG_NAME}" \
               --workspace-name "${AML_WORKSPACE}" \
               --query "provisioning_state" -o tsv 2>/dev/null || echo "")
@@ -417,25 +405,19 @@ jobs:
           
           # Create or update deployment
           echo "Creating/updating deployment blue..."
-          az ml online-deployment create \
             --file /tmp/deployment-resolved.yml \
             --resource-group "${RG_NAME}" \
             --workspace-name "${AML_WORKSPACE}" \
             --all-traffic \
-            || az ml online-deployment update \
               --file /tmp/deployment-resolved.yml \
               --resource-group "${RG_NAME}" \
               --workspace-name "${AML_WORKSPACE}"
           
           # Get endpoint URL and key
-          ENDPOINT_URL=$(az ml online-endpoint show \
-            --name opal-sd-placement-dev \
             --resource-group "${RG_NAME}" \
             --workspace-name "${AML_WORKSPACE}" \
             --query "scoring_uri" -o tsv)
           
-          ENDPOINT_KEY=$(az ml online-endpoint get-credentials \
-            --name opal-sd-placement-dev \
             --resource-group "${RG_NAME}" \
             --workspace-name "${AML_WORKSPACE}" \
             --query "primaryKey" -o tsv)
