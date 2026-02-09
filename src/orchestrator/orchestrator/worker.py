@@ -1,4 +1,4 @@
-﻿# Updated: 2026-02-09 - Full product placement pipeline
+# Updated: 2026-02-09 - Full product placement pipeline
 import json
 import time
 import logging
@@ -18,32 +18,9 @@ from shared.image_generation import get_image_gen_provider
 
 LOG = logging.getLogger(__name__)
 
-# Initialize providers with error handling
-import sys
-import traceback
-
-try:
-    bg_provider = get_provider(
-        provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
-        api_key=settings.REMOVEBG_API_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'remove.bg' else None,
-        endpoint=settings.AZURE_VISION_ENDPOINT if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None,
-        key=settings.AZURE_VISION_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None
-    )
-    LOG.info(f'Background removal: {bg_provider.name}')
-except Exception as e:
-    LOG.error(f'Failed to init background removal: {e}')
-    bg_provider = None
-
-try:
-    img_gen_provider = get_image_gen_provider(
-        provider_name=settings.IMAGE_GEN_PROVIDER,
-        api_key=getattr(settings, f'{settings.IMAGE_GEN_PROVIDER.upper().replace(".", "_")}_API_KEY', '')
-    )
-    LOG.info(f'Image generation: {img_gen_provider.name}')
-except Exception as e:
-    print(f"ERROR initializing image generation: {e}", file=sys.stderr)
-    traceback.print_exc()
-    img_gen_provider = None
+# Providers will be initialized in main() after logging is setup
+bg_provider = None
+img_gen_provider = None
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
@@ -161,7 +138,7 @@ def process_message(data: dict):
             item.output_blob_path = out_path
             item.status = ItemStatus.completed
             s.commit()
-            LOG.info('âœ… Item completed: %s', item_id)
+            LOG.info('✅ Item completed: %s', item_id)
 
         # Send to exports queue
         try:
@@ -203,7 +180,7 @@ def finalize_job_status(job_id: str):
         
         if completed == len(items):
             job.status = JobStatus.completed
-            LOG.info('ðŸŽ‰ Job COMPLETED: %s', job_id)
+            LOG.info('🎉 Job COMPLETED: %s', job_id)
         elif processing > 0:
             job.status = JobStatus.processing
         elif failed == len(items):
@@ -215,24 +192,47 @@ def finalize_job_status(job_id: str):
 
 
 def main():
-    # Print to stdout immediately to confirm startup
-    print("=" * 50, flush=True)
-    print("OPAL ORCHESTRATOR STARTING", flush=True)
-    print("=" * 50, flush=True)
+    global bg_provider, img_gen_provider
+    
+    # Configure logging FIRST
     logging.basicConfig(
         level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
         format='%(asctime)s %(levelname)s - %(message)s'
     )
-    LOG.info('ðŸš€ OPAL Orchestrator starting')
+    
+    LOG.info('=' * 50)
+    LOG.info('🚀 OPAL ORCHESTRATOR STARTING')
+    LOG.info('=' * 50)
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
-    if bg_provider:
-        LOG.info('Background removal: %s', bg_provider.name)
-    if img_gen_provider:
-        LOG.info('Image generation: %s', img_gen_provider.name)
+    
+    # NOW initialize providers AFTER logging is configured
+    try:
+        bg_provider = get_provider(
+            provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
+            api_key=settings.REMOVEBG_API_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'remove.bg' else None,
+            endpoint=settings.AZURE_VISION_ENDPOINT if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None,
+            key=settings.AZURE_VISION_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None
+        )
+        LOG.info('✅ Background removal: %s', bg_provider.name)
+    except Exception as e:
+        LOG.error('❌ Failed to init background removal: %s', e, exc_info=True)
+        bg_provider = None
+    
+    try:
+        img_gen_provider = get_image_gen_provider(
+            provider_name=settings.IMAGE_GEN_PROVIDER,
+            api_key=getattr(settings, f'{settings.IMAGE_GEN_PROVIDER.upper().replace(".", "_")}_API_KEY', '')
+        )
+        LOG.info('✅ Image generation: %s', img_gen_provider.name)
+    except Exception as e:
+        LOG.error('❌ Failed to init image generation: %s', e, exc_info=True)
+        img_gen_provider = None
     
     if not bg_provider and not img_gen_provider:
-        LOG.warning('âš ï¸  No AI providers configured - will pass through images')
+        LOG.warning('⚠️  No AI providers configured - will pass through images')
 
+    LOG.info('🎬 Starting message processing loop...')
+    
     while True:
         try:
             with get_client() as client:
@@ -254,7 +254,7 @@ def main():
                             finalize_job_status(data['job_id'])
                             
                             receiver.complete_message(m)
-                            LOG.info('âœ… Message completed: %s', data.get('job_id'))
+                            LOG.info('✅ Message completed: %s', data.get('job_id'))
                         except json.JSONDecodeError as e:
                             LOG.error('Invalid JSON: %s', e)
                             receiver.dead_letter_message(m, reason='InvalidJSON', error_description=str(e))
@@ -273,5 +273,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
