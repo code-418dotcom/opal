@@ -1,4 +1,7 @@
-# Updated: 2026-02-10 09:22:27 - Real-ESRGAN deployment
+cd D:\opal
+
+@'
+# Updated: 2026-02-09 - Added upscaling (5-step pipeline)
 import json
 import time
 import logging
@@ -184,116 +187,4 @@ def finalize_job_status(job_id: str):
             return
         
         statuses = [item.status for item in items]
-        completed = statuses.count(ItemStatus.completed)
-        failed = statuses.count(ItemStatus.failed)
-        processing = statuses.count(ItemStatus.processing)
-        
-        if completed == len(items):
-            job.status = JobStatus.completed
-            LOG.info('🎉 Job COMPLETED: %s', job_id)
-        elif processing > 0:
-            job.status = JobStatus.processing
-        elif failed == len(items):
-            job.status = JobStatus.failed
-        elif failed > 0:
-            job.status = JobStatus.partial
-        
-        s.commit()
-
-
-def main():
-    global bg_provider, img_gen_provider, upscale_provider
-    
-    # Configure logging FIRST
-    logging.basicConfig(
-        level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-        format='%(asctime)s %(levelname)s - %(message)s'
-    )
-    
-    LOG.info('=' * 50)
-    LOG.info('🚀 OPAL ORCHESTRATOR STARTING')
-    LOG.info('=' * 50)
-    LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
-    
-    # Initialize providers AFTER logging is configured
-    try:
-        bg_provider = get_provider(
-            provider_name=settings.BACKGROUND_REMOVAL_PROVIDER,
-            api_key=settings.REMOVEBG_API_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'remove.bg' else None,
-            endpoint=settings.AZURE_VISION_ENDPOINT if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None,
-            key=settings.AZURE_VISION_KEY if settings.BACKGROUND_REMOVAL_PROVIDER == 'azure-vision' else None
-        )
-        LOG.info('✅ Background removal: %s', bg_provider.name)
-    except Exception as e:
-        LOG.error('❌ Failed to init background removal: %s', e, exc_info=True)
-        bg_provider = None
-    
-    try:
-        img_gen_provider = get_image_gen_provider(
-            provider_name=settings.IMAGE_GEN_PROVIDER,
-            api_key=getattr(settings, f'{settings.IMAGE_GEN_PROVIDER.upper().replace(".", "_")}_API_KEY', '')
-        )
-        LOG.info('✅ Image generation: %s', img_gen_provider.name)
-    except Exception as e:
-        LOG.error('❌ Failed to init image generation: %s', e, exc_info=True)
-        img_gen_provider = None
-    
-    try:
-        if settings.UPSCALE_ENABLED:
-            upscale_provider = get_upscaling_provider(
-                provider_name=settings.UPSCALE_PROVIDER
-            )
-            LOG.info('✅ Upscaling: %s', upscale_provider.name)
-        else:
-            LOG.info('⚠️  Upscaling: DISABLED')
-    except Exception as e:
-        LOG.error('❌ Failed to init upscaling: %s', e, exc_info=True)
-        upscale_provider = None
-    
-    if not bg_provider and not img_gen_provider:
-        LOG.warning('⚠️  No AI providers configured - will pass through images')
-
-    LOG.info('🎬 Starting message processing loop...')
-    
-    while True:
-        try:
-            with get_client() as client:
-                receiver = client.get_queue_receiver(
-                    queue_name=settings.SERVICEBUS_JOBS_QUEUE,
-                    max_wait_time=20,
-                    receive_mode=ServiceBusReceiveMode.PEEK_LOCK
-                )
-                renewer = AutoLockRenewer()
-                
-                with receiver:
-                    messages = receiver.receive_messages(max_message_count=10, max_wait_time=20)
-                    for m in messages:
-                        try:
-                            data = json.loads(str(m))
-                            renewer.register(receiver, m, max_lock_renewal_duration=300)
-                            
-                            process_message(data)
-                            finalize_job_status(data['job_id'])
-                            
-                            receiver.complete_message(m)
-                            LOG.info('✅ Message completed: %s', data.get('job_id'))
-                        except json.JSONDecodeError as e:
-                            LOG.error('Invalid JSON: %s', e)
-                            receiver.dead_letter_message(m, reason='InvalidJSON', error_description=str(e))
-                        except Exception as e:
-                            LOG.exception('Message processing failed: %s', e)
-                            receiver.abandon_message(m)
-                        finally:
-                            try:
-                                renewer.close()
-                            except:
-                                pass
-        except Exception as e:
-            LOG.exception('Worker loop error: %s', e)
-            time.sleep(5)
-
-
-if __name__ == '__main__':
-    main()
-
-# Trigger rebuild
+        completed = statuses.count(ItemStatus.complet
