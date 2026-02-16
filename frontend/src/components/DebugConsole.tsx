@@ -148,7 +148,7 @@ export default function DebugConsole() {
                   </span>
                 </div>
                 <div className="log-message">{log.message}</div>
-                {log.data && (
+                {log.data !== undefined && (
                   <pre className="log-data">
                     {JSON.stringify(log.data, null, 2)}
                   </pre>
