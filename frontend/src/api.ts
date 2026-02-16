@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, UploadSasResponse } from './types';
+import type { Job, CreateJobResponse } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
@@ -49,45 +49,25 @@ class ApiClient {
     return this.request<Job>(`/v1/jobs/${jobId}`);
   }
 
-  async getUploadSas(
-    jobId: string,
-    itemId: string,
-    filename: string
-  ): Promise<UploadSasResponse> {
-    return this.request<UploadSasResponse>('/v1/uploads/sas', {
-      method: 'POST',
-      body: JSON.stringify({
-        job_id: jobId,
-        item_id: itemId,
-        filename,
-      }),
-    });
-  }
+  async uploadDirect(jobId: string, itemId: string, file: File): Promise<void> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('job_id', jobId);
+    formData.append('item_id', itemId);
 
-  async uploadToSas(sasUrl: string, file: File): Promise<void> {
-    const response = await fetch(sasUrl, {
-      method: 'PUT',
+    const url = `${this.baseUrl}/v1/uploads/direct`;
+    const response = await fetch(url, {
+      method: 'POST',
       headers: {
-        'x-ms-blob-type': 'BlockBlob',
-        'Content-Type': file.type || 'application/octet-stream',
+        'X-API-Key': this.apiKey,
       },
-      body: file,
+      body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `Upload failed: ${response.statusText}`);
     }
-  }
-
-  async completeUpload(jobId: string, itemId: string, filename: string): Promise<void> {
-    await this.request('/v1/uploads/complete', {
-      method: 'POST',
-      body: JSON.stringify({
-        job_id: jobId,
-        item_id: itemId,
-        filename,
-      }),
-    });
   }
 
   async enqueueJob(jobId: string): Promise<void> {

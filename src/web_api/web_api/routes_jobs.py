@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from shared.db import SessionLocal
 from shared.models import Job, JobItem, JobStatus, ItemStatus
 from shared.util import new_id, new_correlation_id
-from shared.servicebus import send_job_message
+from shared.queue_unified import send_job_message
 from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["jobs"])

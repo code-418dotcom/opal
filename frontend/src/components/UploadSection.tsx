@@ -81,31 +81,11 @@ export default function UploadSection({ onJobCreated }: Props) {
         try {
           setFiles((prev) =>
             prev.map((f, idx) =>
-              idx === i ? { ...f, status: 'uploading', progress: 10 } : f
+              idx === i ? { ...f, status: 'uploading', progress: 25 } : f
             )
           );
 
-          const sasResponse = await api.getUploadSas(
-            job.job_id,
-            item.item_id,
-            item.filename
-          );
-
-          setFiles((prev) =>
-            prev.map((f, idx) =>
-              idx === i ? { ...f, progress: 30 } : f
-            )
-          );
-
-          await api.uploadToSas(sasResponse.upload_url, fileItem.file);
-
-          setFiles((prev) =>
-            prev.map((f, idx) =>
-              idx === i ? { ...f, progress: 70 } : f
-            )
-          );
-
-          await api.completeUpload(job.job_id, item.item_id, item.filename);
+          await api.uploadDirect(job.job_id, item.item_id, fileItem.file);
 
           setFiles((prev) =>
             prev.map((f, idx) =>
