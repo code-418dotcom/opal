@@ -50,28 +50,31 @@
 
     <script>
         const API_KEY = 'dev_testkey123';
-
-        // Detect API URL
-        const getApiUrl = () => {
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                return 'http://localhost:8080';
-            }
-            return ''; // Relative path for hosted environments
-        };
-
-        const API_URL = getApiUrl();
+        const SUPABASE_URL = 'https://jbwbdfabuffiwdphzzon.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impid2JkZmFidWZmaXdkcGh6em9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzI5ODgsImV4cCI6MjA4NjgwODk4OH0.UjUX0ft6k_E_H5twY8d3A1liMyKjgPpA1kAIDjU4__0';
+        const API_URL = `${SUPABASE_URL}/functions/v1`;
 
         document.getElementById('location').textContent = window.location.href;
-        document.getElementById('apiUrl').textContent = API_URL || '(relative path - same origin)';
+        document.getElementById('apiUrl').textContent = API_URL;
 
         async function testHealth() {
             const result = document.getElementById('healthResult');
-            result.textContent = 'Testing...';
+            result.textContent = 'Testing Edge Functions availability...';
+            result.parentElement.classList.remove('success', 'error');
             try {
-                const response = await fetch(`${API_URL}/healthz`);
-                const data = await response.json();
-                result.textContent = JSON.stringify(data, null, 2);
-                result.parentElement.classList.add('success');
+                const response = await fetch(`${API_URL}/create-job`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                    }
+                });
+                if (response.ok) {
+                    result.textContent = '✓ Edge Functions are accessible\nStatus: ' + response.status;
+                    result.parentElement.classList.add('success');
+                } else {
+                    result.textContent = '✗ Edge Functions returned: ' + response.status;
+                    result.parentElement.classList.add('error');
+                }
             } catch (error) {
                 result.textContent = `ERROR: ${error.message}\n\nStack: ${error.stack}`;
                 result.parentElement.classList.add('error');
@@ -80,35 +83,49 @@
 
         async function testDebugInfo() {
             const result = document.getElementById('debugResult');
-            result.textContent = 'Testing...';
-            try {
-                const response = await fetch(`${API_URL}/debug/info`);
-                const data = await response.json();
-                result.textContent = JSON.stringify(data, null, 2);
-                result.parentElement.classList.add('success');
-            } catch (error) {
-                result.textContent = `ERROR: ${error.message}\n\nStack: ${error.stack}`;
-                result.parentElement.classList.add('error');
-            }
+            result.textContent = 'Fetching environment info...';
+            result.parentElement.classList.remove('success', 'error');
+
+            const info = {
+                'Supabase URL': SUPABASE_URL,
+                'API Endpoint': API_URL,
+                'Has API Key': !!API_KEY,
+                'Has Anon Key': !!SUPABASE_ANON_KEY,
+                'Current Origin': window.location.origin,
+                'User Agent': navigator.userAgent.substring(0, 80) + '...',
+            };
+
+            result.textContent = JSON.stringify(info, null, 2);
+            result.parentElement.classList.add('success');
         }
 
         async function testCreateJob() {
             const result = document.getElementById('jobResult');
-            result.textContent = 'Testing...';
+            result.textContent = 'Creating test job...';
+            result.parentElement.classList.remove('success', 'error');
             try {
-                const response = await fetch(`${API_URL}/v1/jobs`, {
+                const response = await fetch(`${API_URL}/create-job`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': API_KEY
+                        'X-API-Key': API_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'apikey': SUPABASE_ANON_KEY
                     },
                     body: JSON.stringify({
                         items: [{ filename: 'test-from-html.jpg' }]
                     })
                 });
+
                 const data = await response.json();
-                result.textContent = JSON.stringify(data, null, 2);
-                result.parentElement.classList.add('success');
+
+                if (response.ok) {
+                    result.textContent = '✓ Job Created Successfully!\n\n' + JSON.stringify(data, null, 2);
+                    result.parentElement.classList.add('success');
+                } else {
+                    result.textContent = '✗ Failed to create job\n\nStatus: ' + response.status + '\n\n' + JSON.stringify(data, null, 2);
+                    result.parentElement.classList.add('error');
+                }
             } catch (error) {
                 result.textContent = `ERROR: ${error.message}\n\nStack: ${error.stack}`;
                 result.parentElement.classList.add('error');
@@ -118,6 +135,7 @@
         async function runDiagnostics() {
             const result = document.getElementById('diagResult');
             result.textContent = 'Running diagnostics...\n\n';
+            result.parentElement.classList.remove('success', 'error');
 
             const info = {
                 'Window Location': window.location.href,
@@ -125,31 +143,37 @@
                 'Protocol': window.location.protocol,
                 'Port': window.location.port || '(default)',
                 'Origin': window.location.origin,
-                'API URL': API_URL || '(relative)',
+                'API URL': API_URL,
                 'User Agent': navigator.userAgent,
                 'Online': navigator.onLine,
             };
 
             result.textContent += 'Browser Info:\n' + JSON.stringify(info, null, 2);
 
-            // Try different URL variations
-            result.textContent += '\n\n---Testing different URLs---\n';
+            result.textContent += '\n\n---Testing Edge Function Endpoints---\n';
 
-            const urlsToTest = [
-                '/healthz',
-                'http://localhost:8080/healthz',
-                `${window.location.protocol}//${window.location.hostname}:8080/healthz`,
+            const endpointsToTest = [
+                { name: 'create-job (OPTIONS)', url: `${API_URL}/create-job`, method: 'OPTIONS' },
+                { name: 'get-job (OPTIONS)', url: `${API_URL}/get-job/test`, method: 'OPTIONS' },
+                { name: 'upload-file (OPTIONS)', url: `${API_URL}/upload-file`, method: 'OPTIONS' },
             ];
 
-            for (const url of urlsToTest) {
+            for (const endpoint of endpointsToTest) {
                 try {
-                    result.textContent += `\nTrying: ${url}...`;
-                    const response = await fetch(url, { mode: 'cors' });
+                    result.textContent += `\n${endpoint.name}...`;
+                    const response = await fetch(endpoint.url, {
+                        method: endpoint.method,
+                        headers: {
+                            'Origin': window.location.origin,
+                        }
+                    });
                     result.textContent += ` ✓ ${response.status}`;
                 } catch (error) {
                     result.textContent += ` ✗ ${error.message}`;
                 }
             }
+
+            result.parentElement.classList.add('success');
         }
     </script>
 </body>
