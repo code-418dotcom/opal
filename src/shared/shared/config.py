@@ -26,17 +26,28 @@ class Settings(BaseSettings):
 
     ENV_NAME: str = "dev"
 
-    # Postgres
+    # Database
     DATABASE_URL: str
 
-    # Azure Storage
-    STORAGE_ACCOUNT_NAME: str
+    # Supabase (Preferred)
+    SUPABASE_URL: str = Field(default='', env='SUPABASE_URL')
+    SUPABASE_SERVICE_ROLE_KEY: str = Field(default='', env='SUPABASE_SERVICE_ROLE_KEY')
+    SUPABASE_ANON_KEY: str = Field(default='', env='SUPABASE_ANON_KEY')
+
+    # Storage Backend Selection
+    STORAGE_BACKEND: str = Field(default='supabase', env='STORAGE_BACKEND')  # 'supabase' or 'azure'
+
+    # Azure Storage (Legacy)
+    STORAGE_ACCOUNT_NAME: str = Field(default='', env='STORAGE_ACCOUNT_NAME')
     STORAGE_RAW_CONTAINER: str = "raw"
     STORAGE_OUTPUTS_CONTAINER: str = "outputs"
     STORAGE_EXPORTS_CONTAINER: str = "exports"
 
-    # Service Bus
-    SERVICEBUS_NAMESPACE: str
+    # Queue Backend Selection
+    QUEUE_BACKEND: str = Field(default='database', env='QUEUE_BACKEND')  # 'database' or 'azure'
+
+    # Azure Service Bus (Legacy)
+    SERVICEBUS_NAMESPACE: str = Field(default='', env='SERVICEBUS_NAMESPACE')
     SERVICEBUS_JOBS_QUEUE: str = "jobs"
     SERVICEBUS_EXPORTS_QUEUE: str = "exports"
 
