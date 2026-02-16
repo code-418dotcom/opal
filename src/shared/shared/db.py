@@ -2,10 +2,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from .config import settings
 
-# NOTE:
-# create_engine() does NOT connect immediately; it connects on first use.
-# The thing that was killing your app was create_all() being called at import time elsewhere.
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=10,
+    pool_recycle=3600,
+    connect_args={
+        "connect_timeout": 10,
+        "application_name": "opal"
+    }
+)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 

@@ -1,4 +1,4 @@
-﻿from pydantic import Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +46,9 @@ class Settings(BaseSettings):
 
     # App behavior
     LOG_LEVEL: str = "INFO"
+
+    # API Security
+    API_KEYS: str = Field(default='', env='API_KEYS')
 
 
 settings = Settings()

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Image upscaling service abstraction.
 Supports: Real-ESRGAN (local), FAL.AI (API), Replicate (API)
 """
@@ -26,50 +26,59 @@ class UpscalingProvider(ABC):
 
 
 class RealESRGANProvider(UpscalingProvider):
-    """Local upscaling using Real-ESRGAN"""
-    
+    """Local upscaling using Real-ESRGAN with singleton pattern"""
+
+    _instance = None
+    _upsampler = None
+    _Image = None
+    _np = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self):
+        if self._upsampler is not None:
+            return
+
         try:
             from PIL import Image
             import numpy as np
             from realesrgan import RealESRGANer
             from basicsr.archs.rrdbnet_arch import RRDBNet
-            
-            self._Image = Image
-            self._np = np
-            
-            # Initialize Real-ESRGAN with x2 model (good quality, faster)
+
+            RealESRGANProvider._Image = Image
+            RealESRGANProvider._np = np
+
             model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
-            self.upsampler = RealESRGANer(
+            RealESRGANProvider._upsampler = RealESRGANer(
                 scale=2,
                 model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
                 model=model,
                 tile=400,
                 tile_pad=10,
                 pre_pad=0,
-                half=False  # Use FP32 for CPU
+                half=False
             )
-            LOG.info("Real-ESRGAN provider initialized (2x upscaling)")
+            LOG.info("Real-ESRGAN provider initialized (2x upscaling, singleton)")
         except ImportError as e:
             raise ImportError(f"Real-ESRGAN not installed: {e}")
     
     def upscale(self, image_bytes: bytes, scale: int = 2) -> bytes:
         from io import BytesIO
-        
-        LOG.info(f"Upscaling with Real-ESRGAN (2x)")
-        
-        # Load image
-        img = self._Image.open(BytesIO(image_bytes)).convert('RGB')
-        img_array = self._np.array(img)
-        
-        # Upscale
-        output, _ = self.upsampler.enhance(img_array, outscale=2)
-        
-        # Convert back to bytes
-        result_img = self._Image.fromarray(output)
+
+        LOG.info("Upscaling with Real-ESRGAN (2x)")
+
+        img = RealESRGANProvider._Image.open(BytesIO(image_bytes)).convert('RGB')
+        img_array = RealESRGANProvider._np.array(img)
+
+        output, _ = RealESRGANProvider._upsampler.enhance(img_array, outscale=2)
+
+        result_img = RealESRGANProvider._Image.fromarray(output)
         output_buffer = BytesIO()
         result_img.save(output_buffer, format='PNG', optimize=True)
-        
+
         LOG.info(f"Real-ESRGAN upscaling complete: {img.size} → {result_img.size}")
         return output_buffer.getvalue()
     

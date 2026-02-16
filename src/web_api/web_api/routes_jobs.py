@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, Field
 from shared.db import SessionLocal
 from shared.models import Job, JobItem, JobStatus, ItemStatus
 from shared.util import new_id, new_correlation_id
 from shared.servicebus import send_job_message
+from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["jobs"])
 
@@ -13,24 +14,23 @@ router = APIRouter(prefix="/v1", tags=["jobs"])
 
 
 class ItemIn(BaseModel):
-    filename: str
+    filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
 
 
 class CreateJobIn(BaseModel):
-    tenant_id: str
     brand_profile_id: str = "default"
-    items: list[ItemIn]
+    items: list[ItemIn] = Field(..., min_length=1, max_length=100)
 
 
 @router.post("/jobs")
-def create_job(body: CreateJobIn):
+def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_key)):
     job_id = new_id("job")
     corr = new_correlation_id()
 
     with SessionLocal() as s:
         job = Job(
             id=job_id,
-            tenant_id=body.tenant_id,
+            tenant_id=tenant_id,
             brand_profile_id=body.brand_profile_id,
             status=JobStatus.created,
             correlation_id=corr,
@@ -43,7 +43,7 @@ def create_job(body: CreateJobIn):
             item = JobItem(
                 id=item_id,
                 job_id=job_id,
-                tenant_id=body.tenant_id,
+                tenant_id=tenant_id,
                 filename=it.filename,
                 status=ItemStatus.created,
             )
@@ -56,7 +56,7 @@ def create_job(body: CreateJobIn):
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: str, tenant_id: str):
+def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
     with SessionLocal() as s:
         job = s.get(Job, job_id)
         if not job or job.tenant_id != tenant_id:
@@ -84,7 +84,7 @@ def get_job(job_id: str, tenant_id: str):
 
 
 @router.post("/jobs/{job_id}/enqueue")
-def enqueue_job(job_id: str, tenant_id: str):
+def enqueue_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
     with SessionLocal() as s:
         job = s.get(Job, job_id)
         if not job or job.tenant_id != tenant_id:
@@ -93,7 +93,6 @@ def enqueue_job(job_id: str, tenant_id: str):
         items = s.query(JobItem).filter(JobItem.job_id == job_id).all()
         for it in items:
             if it.status in (ItemStatus.created, ItemStatus.uploaded):
-                # Status will be set by orchestrator when processing starts
                 send_job_message(
                     {
                         "tenant_id": tenant_id,

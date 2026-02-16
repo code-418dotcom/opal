@@ -292,8 +292,8 @@ def main():
                         finally:
                             try:
                                 renewer.close()
-                            except:
-                                pass
+                            except Exception as e:
+                                LOG.warning("Lock renewer close failed: %s", e)
         except Exception as e:
             LOG.exception('Worker loop error: %s', e)
             time.sleep(5)

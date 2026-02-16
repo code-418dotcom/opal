@@ -1,3 +1,5 @@
+import re
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
@@ -13,14 +15,52 @@ def get_blob_service_client() -> BlobServiceClient:
     return BlobServiceClient(account_url=_account_url(), credential=cred)
 
 
+def _sanitize_path_component(component: str, allow_dots: bool = False) -> str:
+    if not component:
+        raise ValueError("Path component cannot be empty")
+
+    if allow_dots:
+        pattern = r'^[a-zA-Z0-9_\-\.]+$'
+    else:
+        pattern = r'^[a-zA-Z0-9_\-]+$'
+
+    if not re.match(pattern, component):
+        raise ValueError(f"Invalid path component: {component}")
+
+    if '..' in component:
+        raise ValueError(f"Path traversal attempt detected: {component}")
+
+    return component
+
+
+def _sanitize_filename(filename: str) -> str:
+    safe = Path(filename).name
+
+    if not safe or safe in ('.', '..'):
+        raise ValueError(f"Invalid filename: {filename}")
+
+    if not re.match(r'^[a-zA-Z0-9_\-\.]+$', safe):
+        raise ValueError(f"Filename contains invalid characters: {filename}")
+
+    return safe
+
+
 def build_raw_blob_path(tenant_id: str, job_id: str, item_id: str, filename: str) -> str:
-    safe = filename.replace("\\", "/").split("/")[-1]
-    return f"{tenant_id}/jobs/{job_id}/items/{item_id}/raw/{safe}"
+    tenant = _sanitize_path_component(tenant_id)
+    job = _sanitize_path_component(job_id)
+    item = _sanitize_path_component(item_id)
+    safe_filename = _sanitize_filename(filename)
+
+    return f"{tenant}/jobs/{job}/items/{item}/raw/{safe_filename}"
 
 
 def build_output_blob_path(tenant_id: str, job_id: str, item_id: str, filename: str) -> str:
-    safe = filename.replace("\\", "/").split("/")[-1]
-    return f"{tenant_id}/jobs/{job_id}/items/{item_id}/outputs/{safe}"
+    tenant = _sanitize_path_component(tenant_id)
+    job = _sanitize_path_component(job_id)
+    item = _sanitize_path_component(item_id)
+    safe_filename = _sanitize_filename(filename)
+
+    return f"{tenant}/jobs/{job}/items/{item}/outputs/{safe_filename}"
 
 
 def generate_write_sas(container: str, blob_path: str, expiry_minutes: int = 30) -> str:
