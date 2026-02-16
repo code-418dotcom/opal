@@ -32,6 +32,16 @@ build_raw_blob_path = _backend.build_raw_blob_path
 build_output_blob_path = _backend.build_output_blob_path
 
 
+def get_storage_client():
+    """Get the storage client for health checks"""
+    if settings.STORAGE_BACKEND == 'supabase':
+        return _backend.get_supabase_client()
+    else:
+        # For Azure, import the blob service client
+        from . import storage
+        return storage.get_blob_service_client()
+
+
 # Unified interface functions
 def generate_upload_url(bucket: str, path: str, expires_in: int = 3600) -> str:
     """Generate signed URL for uploading"""

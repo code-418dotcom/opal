@@ -9,11 +9,11 @@ LOG = logging.getLogger(__name__)
 
 
 def get_supabase_client() -> Client:
-    """Get Supabase client with service role key"""
-    return create_client(
-        settings.SUPABASE_URL,
-        settings.SUPABASE_SERVICE_ROLE_KEY
-    )
+    """Get Supabase client with service role key or anon key as fallback"""
+    key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
+    if not key:
+        raise ValueError("Either SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY must be set")
+    return create_client(settings.SUPABASE_URL, key)
 
 
 def _sanitize_path_component(component: str, allow_dots: bool = False) -> str:

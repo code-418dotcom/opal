@@ -27,14 +27,11 @@ app.include_router(uploads_router, dependencies=[Depends(verify_api_key)])
 @app.on_event("startup")
 def _startup_db_init() -> None:
     """
-    MVP-only: attempt to create tables on startup.
-    CRITICAL: This must never crash the app if DB is unavailable.
+    Verify Supabase connection on startup.
     """
     try:
-        from shared.db import engine
-        from shared.models import Base
-
-        Base.metadata.create_all(bind=engine)
-        log.info("DB init: tables ensured.")
+        from shared.db_supabase import get_supabase_client
+        client = get_supabase_client()
+        log.info("Supabase client initialized successfully")
     except Exception:
-        log.exception("DB init failed (non-fatal). App will start in degraded mode.")
+        log.exception("Supabase init failed (non-fatal). App will start in degraded mode.")
