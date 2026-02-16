@@ -43,7 +43,7 @@ function App() {
               <div className="header-info">
                 <span className="api-status">
                   <span className="status-dot"></span>
-                  API Connected
+                  API: {import.meta.env.VITE_API_URL || 'http://localhost:8080'}
                 </span>
               </div>
             </div>
