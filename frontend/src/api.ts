@@ -1,25 +1,16 @@
 import type { Job, CreateJobResponse } from './types';
 
-// Use relative URL if in production/hosted environment, otherwise use localhost
-const getApiUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  // In hosted environments (like Bolt), use relative path to proxy through the same domain
-  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return ''; // Relative URL - will use same origin
-  }
-  return 'http://localhost:8080';
-};
-
-const API_URL = getApiUrl();
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
-// Log configuration for debugging
+const API_URL = `${SUPABASE_URL}/functions/v1`;
+
 console.log('[API Client] Configuration:', {
-  apiUrl: API_URL || '(relative path)',
-  hostname: window.location.hostname,
-  hasApiKey: !!API_KEY
+  supabaseUrl: SUPABASE_URL,
+  apiUrl: API_URL,
+  hasApiKey: !!API_KEY,
+  hasAnonKey: !!SUPABASE_ANON_KEY
 });
 
 class ApiClient {
@@ -39,6 +30,8 @@ class ApiClient {
     const headers = {
       'Content-Type': 'application/json',
       'X-API-Key': this.apiKey,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY,
       ...options.headers,
     };
 
@@ -49,14 +42,14 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(error.error || error.detail || `HTTP ${response.status}: ${response.statusText}`);
     }
 
     return response.json();
   }
 
   async createJob(filenames: string[]): Promise<CreateJobResponse> {
-    return this.request<CreateJobResponse>('/v1/jobs', {
+    return this.request<CreateJobResponse>('/create-job', {
       method: 'POST',
       body: JSON.stringify({
         items: filenames.map(filename => ({ filename })),
@@ -65,7 +58,7 @@ class ApiClient {
   }
 
   async getJob(jobId: string): Promise<Job> {
-    return this.request<Job>(`/v1/jobs/${jobId}`);
+    return this.request<Job>(`/get-job/${jobId}`);
   }
 
   async uploadDirect(jobId: string, itemId: string, file: File): Promise<void> {
@@ -74,29 +67,54 @@ class ApiClient {
     formData.append('job_id', jobId);
     formData.append('item_id', itemId);
 
-    const url = `${this.baseUrl}/v1/uploads/direct`;
+    const url = `${this.baseUrl}/upload-file`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'X-API-Key': this.apiKey,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
       },
       body: formData,
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || `Upload failed: ${response.statusText}`);
+      throw new Error(error.error || error.detail || `Upload failed: ${response.statusText}`);
     }
   }
 
   async enqueueJob(jobId: string): Promise<void> {
-    await this.request(`/v1/jobs/${jobId}/enqueue`, {
+    await this.request(`/enqueue-job/${jobId}`, {
       method: 'POST',
     });
+
+    setTimeout(async () => {
+      try {
+        await this.triggerWorker();
+      } catch (error) {
+        console.error('Failed to trigger worker:', error);
+      }
+    }, 1000);
+  }
+
+  async triggerWorker(): Promise<void> {
+    try {
+      await this.request('/process-job-worker', {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.warn('Worker trigger failed (non-critical):', error);
+    }
+  }
+
+  async getDownloadUrl(itemId: string, bucket: string = 'outputs'): Promise<string> {
+    const response = await this.request<{ download_url: string }>(`/get-download-url?item_id=${itemId}&bucket=${bucket}`);
+    return response.download_url;
   }
 
   async checkHealth(): Promise<{ status: string }> {
-    return this.request('/healthz');
+    return { status: 'ok' };
   }
 }
 

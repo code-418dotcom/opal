@@ -86,9 +86,15 @@ export default function ResultsGallery({ jobId: initialJobId }: Props) {
                 <div className="result-actions">
                   <button
                     className="button-secondary button-sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (item.output_blob_path) {
-                        window.open(item.output_blob_path, '_blank');
+                        try {
+                          const url = await api.getDownloadUrl(item.item_id, 'outputs');
+                          window.open(url, '_blank');
+                        } catch (error) {
+                          console.error('Failed to get download URL:', error);
+                          alert('Failed to generate download URL');
+                        }
                       }
                     }}
                   >
@@ -97,12 +103,18 @@ export default function ResultsGallery({ jobId: initialJobId }: Props) {
                   </button>
                   <button
                     className="button-secondary button-sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (item.output_blob_path) {
-                        const link = document.createElement('a');
-                        link.href = item.output_blob_path;
-                        link.download = item.filename;
-                        link.click();
+                        try {
+                          const url = await api.getDownloadUrl(item.item_id, 'outputs');
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = item.filename;
+                          link.click();
+                        } catch (error) {
+                          console.error('Failed to get download URL:', error);
+                          alert('Failed to generate download URL');
+                        }
                       }
                     }}
                   >
