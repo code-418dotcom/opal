@@ -1,7 +1,6 @@
 INFO:     Started server process [355]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
-INFO:     127.0.0.1:53704 - "GET /healthz HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53712 - "GET /debug/info HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36964 - "POST /v1/jobs HTTP/1.1" 200 OK
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0INFO:     127.0.0.1:57496 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57500 - "GET /debug/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "GET /healthz HTTP/1.1" 200 OK
