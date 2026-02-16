@@ -9,4 +9,4 @@ export PATH=$PATH:/home/appuser/.local/bin
 export PYTHONDONTWRITEBYTECODE=1
 
 cd /tmp/cc-agent/63778139/project
-exec python3 -m uvicorn src.web_api.web_api.main:app --host 0.0.0.0 --port 8080
+exec /home/appuser/.local/bin/uvicorn src.web_api.web_api.main:app --host 0.0.0.0 --port 8080

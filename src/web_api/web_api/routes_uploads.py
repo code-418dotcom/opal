@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
-from shared.db import SessionLocal
-from shared.models import Job, JobItem, ItemStatus
+from shared.db_supabase import get_job_by_id, get_job_item, update_job_item
 from shared.storage_unified import (
     build_raw_blob_path,
     generate_upload_url,
@@ -29,20 +28,18 @@ class UploadComplete(BaseModel):
 
 @router.post("/uploads/sas")
 def get_upload_sas(body: SasRequest, tenant_id: str = Depends(get_tenant_from_api_key)):
-    with SessionLocal() as s:
-        job = s.get(Job, body.job_id)
-        item = s.get(JobItem, body.item_id)
+    job = get_job_by_id(body.job_id, tenant_id)
+    item = get_job_item(body.item_id)
 
-        if not job or job.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Job not found")
-        if not item or item.tenant_id != tenant_id or item.job_id != body.job_id:
-            raise HTTPException(status_code=404, detail="Item not found")
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not item or item["tenant_id"] != tenant_id or item["job_id"] != body.job_id:
+        raise HTTPException(status_code=404, detail="Item not found")
 
-        raw_path = build_raw_blob_path(tenant_id, body.job_id, body.item_id, body.filename)
-        upload_url = generate_upload_url(bucket="raw", path=raw_path)
+    raw_path = build_raw_blob_path(tenant_id, body.job_id, body.item_id, body.filename)
+    upload_url = generate_upload_url(bucket="raw", path=raw_path)
 
-        item.raw_blob_path = raw_path
-        s.commit()
+    update_job_item(body.item_id, {"raw_blob_path": raw_path})
 
     return {"upload_url": upload_url, "raw_blob_path": raw_path}
 
@@ -57,51 +54,45 @@ async def upload_direct(
     """
     Direct upload endpoint - accepts file and uploads to storage backend
     """
-    with SessionLocal() as s:
-        job = s.get(Job, job_id)
-        item = s.get(JobItem, item_id)
+    job = get_job_by_id(job_id, tenant_id)
+    item = get_job_item(item_id)
 
-        if not job or job.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Job not found")
-        if not item or item.tenant_id != tenant_id or item.job_id != job_id:
-            raise HTTPException(status_code=404, detail="Item not found")
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not item or item["tenant_id"] != tenant_id or item["job_id"] != job_id:
+        raise HTTPException(status_code=404, detail="Item not found")
 
-        # Build storage path
-        raw_path = build_raw_blob_path(tenant_id, job_id, item_id, file.filename or item.filename)
+    # Build storage path
+    raw_path = build_raw_blob_path(tenant_id, job_id, item_id, file.filename or item["filename"])
 
-        # Read file content
-        file_content = await file.read()
+    # Read file content
+    file_content = await file.read()
 
-        # Upload to storage
-        storage_upload_file(
-            bucket="raw",
-            path=raw_path,
-            data=file_content,
-            content_type=file.content_type or "application/octet-stream"
-        )
+    # Upload to storage
+    storage_upload_file(
+        bucket="raw",
+        path=raw_path,
+        data=file_content,
+        content_type=file.content_type or "application/octet-stream"
+    )
 
-        # Update item status
-        item.raw_blob_path = raw_path
-        item.status = ItemStatus.uploaded
-        s.commit()
+    # Update item status
+    update_job_item(item_id, {"raw_blob_path": raw_path, "status": "uploaded"})
 
     return {"ok": True, "raw_blob_path": raw_path}
 
 
 @router.post("/uploads/complete")
 def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_from_api_key)):
-    with SessionLocal() as s:
-        job = s.get(Job, body.job_id)
-        item = s.get(JobItem, body.item_id)
+    job = get_job_by_id(body.job_id, tenant_id)
+    item = get_job_item(body.item_id)
 
-        if not job or job.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Job not found")
-        if not item or item.tenant_id != tenant_id or item.job_id != body.job_id:
-            raise HTTPException(status_code=404, detail="Item not found")
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not item or item["tenant_id"] != tenant_id or item["job_id"] != body.job_id:
+        raise HTTPException(status_code=404, detail="Item not found")
 
-        item.status = ItemStatus.uploaded
-
-        s.commit()
+    update_job_item(body.item_id, {"status": "uploaded"})
 
     return {"ok": True}
 

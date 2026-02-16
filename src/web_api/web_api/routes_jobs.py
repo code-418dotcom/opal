@@ -1,16 +1,17 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from shared.db import SessionLocal
-from shared.models import Job, JobItem, JobStatus, ItemStatus
+from shared.db_supabase import (
+    create_job_record,
+    create_job_item_records,
+    get_job_by_id,
+    get_job_items,
+    update_job_status,
+)
 from shared.util import new_id, new_correlation_id
 from shared.queue_unified import send_job_message
 from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["jobs"])
-
-# IMPORTANT:
-# Do NOT create DB tables at import time. This can crash the whole app if DB is unavailable.
-# Migrations later; for MVP we’ll do a *non-fatal* init in startup (see main.py).
 
 
 class ItemIn(BaseModel):
@@ -27,83 +28,82 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
     job_id = new_id("job")
     corr = new_correlation_id()
 
-    with SessionLocal() as s:
-        job = Job(
-            id=job_id,
-            tenant_id=tenant_id,
-            brand_profile_id=body.brand_profile_id,
-            status=JobStatus.created,
-            correlation_id=corr,
-        )
-        s.add(job)
+    # Create job record
+    job_data = {
+        "id": job_id,
+        "tenant_id": tenant_id,
+        "brand_profile_id": body.brand_profile_id,
+        "status": "created",
+        "correlation_id": corr,
+    }
+    create_job_record(job_data)
 
-        created_items = []
-        for it in body.items:
-            item_id = new_id("item")
-            item = JobItem(
-                id=item_id,
-                job_id=job_id,
-                tenant_id=tenant_id,
-                filename=it.filename,
-                status=ItemStatus.created,
-            )
-            s.add(item)
-            created_items.append({"item_id": item_id, "filename": it.filename})
+    # Create job items
+    items_data = []
+    created_items = []
+    for it in body.items:
+        item_id = new_id("item")
+        items_data.append({
+            "id": item_id,
+            "job_id": job_id,
+            "tenant_id": tenant_id,
+            "filename": it.filename,
+            "status": "created",
+        })
+        created_items.append({"item_id": item_id, "filename": it.filename})
 
-        s.commit()
+    if items_data:
+        create_job_item_records(items_data)
 
     return {"job_id": job_id, "correlation_id": corr, "items": created_items}
 
 
 @router.get("/jobs/{job_id}")
 def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
-    with SessionLocal() as s:
-        job = s.get(Job, job_id)
-        if not job or job.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Job not found")
+    job = get_job_by_id(job_id, tenant_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
 
-        items = s.query(JobItem).filter(JobItem.job_id == job_id).all()
-        return {
-            "job_id": job.id,
-            "tenant_id": job.tenant_id,
-            "brand_profile_id": job.brand_profile_id,
-            "status": job.status.value,
-            "correlation_id": job.correlation_id,
-            "items": [
-                {
-                    "item_id": i.id,
-                    "filename": i.filename,
-                    "status": i.status.value,
-                    "raw_blob_path": i.raw_blob_path,
-                    "output_blob_path": i.output_blob_path,
-                    "error_message": i.error_message,
-                }
-                for i in items
-            ],
-        }
+    items = get_job_items(job_id)
+    return {
+        "job_id": job["id"],
+        "tenant_id": job["tenant_id"],
+        "brand_profile_id": job["brand_profile_id"],
+        "status": job["status"],
+        "correlation_id": job["correlation_id"],
+        "items": [
+            {
+                "item_id": i["id"],
+                "filename": i["filename"],
+                "status": i["status"],
+                "raw_blob_path": i.get("raw_blob_path"),
+                "output_blob_path": i.get("output_blob_path"),
+                "error_message": i.get("error_message"),
+            }
+            for i in items
+        ],
+    }
 
 
 @router.post("/jobs/{job_id}/enqueue")
 def enqueue_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
-    with SessionLocal() as s:
-        job = s.get(Job, job_id)
-        if not job or job.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Job not found")
+    job = get_job_by_id(job_id, tenant_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
 
-        items = s.query(JobItem).filter(JobItem.job_id == job_id).all()
-        for it in items:
-            if it.status in (ItemStatus.created, ItemStatus.uploaded):
-                send_job_message(
-                    {
-                        "tenant_id": tenant_id,
-                        "job_id": job_id,
-                        "item_id": it.id,
-                        "correlation_id": job.correlation_id,
-                    }
-                )
+    items = get_job_items(job_id)
+    for it in items:
+        if it["status"] in ("created", "uploaded"):
+            send_job_message(
+                {
+                    "tenant_id": tenant_id,
+                    "job_id": job_id,
+                    "item_id": it["id"],
+                    "correlation_id": job["correlation_id"],
+                }
+            )
 
-        job.status = JobStatus.processing
-        s.commit()
+    update_job_status(job_id, "processing")
 
     return {"ok": True}
 
