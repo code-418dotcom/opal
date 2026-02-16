@@ -60,19 +60,10 @@ def upload_complete(body: UploadComplete):
         
         item.status = ItemStatus.uploaded
         
-        # CRITICAL FIX: Extract correlation_id BEFORE session closes
-        correlation_id = job.correlation_id
-        
         s.commit()
     
     # Now send message with the extracted value
-    send_job_message(
-        {
-            "tenant_id": body.tenant_id,
-            "job_id": body.job_id,
-            "item_id": body.item_id,
-            "correlation_id": correlation_id,
-        }
-    )
+    # Message will be sent when job is enqueued
     
     return {"ok": True}
+
