@@ -20,7 +20,16 @@ type Tab = 'upload' | 'monitor' | 'debug' | 'results';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
+    // Restore job ID from localStorage
+    return localStorage.getItem('currentJobId');
+  });
+
+  const handleJobCreated = (jobId: string) => {
+    setCurrentJobId(jobId);
+    // Persist to localStorage
+    localStorage.setItem('currentJobId', jobId);
+  };
 
   const tabs = [
     { id: 'upload' as Tab, label: 'Upload', icon: Upload },
@@ -70,7 +79,7 @@ function App() {
         <main className="main">
           <div className="container">
             {activeTab === 'upload' && (
-              <UploadSection onJobCreated={setCurrentJobId} />
+              <UploadSection onJobCreated={handleJobCreated} />
             )}
             {activeTab === 'monitor' && (
               <JobMonitor jobId={currentJobId} />

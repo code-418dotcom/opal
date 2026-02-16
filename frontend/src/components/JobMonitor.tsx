@@ -18,12 +18,25 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
     }
   }, [initialJobId]);
 
+  const [workerStatus, setWorkerStatus] = useState<string>('');
+
   const { data: job, isLoading, error, refetch } = useQuery<Job>({
     queryKey: ['job', jobId],
     queryFn: () => api.getJob(jobId),
     enabled: !!jobId,
     refetchInterval: autoRefresh ? 3000 : false,
   });
+
+  const triggerWorker = async () => {
+    try {
+      setWorkerStatus('Triggering worker...');
+      await api.triggerWorker();
+      setWorkerStatus('✓ Worker triggered successfully');
+      setTimeout(() => refetch(), 1000);
+    } catch (error) {
+      setWorkerStatus(`✗ Worker failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const badges = {
@@ -90,7 +103,21 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
           />
           Auto-refresh (3s)
         </label>
+
+        <button
+          className="button-primary"
+          onClick={triggerWorker}
+          disabled={isLoading}
+        >
+          Process Queue
+        </button>
       </div>
+
+      {workerStatus && (
+        <div className={`info-box ${workerStatus.startsWith('✗') ? 'error' : 'success'}`}>
+          {workerStatus}
+        </div>
+      )}
 
       {error && (
         <div className="error-box">
