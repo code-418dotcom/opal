@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPAL API Test Page</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #00d4ff; }
+        .test { margin: 20px 0; padding: 15px; background: #16213e; border-radius: 8px; border-left: 4px solid #00d4ff; }
+        .result { margin-top: 10px; padding: 10px; background: #0f1419; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+        .success { border-left-color: #00ff00; }
+        .error { border-left-color: #ff0000; }
+        button { background: #00d4ff; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #00b8e6; }
+        .info { background: #2a2a4e; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>⚡ OPAL API Connection Test</h1>
+
+    <div class="info">
+        <strong>Current Location:</strong> <span id="location"></span><br>
+        <strong>API URL:</strong> <span id="apiUrl"></span>
+    </div>
+
+    <div class="test">
+        <h3>Test 1: Health Check</h3>
+        <button onclick="testHealth()">Run Test</button>
+        <div id="healthResult" class="result"></div>
+    </div>
+
+    <div class="test">
+        <h3>Test 2: Debug Info</h3>
+        <button onclick="testDebugInfo()">Run Test</button>
+        <div id="debugResult" class="result"></div>
+    </div>
+
+    <div class="test">
+        <h3>Test 3: Create Job</h3>
+        <button onclick="testCreateJob()">Run Test</button>
+        <div id="jobResult" class="result"></div>
+    </div>
+
+    <div class="test">
+        <h3>Test 4: Network Diagnostics</h3>
+        <button onclick="runDiagnostics()">Run Diagnostics</button>
+        <div id="diagResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_KEY = 'dev_testkey123';
+
+        // Detect API URL
+        const getApiUrl = () => {
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return 'http://localhost:8080';
+            }
+            return ''; // Relative path for hosted environments
+        };
+
+        const API_URL = getApiUrl();
+
+        document.getElementById('location').textContent = window.location.href;
+        document.getElementById('apiUrl').textContent = API_URL || '(relative path - same origin)';
+
+        async function testHealth() {
+            const result = document.getElementById('healthResult');
+            result.textContent = 'Testing...';
+            try {
+                const response = await fetch(`${API_URL}/healthz`);
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+                result.parentElement.classList.add('success');
+            } catch (error) {
+                result.textContent = `ERROR: ${error.message}\n\nStack: ${error.stack}`;
+                result.parentElement.classList.add('error');
+            }
+        }
+
+        async function testDebugInfo() {
+            const result = document.getElementById('debugResult');
+            result.textContent = 'Testing...';
+            try {
+                const response = await fetch(`${API_URL}/debug/info`);
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+                result.parentElement.classList.add('success');
+            } catch (error) {
+                result.textContent = `ERROR: ${error.message}\n\nStack: ${error.stack}`;
+                result.parentElement.classList.add('error');
+            }
+        }
+
+        async function testCreateJob() {
+            const result = document.getElementById('jobResult');
+            result.textContent = 'Testing...';
+            try {
+                const response = await fetch(`${API_URL}/v1/jobs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        items: [{ filename: 'test-from-html.jpg' }]
+                    })
+                });
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+                result.parentElement.classList.add('success');
+            } catch (error) {
+                result.textContent = `ERROR: ${error.message}\n\nStack: ${error.stack}`;
+                result.parentElement.classList.add('error');
+            }
+        }
+
+        async function runDiagnostics() {
+            const result = document.getElementById('diagResult');
+            result.textContent = 'Running diagnostics...\n\n';
+
+            const info = {
+                'Window Location': window.location.href,
+                'Hostname': window.location.hostname,
+                'Protocol': window.location.protocol,
+                'Port': window.location.port || '(default)',
+                'Origin': window.location.origin,
+                'API URL': API_URL || '(relative)',
+                'User Agent': navigator.userAgent,
+                'Online': navigator.onLine,
+            };
+
+            result.textContent += 'Browser Info:\n' + JSON.stringify(info, null, 2);
+
+            // Try different URL variations
+            result.textContent += '\n\n---Testing different URLs---\n';
+
+            const urlsToTest = [
+                '/healthz',
+                'http://localhost:8080/healthz',
+                `${window.location.protocol}//${window.location.hostname}:8080/healthz`,
+            ];
+
+            for (const url of urlsToTest) {
+                try {
+                    result.textContent += `\nTrying: ${url}...`;
+                    const response = await fetch(url, { mode: 'cors' });
+                    result.textContent += ` ✓ ${response.status}`;
+                } catch (error) {
+                    result.textContent += ` ✗ ${error.message}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

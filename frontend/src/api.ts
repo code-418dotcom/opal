@@ -1,7 +1,26 @@
 import type { Job, CreateJobResponse } from './types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+// Use relative URL if in production/hosted environment, otherwise use localhost
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // In hosted environments (like Bolt), use relative path to proxy through the same domain
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return ''; // Relative URL - will use same origin
+  }
+  return 'http://localhost:8080';
+};
+
+const API_URL = getApiUrl();
 const API_KEY = import.meta.env.VITE_API_KEY || '';
+
+// Log configuration for debugging
+console.log('[API Client] Configuration:', {
+  apiUrl: API_URL || '(relative path)',
+  hostname: window.location.hostname,
+  hasApiKey: !!API_KEY
+});
 
 class ApiClient {
   private baseUrl: string;

@@ -7,5 +7,19 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    proxy: {
+      '/v1': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/healthz': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/debug': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
   },
 })

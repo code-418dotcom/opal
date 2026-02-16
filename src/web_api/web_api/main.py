@@ -24,6 +24,26 @@ app.include_router(jobs_router, dependencies=[Depends(verify_api_key)])
 app.include_router(uploads_router, dependencies=[Depends(verify_api_key)])
 
 
+@app.get("/debug/info")
+def debug_info():
+    """Debug endpoint to show connection information"""
+    import os
+    return {
+        "status": "ok",
+        "api_keys_configured": bool(os.getenv("API_KEYS")),
+        "supabase_url": os.getenv("SUPABASE_URL", "not set"),
+        "storage_backend": os.getenv("STORAGE_BACKEND", "not set"),
+        "queue_backend": os.getenv("QUEUE_BACKEND", "not set"),
+        "cors_enabled": True,
+        "endpoints": {
+            "health": "/healthz",
+            "jobs_create": "/v1/jobs (POST)",
+            "jobs_get": "/v1/jobs/{job_id} (GET)",
+            "uploads": "/v1/uploads/direct (POST)"
+        }
+    }
+
+
 @app.on_event("startup")
 def _startup_db_init() -> None:
     """

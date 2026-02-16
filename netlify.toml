@@ -7,6 +7,24 @@ command = "npm run build"
 NODE_VERSION = "18"
 
 [[redirects]]
+from = "/v1/*"
+to = "http://localhost:8080/v1/:splat"
+status = 200
+force = true
+
+[[redirects]]
+from = "/healthz"
+to = "http://localhost:8080/healthz"
+status = 200
+force = true
+
+[[redirects]]
+from = "/debug/*"
+to = "http://localhost:8080/debug/:splat"
+status = 200
+force = true
+
+[[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
