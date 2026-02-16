@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OPAL Debug Info</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #2a2a2a;
+            border: 1px solid #00ff00;
+        }
+        .label {
+            font-weight: bold;
+            color: #ffff00;
+        }
+        .value {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 OPAL Debug Information</h1>
+    <div id="output"></div>
+
+    <script type="module">
+        const output = document.getElementById('output');
+
+        function addInfo(label, value, isError = false) {
+            const div = document.createElement('div');
+            div.className = 'info';
+            div.innerHTML = `<span class="label">${label}:</span> <span class="${isError ? 'error' : 'value'}">${value}</span>`;
+            output.appendChild(div);
+        }
+
+        // Show current page URL
+        addInfo('Current URL', window.location.href);
+        addInfo('Origin', window.location.origin);
+        addInfo('Protocol', window.location.protocol);
+        addInfo('Host', window.location.host);
+
+        // Try to fetch the main JS bundle to check what's in it
+        addInfo('---', '---');
+        addInfo('Looking for environment variables in bundle...', '');
+
+        try {
+            const response = await fetch('/');
+            const html = await response.text();
+            const scriptMatch = html.match(/src="([^"]*\.js)"/);
+
+            if (scriptMatch) {
+                const scriptUrl = scriptMatch[1];
+                addInfo('Main script URL', scriptUrl);
+
+                const scriptResponse = await fetch(scriptUrl);
+                const scriptContent = await scriptResponse.text();
+
+                // Search for the Supabase URL
+                const supabaseMatch = scriptContent.match(/https:\/\/[^"']*\.supabase\.co/);
+                if (supabaseMatch) {
+                    addInfo('✓ Supabase URL found in bundle', supabaseMatch[0]);
+                } else {
+                    addInfo('✗ Supabase URL NOT found in bundle', 'MISSING', true);
+                }
+
+                // Search for API keys
+                const hasDevKey = scriptContent.includes('dev_testkey123');
+                addInfo(hasDevKey ? '✓ API Key found' : '✗ API Key NOT found', hasDevKey ? 'present' : 'MISSING', !hasDevKey);
+
+                // Check for the anon key
+                const hasAnonKey = scriptContent.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
+                addInfo(hasAnonKey ? '✓ Anon Key found' : '✗ Anon Key NOT found', hasAnonKey ? 'present' : 'MISSING', !hasAnonKey);
+            }
+        } catch (e) {
+            addInfo('Error checking bundle', e.message, true);
+        }
+
+        addInfo('---', '---');
+        addInfo('Instructions', 'Open browser console and check for "[API Client] Configuration" log');
+    </script>
+</body>
+</html>
