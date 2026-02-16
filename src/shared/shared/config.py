@@ -1,3 +1,4 @@
+from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,13 +22,19 @@ class Settings(BaseSettings):
     UPSCALE_PROVIDER: str = Field(default='realesrgan', env='UPSCALE_PROVIDER')
     UPSCALE_ENABLED: bool = Field(default=True, env='UPSCALE_ENABLED')
     
-    # Container Apps: everything comes from env vars, not a .env file
-    model_config = SettingsConfigDict(env_file=None)
+    # Load from .env file in development, env vars in production
+    # Look for .env in current directory or project root
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        extra='ignore',
+        case_sensitive=False
+    )
 
     ENV_NAME: str = "dev"
 
-    # Database
-    DATABASE_URL: str
+    # Database (optional when using Supabase)
+    DATABASE_URL: str = Field(default='', env='DATABASE_URL')
 
     # Supabase (Preferred)
     SUPABASE_URL: str = Field(default='', env='SUPABASE_URL')
