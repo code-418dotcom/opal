@@ -93,7 +93,7 @@ def enqueue_job(job_id: str, tenant_id: str):
         items = s.query(JobItem).filter(JobItem.job_id == job_id).all()
         for it in items:
             if it.status in (ItemStatus.created, ItemStatus.uploaded):
-                it.status = ItemStatus.processing
+                # Status will be set by orchestrator when processing starts
                 send_job_message(
                     {
                         "tenant_id": tenant_id,
@@ -107,5 +107,6 @@ def enqueue_job(job_id: str, tenant_id: str):
         s.commit()
 
     return {"ok": True}
+
 
 
