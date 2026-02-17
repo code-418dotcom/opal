@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(az resource list:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
