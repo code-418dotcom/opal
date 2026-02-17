@@ -375,10 +375,11 @@ UNLICENSED - Private use only
 ## 📝 Version History
 
 ### v0.2.1 (Current)
-- ✅ Supabase integration
+- ✅ Supabase integration complete
 - ✅ Frontend deployment fixes
 - ✅ Security improvements
 - ✅ Comprehensive documentation
+- ✅ GitHub Actions workflows configured
 
 ### v0.2.0
 - Initial Azure-based implementation
