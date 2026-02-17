@@ -94,5 +94,13 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
 
     update_job_item(body.item_id, {"status": "uploaded"})
 
+    # Send message to queue to trigger processing
+    send_job_message({
+        "tenant_id": tenant_id,
+        "job_id": body.job_id,
+        "item_id": body.item_id,
+        "correlation_id": job["correlation_id"],
+    })
+
     return {"ok": True}
 
