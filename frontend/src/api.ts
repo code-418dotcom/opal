@@ -1,17 +1,12 @@
 import type { Job, CreateJobResponse } from './types';
 
 // Detect backend type from environment variables
-// @ts-expect-error - Vite env variables are available at runtime
-const BACKEND_TYPE = import.meta.env.VITE_BACKEND_TYPE as string || 'supabase';
-// @ts-expect-error - Vite env variables are available at runtime
+const BACKEND_TYPE = (import.meta.env.VITE_BACKEND_TYPE as string) || 'supabase';
 const API_URL = import.meta.env.VITE_API_URL as string;
-// @ts-expect-error - Vite env variables are available at runtime
 const API_KEY = import.meta.env.VITE_API_KEY as string;
 
 // Supabase-specific (optional for Azure backend)
-// @ts-expect-error - Vite env variables are available at runtime
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-// @ts-expect-error - Vite env variables are available at runtime
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 // Validate configuration based on backend type
