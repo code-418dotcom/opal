@@ -19,11 +19,11 @@ The frontend is already built at `frontend/dist/`
 After deployment:
 
 1. Click "Site settings" → "Environment variables"
-2. Add these variables:
+2. Add these variables (get from https://app.supabase.com/project/_/settings/api):
 
 ```
-VITE_SUPABASE_URL=https://jbwbdfabuffiwdphzzon.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impid2JkZmFidWZmaXdkcGh6em9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzI5ODgsImV4cCI6MjA4NjgwODk4OH0.UjUX0ft6k_E_H5twY8d3A1liMyKjgPpA1kAIDjU4__0
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY_HERE
 ```
 
 3. Click "Rebuild site"

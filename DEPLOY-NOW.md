@@ -48,11 +48,13 @@ After deployment, add environment variables in Azure Portal:
 2. Click "Configuration" in left menu
 3. Add these application settings:
    ```
-   VITE_SUPABASE_URL=https://jbwbdfabuffiwdphzzon.supabase.co
-   VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impid2JkZmFidWZmaXdkcGh6em9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzI5ODgsImV4cCI6MjA4NjgwODk4OH0.UjUX0ft6k_E_H5twY8d3A1liMyKjgPpA1kAIDjU4__0
+   VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+   VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY_HERE
    VITE_API_URL=http://localhost:8080
    VITE_API_KEY=dev_testkey123
    ```
+
+   **Get your Supabase credentials from:** https://app.supabase.com/project/_/settings/api
 4. Click "Save"
 
 ### Step 4: Wait for Deployment

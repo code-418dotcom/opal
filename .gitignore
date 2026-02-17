@@ -3,9 +3,29 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+.env.local
+.env*.local
 .venv/
 .vscode/
 dist/
 build/
 *.egg-info/
 .DS_Store
+
+# Environment files with credentials
+.env.azure
+.env.deploy
+.env.production
+frontend/.env
+frontend/.env.local
+frontend/.env*.local
+
+# Scripts with hardcoded credentials
+start_backend.sh
+start_backend_local.sh
+
+# Temporary or local configuration files
+*.local.sh
+*.secret
+*.key
+*.pem

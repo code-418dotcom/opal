@@ -1,9 +1,20 @@
 import type { Job, CreateJobResponse } from './types';
 
-// API configuration with fallback values for Bolt environment
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jbwbdfabuffiwdphzzon.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impid2JkZmFidWZmaXdkcGh6em9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzI5ODgsImV4cCI6MjA4NjgwODk4OH0.UjUX0ft6k_E_H5twY8d3A1liMyKjgPpA1kAIDjU4__0';
-const API_KEY = import.meta.env.VITE_API_KEY || 'dev_testkey123';
+// API configuration - environment variables are REQUIRED
+// @ts-expect-error - Vite env variables are available at runtime
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+// @ts-expect-error - Vite env variables are available at runtime
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// @ts-expect-error - Vite env variables are available at runtime
+const API_KEY = import.meta.env.VITE_API_KEY as string;
+
+// Validate required environment variables
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !API_KEY) {
+  throw new Error(
+    'Missing required environment variables. Please ensure VITE_SUPABASE_URL, ' +
+    'VITE_SUPABASE_ANON_KEY, and VITE_API_KEY are set in your .env.local file.'
+  );
+}
 
 const API_URL = `${SUPABASE_URL}/functions/v1`;
 

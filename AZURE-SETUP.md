@@ -46,7 +46,7 @@ It will:
 
 ```bash
 # Using environment variable for password
-export PGPASSWORD="Cfcm85xShf5M5D53VBbh25DrK6Z4VEwennKd1"
+export PGPASSWORD="YOUR_POSTGRES_PASSWORD_HERE"
 
 # Run migration
 psql -h opal-dev-dbeia4dlnxsy4-pg-ne.postgres.database.azure.com \
@@ -103,10 +103,10 @@ az servicebus namespace authorization-rule keys list \
 Create `.env.deploy` file with your connection strings from Step 2:
 
 ```env
-DATABASE_URL=postgresql+psycopg://opaladmin:Cfcm85xShf5M5D53VBbh25DrK6Z4VEwennKd1@opal-dev-dbeia4dlnxsy4-pg-ne.postgres.database.azure.com:5432/opal?sslmode=require
+DATABASE_URL=postgresql+psycopg://opaladmin:YOUR_PASSWORD@opal-dev-dbeia4dlnxsy4-pg-ne.postgres.database.azure.com:5432/opal?sslmode=require
 AZURE_STORAGE_CONNECTION_STRING=<from-step-2>
 AZURE_SERVICEBUS_CONNECTION_STRING=<from-step-2>
-FAL_API_KEY=09c4a4ef-8788-497c-a417-91aa605dfb98:d730836789379f7a17432c0e02f21977
+FAL_API_KEY=YOUR_FAL_API_KEY_HERE
 ```
 
 Deploy:

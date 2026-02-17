@@ -66,7 +66,7 @@ Create a file `.env.azure` in the project root:
 
 ```env
 # Database (your Azure PostgreSQL)
-DATABASE_URL=postgresql+psycopg://opaladmin:Cfcm85xShf5M5D53VBbh25DrK6Z4VEwennKd1@opal-dev-dbeia4dlnxsy4-pg-ne.postgres.database.azure.com:5432/opal?sslmode=require
+DATABASE_URL=postgresql+psycopg://opaladmin:YOUR_PASSWORD@opal-dev-dbeia4dlnxsy4-pg-ne.postgres.database.azure.com:5432/opal?sslmode=require
 
 # Azure Storage (from Step 1)
 AZURE_STORAGE_CONNECTION_STRING=<paste-from-step-1>
@@ -74,8 +74,8 @@ AZURE_STORAGE_CONNECTION_STRING=<paste-from-step-1>
 # Azure Service Bus (from Step 1)
 AZURE_SERVICEBUS_CONNECTION_STRING=<paste-from-step-1>
 
-# FAL.AI
-FAL_API_KEY=09c4a4ef-8788-497c-a417-91aa605dfb98:d730836789379f7a17432c0e02f21977
+# FAL.AI (Get from https://fal.ai/dashboard)
+FAL_API_KEY=YOUR_FAL_API_KEY_HERE
 
 # Config
 SERVICEBUS_JOBS_QUEUE=jobs

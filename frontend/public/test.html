@@ -49,9 +49,12 @@
     </div>
 
     <script>
-        const API_KEY = 'dev_testkey123';
-        const SUPABASE_URL = 'https://jbwbdfabuffiwdphzzon.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impid2JkZmFidWZmaXdkcGh6em9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMzI5ODgsImV4cCI6MjA4NjgwODk4OH0.UjUX0ft6k_E_H5twY8d3A1liMyKjgPpA1kAIDjU4__0';
+        // ⚠️ CONFIGURATION REQUIRED
+        // Replace these placeholder values with your actual credentials
+        // NEVER commit real credentials to version control
+        const API_KEY = 'YOUR_API_KEY_HERE';
+        const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
         const API_URL = `${SUPABASE_URL}/functions/v1`;
 
         document.getElementById('location').textContent = window.location.href;
