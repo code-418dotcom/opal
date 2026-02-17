@@ -163,7 +163,7 @@ jobs:
           IMAGE_LATEST="${ACR_LOGIN}/${SERVICE_NAME}:latest"
 
           echo "Building ${SERVICE_NAME}..."
-          docker build -t "${IMAGE_NAME}" -t "${IMAGE_LATEST}" ./src/${SERVICE_NAME}
+          docker build -f ./src/${SERVICE_NAME}/Dockerfile -t "${IMAGE_NAME}" -t "${IMAGE_LATEST}" .
 
           echo "Pushing ${SERVICE_NAME}..."
           docker push "${IMAGE_NAME}"
@@ -340,6 +340,9 @@ jobs:
         run: |
           cd frontend
           npm run build
+
+      - name: Install OIDC Client from Core Package
+        run: npm install @actions/core@1.6.0 @actions/http-client
 
       - name: Get OIDC Token
         uses: actions/github-script@v6
