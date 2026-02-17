@@ -364,6 +364,19 @@ jobs:
           echo "SWA_NAME=${SWA_NAME}" >> $GITHUB_ENV
           echo "Found Static Web App: ${SWA_NAME}"
 
+      - name: Get Static Web App Deployment Token
+        run: |
+          set -euo pipefail
+
+          echo "Getting deployment token for ${SWA_NAME}..."
+          DEPLOYMENT_TOKEN=$(az staticwebapp secrets list \
+            --name "${SWA_NAME}" \
+            --resource-group "${RG_NAME}" \
+            --query "properties.apiKey" -o tsv)
+
+          echo "::add-mask::${DEPLOYMENT_TOKEN}"
+          echo "DEPLOYMENT_TOKEN=${DEPLOYMENT_TOKEN}" >> $GITHUB_ENV
+
       - name: Deploy to Azure Static Web Apps
         run: |
           set -euo pipefail
@@ -373,12 +386,10 @@ jobs:
           # Install Static Web Apps CLI
           npm install -g @azure/static-web-apps-cli
 
-          # Deploy using Azure CLI
-          az staticwebapp upload \
-            --name "${SWA_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --source ./frontend/dist \
-            --no-use-keychain
+          # Deploy using SWA CLI
+          swa deploy ./frontend/dist \
+            --deployment-token "${DEPLOYMENT_TOKEN}" \
+            --env production
 
           echo "✅ Frontend deployed successfully"
 
