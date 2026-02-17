@@ -326,6 +326,13 @@ jobs:
           submodules: true
           lfs: false
 
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -341,27 +348,39 @@ jobs:
           cd frontend
           npm run build
 
-      - name: Install OIDC Client from Core Package
-        run: npm install @actions/core@1.6.0 @actions/http-client
+      - name: Discover Static Web App
+        run: |
+          set -euo pipefail
 
-      - name: Get OIDC Token
-        uses: actions/github-script@v6
-        id: idtoken
-        with:
-          script: |
-            const coredemo = require('@actions/core')
-            return await coredemo.getIDToken()
-          result-encoding: string
+          echo "Finding Static Web App in ${RG_NAME}..."
+          SWA_NAME=$(az staticwebapp list -g "${RG_NAME}" --query "[0].name" -o tsv)
+
+          if [ -z "${SWA_NAME}" ]; then
+            echo "ERROR: No Static Web App found in ${RG_NAME}"
+            echo "Please ensure the infrastructure is deployed first"
+            exit 1
+          fi
+
+          echo "SWA_NAME=${SWA_NAME}" >> $GITHUB_ENV
+          echo "Found Static Web App: ${SWA_NAME}"
 
       - name: Deploy to Azure Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_AMBITIOUS_SMOKE_04D5B1703 }}
-          action: "upload"
-          app_location: "./frontend"
-          api_location: ""
-          output_location: "dist"
-          github_id_token: ${{ steps.idtoken.outputs.result }}
+        run: |
+          set -euo pipefail
+
+          echo "Deploying frontend to ${SWA_NAME}..."
+
+          # Install Static Web Apps CLI
+          npm install -g @azure/static-web-apps-cli
+
+          # Deploy using Azure CLI
+          az staticwebapp upload \
+            --name "${SWA_NAME}" \
+            --resource-group "${RG_NAME}" \
+            --source ./frontend/dist \
+            --no-use-keychain
+
+          echo "✅ Frontend deployed successfully"
 
   # ========================================
   # JOB 5: Deployment Summary
