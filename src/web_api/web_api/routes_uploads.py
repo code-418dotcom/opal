@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
+import logging
 
 from shared.db_sqlalchemy import get_job_by_id, get_job_item, update_job_item
 from shared.storage_unified import (
@@ -11,6 +12,7 @@ from shared.queue_unified import send_job_message
 from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["uploads"])
+LOG = logging.getLogger(__name__)
 
 
 class SasRequest(BaseModel):
@@ -95,12 +97,18 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
     update_job_item(body.item_id, {"status": "uploaded"})
 
     # Send message to queue to trigger processing
-    send_job_message({
-        "tenant_id": tenant_id,
-        "job_id": body.job_id,
-        "item_id": body.item_id,
-        "correlation_id": job["correlation_id"],
-    })
+    LOG.info(f"Sending queue message for job_id={body.job_id} item_id={body.item_id}")
+    try:
+        send_job_message({
+            "tenant_id": tenant_id,
+            "job_id": body.job_id,
+            "item_id": body.item_id,
+            "correlation_id": job["correlation_id"],
+        })
+        LOG.info(f"Queue message sent successfully for job_id={body.job_id}")
+    except Exception as e:
+        LOG.error(f"Failed to send queue message: {e}", exc_info=True)
+        # Don't fail the request - upload is complete even if queueing fails
 
     return {"ok": True}
 
