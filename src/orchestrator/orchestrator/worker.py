@@ -101,7 +101,14 @@ def process_message(data: dict):
     item_id = data['item_id']
     correlation_id = data.get('correlation_id', '')
 
-    LOG.info('Processing: tenant_id=%s job_id=%s item_id=%s', tenant_id, job_id, item_id)
+    # Get processing options from message (default all enabled)
+    processing_opts = data.get('processing_options', {})
+    enable_bg_removal = processing_opts.get('remove_background', True)
+    enable_scene_gen = processing_opts.get('generate_scene', True)
+    enable_upscale = processing_opts.get('upscale', True)
+
+    LOG.info('Processing: tenant_id=%s job_id=%s item_id=%s (bg:%s scene:%s upscale:%s)',
+             tenant_id, job_id, item_id, enable_bg_removal, enable_scene_gen, enable_upscale)
 
     with SessionLocal() as s:
         item = s.get(JobItem, item_id)
@@ -128,37 +135,46 @@ def process_message(data: dict):
         # Step 1: Download input
         LOG.info('[1/5] Downloading input: %s', item_id)
         input_bytes = download_blob_via_sas(raw_read_sas)
-        
-        # Step 2: Remove background
-        if bg_provider:
+
+        # Step 2: Remove background (conditional)
+        if enable_bg_removal and bg_provider:
             LOG.info('[2/5] Removing background with %s: %s', bg_provider.name, item_id)
             product_png = bg_provider.remove_background(input_bytes)
         else:
-            LOG.warning('[2/5] No background removal - using input')
+            if not enable_bg_removal:
+                LOG.info('[2/5] Background removal disabled by user - using original')
+            else:
+                LOG.warning('[2/5] No background removal provider - using input')
             product_png = input_bytes
-        
-        # Step 3: Generate lifestyle scene
-        if img_gen_provider:
+
+        # Step 3 & 4: Generate scene and composite (conditional)
+        if enable_scene_gen and img_gen_provider:
             LOG.info('[3/5] Generating lifestyle scene with %s: %s', img_gen_provider.name, item_id)
-            
+
             # TODO: Get prompt from brand profile (for now, use default)
             prompt = "modern minimalist living room, bright natural lighting, wooden floor, white walls, plants, photorealistic, high quality"
-            
+
             scene_bytes = img_gen_provider.generate(prompt)
-            
+
             # Step 4: Composite product onto scene
             LOG.info('[4/5] Compositing product onto scene: %s', item_id)
             composited_bytes = composite_product_on_scene(product_png, scene_bytes)
         else:
-            LOG.warning('[3/5] No image generation - using background-removed product')
+            if not enable_scene_gen:
+                LOG.info('[3/5] Scene generation disabled by user - using product only')
+            else:
+                LOG.warning('[3/5] No image generation provider - using product')
             composited_bytes = product_png
-        
-        # Step 5: Upscale final image
-        if upscale_provider and settings.UPSCALE_ENABLED:
+
+        # Step 5: Upscale final image (conditional)
+        if enable_upscale and upscale_provider and settings.UPSCALE_ENABLED:
             LOG.info('[5/5] Upscaling with %s: %s', upscale_provider.name, item_id)
             final_bytes = upscale_provider.upscale(composited_bytes)
         else:
-            LOG.warning('[5/5] Upscaling disabled - using composited image')
+            if not enable_upscale:
+                LOG.info('[5/5] Upscaling disabled by user - using composited image')
+            else:
+                LOG.warning('[5/5] Upscaling disabled - using composited image')
             final_bytes = composited_bytes
         
         # Upload final result

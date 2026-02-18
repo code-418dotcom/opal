@@ -18,9 +18,17 @@ class ItemIn(BaseModel):
     filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
 
 
+class ProcessingOptions(BaseModel):
+    """Configure which AI processing steps to apply"""
+    remove_background: bool = True
+    generate_scene: bool = True
+    upscale: bool = True
+
+
 class CreateJobIn(BaseModel):
     brand_profile_id: str = "default"
     items: list[ItemIn] = Field(..., min_length=1, max_length=100)
+    processing_options: ProcessingOptions = Field(default_factory=ProcessingOptions)
 
 
 @router.post("/jobs")
@@ -55,7 +63,12 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
     if items_data:
         create_job_item_records(items_data)
 
-    return {"job_id": job_id, "correlation_id": corr, "items": created_items}
+    return {
+        "job_id": job_id,
+        "correlation_id": corr,
+        "items": created_items,
+        "processing_options": body.processing_options.model_dump()
+    }
 
 
 @router.get("/jobs/{job_id}")

@@ -22,10 +22,18 @@ class SasRequest(BaseModel):
     content_type: str = "application/octet-stream"
 
 
+class ProcessingOptions(BaseModel):
+    """Configure which AI processing steps to apply"""
+    remove_background: bool = True
+    generate_scene: bool = True
+    upscale: bool = True
+
+
 class UploadComplete(BaseModel):
     job_id: str = Field(..., min_length=1, pattern=r'^[a-zA-Z0-9_\-]+$')
     item_id: str = Field(..., min_length=1, pattern=r'^[a-zA-Z0-9_\-]+$')
     filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
+    processing_options: ProcessingOptions = Field(default_factory=ProcessingOptions)
 
 
 @router.post("/uploads/sas")
@@ -106,6 +114,7 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
             "job_id": body.job_id,
             "item_id": body.item_id,
             "correlation_id": job["correlation_id"],
+            "processing_options": body.processing_options.model_dump(),
         })
         print(f"[SEND_COMPLETE] Queue message sent successfully for job_id={body.job_id}", flush=True)
         LOG.info(f"Queue message sent successfully for job_id={body.job_id}")

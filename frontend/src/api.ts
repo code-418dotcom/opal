@@ -84,13 +84,22 @@ class ApiClient {
     return response.json();
   }
 
-  async createJob(filenames: string[]): Promise<CreateJobResponse> {
+  async createJob(filenames: string[], processingOptions?: {
+    remove_background: boolean;
+    generate_scene: boolean;
+    upscale: boolean;
+  }): Promise<CreateJobResponse> {
     const endpoint = this.backendType === 'azure' ? '/v1/jobs' : '/create-job';
     const body = this.backendType === 'azure'
       ? {
           tenant_id: 'default',
           brand_profile_id: 'default',
           items: filenames.map(filename => ({ filename })),
+          processing_options: processingOptions || {
+            remove_background: true,
+            generate_scene: true,
+            upscale: true
+          },
         }
       : {
           items: filenames.map(filename => ({ filename })),
@@ -109,17 +118,25 @@ class ApiClient {
     return this.request<Job>(endpoint);
   }
 
-  async uploadDirect(jobId: string, itemId: string, file: File): Promise<void> {
+  async uploadDirect(jobId: string, itemId: string, file: File, processingOptions?: {
+    remove_background: boolean;
+    generate_scene: boolean;
+    upscale: boolean;
+  }): Promise<void> {
     if (this.backendType === 'azure') {
       // Azure backend: first get upload URL, then upload
-      await this.uploadToAzure(jobId, itemId, file);
+      await this.uploadToAzure(jobId, itemId, file, processingOptions);
     } else {
       // Supabase backend: direct upload to edge function
       await this.uploadToSupabase(jobId, itemId, file);
     }
   }
 
-  private async uploadToAzure(jobId: string, itemId: string, file: File): Promise<void> {
+  private async uploadToAzure(jobId: string, itemId: string, file: File, processingOptions?: {
+    remove_background: boolean;
+    generate_scene: boolean;
+    upscale: boolean;
+  }): Promise<void> {
     // Step 1: Get SAS URL for upload
     const sasResponse = await this.request<{ upload_url: string }>('/v1/uploads/sas', {
       method: 'POST',
@@ -146,7 +163,7 @@ class ApiClient {
       throw new Error(`Upload to Azure Blob failed: ${uploadResponse.statusText}`);
     }
 
-    // Step 3: Finalize upload
+    // Step 3: Finalize upload with processing options
     await this.request('/v1/uploads/complete', {
       method: 'POST',
       body: JSON.stringify({
@@ -154,6 +171,11 @@ class ApiClient {
         job_id: jobId,
         item_id: itemId,
         filename: file.name,
+        processing_options: processingOptions || {
+          remove_background: true,
+          generate_scene: true,
+          upscale: true
+        },
       }),
     });
   }

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Loader, CheckCircle, AlertCircle } from 'lucide-react';
 import { api } from '../api';
+import ProcessingOptions, { ProcessingOptionsType } from './ProcessingOptions';
 
 interface Props {
   onJobCreated: (jobId: string) => void;
@@ -18,6 +19,11 @@ export default function UploadSection({ onJobCreated }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [processingOptions, setProcessingOptions] = useState<ProcessingOptionsType>({
+    remove_background: true,
+    generate_scene: true,
+    upscale: true,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -69,7 +75,7 @@ export default function UploadSection({ onJobCreated }: Props) {
 
     try {
       const filenames = files.map((f) => f.file.name);
-      const job = await api.createJob(filenames);
+      const job = await api.createJob(filenames, processingOptions);
 
       setJobId(job.job_id);
       onJobCreated(job.job_id);
@@ -85,7 +91,7 @@ export default function UploadSection({ onJobCreated }: Props) {
             )
           );
 
-          await api.uploadDirect(job.job_id, item.item_id, fileItem.file);
+          await api.uploadDirect(job.job_id, item.item_id, fileItem.file, processingOptions);
 
           setFiles((prev) =>
             prev.map((f, idx) =>
@@ -209,9 +215,16 @@ export default function UploadSection({ onJobCreated }: Props) {
       )}
 
       {files.length > 0 && !isUploading && (
-        <button className="button-primary" onClick={uploadFiles}>
-          Upload & Process {files.length} Image(s)
-        </button>
+        <>
+          <ProcessingOptions
+            options={processingOptions}
+            onChange={setProcessingOptions}
+            disabled={isUploading}
+          />
+          <button className="button-primary" onClick={uploadFiles}>
+            Upload & Process {files.length} Image(s)
+          </button>
+        </>
       )}
 
       {isUploading && (
