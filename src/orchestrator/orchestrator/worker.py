@@ -3,6 +3,8 @@ import json
 import time
 import logging
 import httpx
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from io import BytesIO
 from PIL import Image
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -18,6 +20,32 @@ from shared.image_generation import get_image_gen_provider
 from shared.upscaling import get_upscaling_provider
 
 LOG = logging.getLogger(__name__)
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    """Simple health check endpoint for Container Apps probes"""
+    def do_GET(self):
+        if self.path in ('/healthz', '/readyz', '/livez', '/'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        # Suppress health check logs to avoid spam
+        pass
+
+
+def start_health_server(port=8080):
+    """Start health check HTTP server in background thread"""
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    LOG.info(f'Health server started on port {port}')
+    return server
 
 # Providers will be initialized in main() after logging is setup
 bg_provider = None
@@ -214,7 +242,10 @@ def main():
     LOG.info('OPAL ORCHESTRATOR STARTING')
     LOG.info('=' * 50)
     LOG.info('Queue: %s', settings.SERVICEBUS_JOBS_QUEUE)
-    
+
+    # Start health check server for Container Apps probes
+    start_health_server(port=8080)
+
     # NOW initialize providers AFTER logging is configured
     try:
         # Provider-specific kwargs
