@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Loader, CheckCircle, AlertCircle } from 'lucide-react';
 import { api } from '../api';
-import ProcessingOptions, { ProcessingOptionsType } from './ProcessingOptions';
+import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
 
 interface Props {
   onJobCreated: (jobId: string) => void;
