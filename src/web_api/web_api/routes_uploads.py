@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
-from shared.db_supabase import get_job_by_id, get_job_item, update_job_item
+from shared.db_sqlalchemy import get_job_by_id, get_job_item, update_job_item
 from shared.storage_unified import (
     build_raw_blob_path,
     generate_upload_url,

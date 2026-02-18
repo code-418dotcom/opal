@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from shared.db_supabase import (
+from shared.db_sqlalchemy import (
     create_job_record,
     create_job_item_records,
     get_job_by_id,

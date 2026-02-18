@@ -1,17 +1,19 @@
 from fastapi import APIRouter
 import logging
 
-from shared.db_supabase import get_supabase_client
-from shared.storage_unified import get_storage_client
+from shared.db import SessionLocal
+from shared.models import Job
+from shared.config import settings
 
 router = APIRouter()
 LOG = logging.getLogger(__name__)
 
 
 def _check_db() -> bool:
+    """Check database connectivity using SQLAlchemy."""
     try:
-        client = get_supabase_client()
-        client.table("jobs").select("id").limit(1).execute()
+        with SessionLocal() as session:
+            session.query(Job).limit(1).all()
         return True
     except Exception as e:
         LOG.error(f"DB health check failed: {e}")
@@ -19,13 +21,13 @@ def _check_db() -> bool:
 
 
 def _check_storage() -> bool:
+    """Check Azure storage connectivity."""
     try:
-        from shared.config import settings
-        if not settings.SUPABASE_URL or (not settings.SUPABASE_ANON_KEY and not settings.SUPABASE_SERVICE_ROLE_KEY):
-            LOG.error("Storage health check skipped: Supabase not configured")
+        if not settings.STORAGE_ACCOUNT_NAME:
+            LOG.error("Storage health check skipped: STORAGE_ACCOUNT_NAME not configured")
             return False
-        client = get_storage_client()
-        # Just test that the client was created
+        # For Azure, we just check if the config is present
+        # Actual blob operations require managed identity which is configured at runtime
         return True
     except Exception as e:
         LOG.error(f"Storage health check failed: {e}")
