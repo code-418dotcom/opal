@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from web_api.routes_health import router as health_router
 from web_api.routes_jobs import router as jobs_router
 from web_api.routes_uploads import router as uploads_router
+from web_api.routes_downloads import router as downloads_router
 from web_api.auth import verify_api_key
 
 log = logging.getLogger("opal")
@@ -22,6 +23,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(jobs_router, dependencies=[Depends(verify_api_key)])
 app.include_router(uploads_router, dependencies=[Depends(verify_api_key)])
+app.include_router(downloads_router, dependencies=[Depends(verify_api_key)])
 
 
 @app.get("/debug/info")
