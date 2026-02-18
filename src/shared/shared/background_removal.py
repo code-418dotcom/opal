@@ -80,21 +80,23 @@ class AzureVisionProvider(BackgroundRemovalProvider):
 
     def remove_background(self, image_bytes: bytes) -> bytes:
         import httpx
-        from io import BytesIO
-        from PIL import Image
 
         LOG.info("Processing with Azure Computer Vision Image Analysis 4.0")
 
         # Use Image Analysis 4.0 API with backgroundRemoval feature
+        # Endpoint format: {endpoint}/computervision/imageanalysis:segment
         url = f"{self.endpoint}/computervision/imageanalysis:segment"
         params = {
-            "api-version": "2023-02-01-preview",
+            "api-version": "2024-02-01",  # Updated to latest stable version
             "mode": "backgroundRemoval"
         }
         headers = {
             "Ocp-Apim-Subscription-Key": self.key,
             "Content-Type": "application/octet-stream"
         }
+
+        LOG.info("Calling Azure Vision API: %s?api-version=%s&mode=%s",
+                 url, params['api-version'], params['mode'])
 
         # Call Azure Computer Vision API
         response = httpx.post(
@@ -104,6 +106,13 @@ class AzureVisionProvider(BackgroundRemovalProvider):
             content=image_bytes,
             timeout=60
         )
+
+        # Log response details for debugging
+        LOG.info("Azure Vision API response: status=%d, content-type=%s, size=%d bytes",
+                 response.status_code,
+                 response.headers.get('content-type', 'unknown'),
+                 len(response.content))
+
         response.raise_for_status()
 
         # The API returns a PNG image with transparent background
