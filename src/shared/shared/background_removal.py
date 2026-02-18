@@ -71,17 +71,49 @@ class RemoveBgProvider(BackgroundRemovalProvider):
 
 
 class AzureVisionProvider(BackgroundRemovalProvider):
-    """Azure AI Vision background removal (future implementation)"""
-    
+    """Azure AI Vision background removal using Image Analysis 4.0"""
+
     def __init__(self, endpoint: str, key: str):
-        self.endpoint = endpoint
+        self.endpoint = endpoint.rstrip('/')
         self.key = key
-        LOG.info("Azure AI Vision provider initialized")
-    
+        LOG.info("Azure AI Vision provider initialized (endpoint: %s)", self.endpoint)
+
     def remove_background(self, image_bytes: bytes) -> bytes:
-        # TODO: Implement when Azure AI Vision endpoint is fixed
-        raise NotImplementedError("Azure AI Vision provider not yet implemented")
-    
+        import httpx
+        from io import BytesIO
+        from PIL import Image
+
+        LOG.info("Processing with Azure Computer Vision Image Analysis 4.0")
+
+        # Use Image Analysis 4.0 API with backgroundRemoval feature
+        url = f"{self.endpoint}/computervision/imageanalysis:segment"
+        params = {
+            "api-version": "2023-02-01-preview",
+            "mode": "backgroundRemoval"
+        }
+        headers = {
+            "Ocp-Apim-Subscription-Key": self.key,
+            "Content-Type": "application/octet-stream"
+        }
+
+        # Call Azure Computer Vision API
+        response = httpx.post(
+            url,
+            params=params,
+            headers=headers,
+            content=image_bytes,
+            timeout=60
+        )
+        response.raise_for_status()
+
+        # The API returns a PNG image with transparent background
+        result_bytes = response.content
+
+        LOG.info("Azure Computer Vision background removal successful (%d bytes -> %d bytes)",
+                 len(image_bytes), len(result_bytes))
+
+        return result_bytes
+
     @property
     def name(self) -> str:
         return "azure-vision"
