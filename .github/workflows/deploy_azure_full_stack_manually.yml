@@ -123,6 +123,9 @@ jobs:
           - export_worker
           - billing_service
           - aml_sd_stub
+          - bg_removal_worker
+          - scene_worker
+          - upscale_worker
 
     steps:
       - name: Checkout code
@@ -233,6 +236,22 @@ jobs:
 
           echo "✅ Resources discovered successfully"
 
+      - name: Ensure Service Bus queues exist (idempotent)
+        run: |
+          set -euo pipefail
+          for Q in bg-removal scene-gen upscale; do
+            if ! az servicebus queue show -g "${RG_NAME}" --namespace-name "${SB}" --name "${Q}" >/dev/null 2>&1; then
+              echo "Creating queue: ${Q}"
+              az servicebus queue create -g "${RG_NAME}" --namespace-name "${SB}" \
+                --name "${Q}" \
+                --max-delivery-count 5 \
+                --lock-duration PT5M \
+                --default-message-time-to-live P7D
+            else
+              echo "Queue already exists: ${Q}"
+            fi
+          done
+
       - name: Deploy Web API
         run: |
           set -euo pipefail
@@ -310,6 +329,69 @@ jobs:
               ENVIRONMENT="${ENV_NAME}" \
               POSTGRES_HOST="${PG_SERVER}.postgres.database.azure.com" \
             || echo "⚠️ Billing Service update failed or doesn't exist"
+
+      - name: Deploy BG Removal Worker
+        run: |
+          set -euo pipefail
+
+          IMAGE="${ACR_LOGIN}/bg_removal_worker:${IMAGE_TAG}"
+          APP_NAME="opal-bg-removal-worker-${ENV_NAME}"
+
+          echo "Deploying BG Removal Worker: ${APP_NAME}"
+
+          az containerapp update \
+            --name "${APP_NAME}" \
+            --resource-group "${RG_NAME}" \
+            --image "${IMAGE}" \
+            --set-env-vars \
+              ENV_NAME="${ENV_NAME}" \
+              STORAGE_ACCOUNT_NAME="${STORAGE}" \
+              SERVICEBUS_NAMESPACE="${SB}" \
+              DATABASE_URL="postgresql+psycopg://opaladmin:${{ secrets.POSTGRES_ADMIN_PASSWORD }}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require" \
+              BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}" \
+            || echo "⚠️ BG Removal Worker update failed or doesn't exist yet"
+
+      - name: Deploy Scene Worker
+        run: |
+          set -euo pipefail
+
+          IMAGE="${ACR_LOGIN}/scene_worker:${IMAGE_TAG}"
+          APP_NAME="opal-scene-worker-${ENV_NAME}"
+
+          echo "Deploying Scene Worker: ${APP_NAME}"
+
+          az containerapp update \
+            --name "${APP_NAME}" \
+            --resource-group "${RG_NAME}" \
+            --image "${IMAGE}" \
+            --set-env-vars \
+              ENV_NAME="${ENV_NAME}" \
+              STORAGE_ACCOUNT_NAME="${STORAGE}" \
+              SERVICEBUS_NAMESPACE="${SB}" \
+              DATABASE_URL="postgresql+psycopg://opaladmin:${{ secrets.POSTGRES_ADMIN_PASSWORD }}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require" \
+              IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}" \
+              FAL_API_KEY="${{ secrets.FAL_API_KEY }}" \
+            || echo "⚠️ Scene Worker update failed or doesn't exist yet"
+
+      - name: Deploy Upscale Worker
+        run: |
+          set -euo pipefail
+
+          IMAGE="${ACR_LOGIN}/upscale_worker:${IMAGE_TAG}"
+          APP_NAME="opal-upscale-worker-${ENV_NAME}"
+
+          echo "Deploying Upscale Worker: ${APP_NAME}"
+
+          az containerapp update \
+            --name "${APP_NAME}" \
+            --resource-group "${RG_NAME}" \
+            --image "${IMAGE}" \
+            --set-env-vars \
+              ENV_NAME="${ENV_NAME}" \
+              STORAGE_ACCOUNT_NAME="${STORAGE}" \
+              SERVICEBUS_NAMESPACE="${SB}" \
+              DATABASE_URL="postgresql+psycopg://opaladmin:${{ secrets.POSTGRES_ADMIN_PASSWORD }}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require" \
+            || echo "⚠️ Upscale Worker update failed or doesn't exist yet"
 
   # ========================================
   # JOB 4: Deploy Frontend
