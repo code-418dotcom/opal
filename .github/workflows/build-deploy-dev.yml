@@ -303,6 +303,27 @@ jobs:
             wait_ready "${NAME}"
           }
 
+          wait_for_acr_pull () {
+            local NAME="$1"
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            echo "Polling until AcrPull is visible in ARM for ${NAME} (max 5 min)..."
+            for i in $(seq 1 30); do
+              COUNT=$(az role assignment list \
+                --assignee "${PID}" --scope "${ACR_ID}" \
+                --query "[?roleDefinitionName=='AcrPull'] | length(@)" \
+                -o tsv 2>/dev/null || echo "0")
+              if [ "${COUNT:-0}" -gt 0 ]; then
+                echo "AcrPull confirmed in ARM (attempt ${i}). Waiting 20s for enforcement to catch up..."
+                sleep 20
+                return 0
+              fi
+              echo "  AcrPull not yet visible (${i}/30), waiting 10s..."
+              sleep 10
+            done
+            echo "WARNING: AcrPull not confirmed after 5 min — proceeding anyway"
+          }
+
           ensure_ingress () {
             local NAME="$1"
             local MODE="$2"   # external|internal|none
@@ -355,8 +376,7 @@ jobs:
 
             # Grant AcrPull BEFORE binding registry — Azure validates MI access on bind
             ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
-            echo "Waiting 30s for AcrPull role to propagate..."
-            sleep 30
+            wait_for_acr_pull "${NAME}"
 
             ensure_registry_binding "${NAME}"
 
