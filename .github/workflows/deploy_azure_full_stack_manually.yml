@@ -117,15 +117,31 @@ jobs:
 
     strategy:
       matrix:
-        service:
-          - web_api
-          - orchestrator
-          - export_worker
-          - billing_service
-          - aml_sd_stub
-          - bg_removal_worker
-          - scene_worker
-          - upscale_worker
+        include:
+          - service: web_api
+            image: opal/web-api
+            dockerfile: src/web_api/Dockerfile
+          - service: orchestrator
+            image: opal/orchestrator
+            dockerfile: src/orchestrator/Dockerfile
+          - service: export_worker
+            image: opal/export-worker
+            dockerfile: src/export_worker/Dockerfile
+          - service: billing_service
+            image: opal/billing-service
+            dockerfile: src/billing_service/Dockerfile
+          - service: aml_sd_stub
+            image: opal/aml-sd-stub
+            dockerfile: src/aml_sd_stub/Dockerfile
+          - service: bg_removal_worker
+            image: opal/bg-removal-worker
+            dockerfile: src/bg_removal_worker/Dockerfile
+          - service: scene_worker
+            image: opal/scene-worker
+            dockerfile: src/scene_worker/Dockerfile
+          - service: upscale_worker
+            image: opal/upscale-worker
+            dockerfile: src/upscale_worker/Dockerfile
 
     steps:
       - name: Checkout code
@@ -157,22 +173,22 @@ jobs:
           set -euo pipefail
           az acr login --name "${ACR_NAME}"
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push ${{ matrix.service }}
         run: |
           set -euo pipefail
 
-          SERVICE_NAME="${{ matrix.service }}"
-          IMAGE_NAME="${ACR_LOGIN}/${SERVICE_NAME}:${IMAGE_TAG}"
-          IMAGE_LATEST="${ACR_LOGIN}/${SERVICE_NAME}:latest"
+          IMAGE_NAME="${ACR_LOGIN}/${{ matrix.image }}:${IMAGE_TAG}"
+          IMAGE_LATEST="${ACR_LOGIN}/${{ matrix.image }}:latest"
 
-          echo "Building ${SERVICE_NAME}..."
-          docker build -f ./src/${SERVICE_NAME}/Dockerfile -t "${IMAGE_NAME}" -t "${IMAGE_LATEST}" .
+          echo "Building ${{ matrix.service }} -> ${IMAGE_NAME}"
+          docker buildx build --platform linux/amd64 \
+            -f ./${{ matrix.dockerfile }} \
+            -t "${IMAGE_NAME}" -t "${IMAGE_LATEST}" . --push
 
-          echo "Pushing ${SERVICE_NAME}..."
-          docker push "${IMAGE_NAME}"
-          docker push "${IMAGE_LATEST}"
-
-          echo "✅ Successfully built and pushed ${SERVICE_NAME}"
+          echo "✅ Successfully built and pushed ${{ matrix.service }}"
 
   # ========================================
   # JOB 3: Deploy Backend Services
@@ -209,12 +225,14 @@ jobs:
           ACR_NAME=$(az acr list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${ACR_NAME}" ] || (echo "ERROR: No ACR found"; exit 1)
           ACR_LOGIN=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "loginServer" -o tsv)
+          ACR_ID=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "id" -o tsv)
 
           STORAGE=$(az storage account list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${STORAGE}" ] || (echo "ERROR: No Storage Account found"; exit 1)
 
           SB=$(az servicebus namespace list -g "${RG_NAME}" --query "[0].name" -o tsv)
           [ -n "${SB}" ] || (echo "ERROR: No Service Bus Namespace found"; exit 1)
+          SB_ID=$(az servicebus namespace show -g "${RG_NAME}" -n "${SB}" --query id -o tsv)
 
           PG_SERVER=$(az resource list -g "${RG_NAME}" \
             --resource-type "Microsoft.DBforPostgreSQL/flexibleServers" \
@@ -224,15 +242,17 @@ jobs:
             --query "[0].name" -o tsv)
           [ -n "${PG_SERVER}" ] || (echo "ERROR: No Postgres Server found"; exit 1)
 
-          CENV=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
-          [ -n "${CENV}" ] || (echo "ERROR: No Container App Environment found"; exit 1)
+          CAE=$(az containerapp env list -g "${RG_NAME}" --query "[0].name" -o tsv)
+          [ -n "${CAE}" ] || (echo "ERROR: No Container App Environment found"; exit 1)
 
           echo "ACR_NAME=${ACR_NAME}" >> $GITHUB_ENV
           echo "ACR_LOGIN=${ACR_LOGIN}" >> $GITHUB_ENV
+          echo "ACR_ID=${ACR_ID}" >> $GITHUB_ENV
           echo "STORAGE=${STORAGE}" >> $GITHUB_ENV
           echo "SB=${SB}" >> $GITHUB_ENV
+          echo "SB_ID=${SB_ID}" >> $GITHUB_ENV
           echo "PG_SERVER=${PG_SERVER}" >> $GITHUB_ENV
-          echo "CENV=${CENV}" >> $GITHUB_ENV
+          echo "CAE=${CAE}" >> $GITHUB_ENV
 
           echo "✅ Resources discovered successfully"
 
@@ -252,146 +272,152 @@ jobs:
             fi
           done
 
-      - name: Deploy Web API
+      - name: Login to ACR (for registry binding)
+        run: az acr login --name "${ACR_NAME}"
+
+      - name: Create & deploy all Container Apps
         run: |
           set -euo pipefail
 
-          IMAGE="${ACR_LOGIN}/web_api:${IMAGE_TAG}"
-          APP_NAME="opal-${ENV_NAME}-web-api"
+          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          DATABASE_URL="postgresql+psycopg://opaladmin:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
+          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
+          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
+          BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}"
+          IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}"
+          FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
 
-          echo "Deploying Web API: ${APP_NAME}"
+          ENV_VARS=(
+            "ENV_NAME=${ENV_NAME}"
+            "DATABASE_URL=${DATABASE_URL}"
+            "STORAGE_ACCOUNT_NAME=${STORAGE}"
+            "SERVICEBUS_NAMESPACE=${SB}"
+            "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
+            "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
+            "BACKGROUND_REMOVAL_PROVIDER=${BACKGROUND_REMOVAL_PROVIDER}"
+            "IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER}"
+            "FAL_API_KEY=${FAL_API_KEY}"
+          )
 
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENVIRONMENT="${ENV_NAME}" \
-              STORAGE_ACCOUNT_NAME="${STORAGE}" \
-              SERVICEBUS_NAMESPACE="${SB}" \
-              POSTGRES_HOST="${PG_SERVER}.postgres.database.azure.com" \
-            || echo "⚠️ Web API update failed or doesn't exist"
+          PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
-      - name: Deploy Orchestrator
-        run: |
-          set -euo pipefail
+          wait_ready () {
+            local NAME="$1" MAX="${2:-60}" SLEEP="${3:-5}"
+            echo "Waiting for ${NAME} (provisioningState=Succeeded)..."
+            for i in $(seq 1 "${MAX}"); do
+              local STATE
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv 2>/dev/null || true)
+              if [ "${STATE}" = "Succeeded" ]; then echo "${NAME} ready."; return 0; fi
+              if [ "${STATE}" = "Failed" ]; then
+                echo "ERROR: ${NAME} provisioningState=Failed"
+                az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
+                return 1
+              fi
+              echo "  ${NAME}: ${STATE:-<none>} (${i}/${MAX})"
+              sleep "${SLEEP}"
+            done
+            echo "ERROR: Timeout waiting for ${NAME}"
+            return 1
+          }
 
-          IMAGE="${ACR_LOGIN}/orchestrator:${IMAGE_TAG}"
-          APP_NAME="opal-${ENV_NAME}-orchestrator"
+          ensure_identity () {
+            az containerapp identity assign -g "${RG_NAME}" -n "$1" --system-assigned >/dev/null
+            wait_ready "$1"
+          }
 
-          echo "Deploying Orchestrator: ${APP_NAME}"
+          ensure_role () {
+            local NAME="$1" SCOPE="$2" ROLE="$3"
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            az role assignment create --assignee "${PID}" --role "${ROLE}" --scope "${SCOPE}" >/dev/null 2>&1 || true
+          }
 
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENVIRONMENT="${ENV_NAME}" \
-              STORAGE_ACCOUNT_NAME="${STORAGE}" \
-              SERVICEBUS_NAMESPACE="${SB}" \
-              POSTGRES_HOST="${PG_SERVER}.postgres.database.azure.com" \
-            || echo "⚠️ Orchestrator update failed or doesn't exist"
+          ensure_registry_binding () {
+            echo "Binding registry for $1..."
+            az containerapp registry set -g "${RG_NAME}" -n "$1" \
+              --server "${ACR_LOGIN}" --identity system >/dev/null
+            wait_ready "$1"
+          }
 
-      - name: Deploy Export Worker
-        run: |
-          set -euo pipefail
+          ensure_ingress () {
+            local NAME="$1" MODE="$2" PORT="$3"
+            [ "${MODE}" = "none" ] && return 0
+            az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
+              --type "${MODE}" --target-port "${PORT}" --transport auto >/dev/null 2>&1 || true
+            wait_ready "${NAME}"
+            az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
+              --type "${MODE}" --target-port "${PORT}" >/dev/null 2>&1 || true
+            wait_ready "${NAME}"
+          }
 
-          IMAGE="${ACR_LOGIN}/export_worker:${IMAGE_TAG}"
-          APP_NAME="opal-${ENV_NAME}-export-worker"
+          ensure_app_exists () {
+            local NAME="$1" INGRESS="$2" PORT="$3"
 
-          echo "Deploying Export Worker: ${APP_NAME}"
+            if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv || true)
+              echo "App exists: ${NAME} (state: ${STATE})"
+              if [ "${STATE}" = "Failed" ]; then
+                echo "Deleting failed app to recreate..."
+                az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes
+              fi
+            fi
 
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENVIRONMENT="${ENV_NAME}" \
-              STORAGE_ACCOUNT_NAME="${STORAGE}" \
-              SERVICEBUS_NAMESPACE="${SB}" \
-              POSTGRES_HOST="${PG_SERVER}.postgres.database.azure.com" \
-            || echo "⚠️ Export Worker update failed or doesn't exist"
+            if ! az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
+              echo "Creating ${NAME} with placeholder image..."
+              az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                --environment "${CAE}" \
+                --image "${PLACEHOLDER_IMAGE}" \
+                --min-replicas 1 --max-replicas 3 \
+                --env-vars "${ENV_VARS[@]}" >/dev/null
+              wait_ready "${NAME}"
+            fi
 
-      - name: Deploy Billing Service
-        run: |
-          set -euo pipefail
+            ensure_identity "${NAME}"
 
-          IMAGE="${ACR_LOGIN}/billing_service:${IMAGE_TAG}"
-          APP_NAME="opal-${ENV_NAME}-billing"
+            # Grant AcrPull BEFORE binding registry — Azure validates MI access on bind
+            ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
+            echo "Waiting 30s for AcrPull role to propagate..."
+            sleep 30
 
-          echo "Deploying Billing Service: ${APP_NAME}"
+            ensure_registry_binding "${NAME}"
 
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENVIRONMENT="${ENV_NAME}" \
-              POSTGRES_HOST="${PG_SERVER}.postgres.database.azure.com" \
-            || echo "⚠️ Billing Service update failed or doesn't exist"
+            STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
 
-      - name: Deploy BG Removal Worker
-        run: |
-          set -euo pipefail
+            ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
+          }
 
-          IMAGE="${ACR_LOGIN}/bg_removal_worker:${IMAGE_TAG}"
-          APP_NAME="opal-bg-removal-worker-${ENV_NAME}"
+          deploy_image () {
+            local NAME="$1" IMAGE="$2"
+            echo "Deploying ${NAME} -> ${IMAGE}"
+            wait_ready "${NAME}"
+            az containerapp update -g "${RG_NAME}" -n "${NAME}" \
+              --image "${IMAGE}" \
+              --set-env-vars "${ENV_VARS[@]}" >/dev/null
+            wait_ready "${NAME}"
+          }
 
-          echo "Deploying BG Removal Worker: ${APP_NAME}"
+          # Create + wire up all apps (idempotent)
+          ensure_app_exists "opal-web-api-${ENV_NAME}"          "external" 8080
+          ensure_app_exists "opal-orchestrator-${ENV_NAME}"     "internal" 8080
+          ensure_app_exists "opal-export-worker-${ENV_NAME}"    "none"     0
+          ensure_app_exists "opal-billing-service-${ENV_NAME}"  "external" 8080
+          ensure_app_exists "opal-bg-removal-worker-${ENV_NAME}" "none"    0
+          ensure_app_exists "opal-scene-worker-${ENV_NAME}"     "none"     0
+          ensure_app_exists "opal-upscale-worker-${ENV_NAME}"   "none"     0
 
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENV_NAME="${ENV_NAME}" \
-              STORAGE_ACCOUNT_NAME="${STORAGE}" \
-              SERVICEBUS_NAMESPACE="${SB}" \
-              DATABASE_URL="postgresql+psycopg://opaladmin:${{ secrets.POSTGRES_ADMIN_PASSWORD }}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require" \
-              BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}" \
-            || echo "⚠️ BG Removal Worker update failed or doesn't exist yet"
+          # Deploy images
+          deploy_image "opal-web-api-${ENV_NAME}"           "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
+          deploy_image "opal-orchestrator-${ENV_NAME}"      "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
+          deploy_image "opal-export-worker-${ENV_NAME}"     "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+          deploy_image "opal-billing-service-${ENV_NAME}"   "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
+          deploy_image "opal-bg-removal-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}"
+          deploy_image "opal-scene-worker-${ENV_NAME}"      "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}"
+          deploy_image "opal-upscale-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}"
 
-      - name: Deploy Scene Worker
-        run: |
-          set -euo pipefail
-
-          IMAGE="${ACR_LOGIN}/scene_worker:${IMAGE_TAG}"
-          APP_NAME="opal-scene-worker-${ENV_NAME}"
-
-          echo "Deploying Scene Worker: ${APP_NAME}"
-
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENV_NAME="${ENV_NAME}" \
-              STORAGE_ACCOUNT_NAME="${STORAGE}" \
-              SERVICEBUS_NAMESPACE="${SB}" \
-              DATABASE_URL="postgresql+psycopg://opaladmin:${{ secrets.POSTGRES_ADMIN_PASSWORD }}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require" \
-              IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}" \
-              FAL_API_KEY="${{ secrets.FAL_API_KEY }}" \
-            || echo "⚠️ Scene Worker update failed or doesn't exist yet"
-
-      - name: Deploy Upscale Worker
-        run: |
-          set -euo pipefail
-
-          IMAGE="${ACR_LOGIN}/upscale_worker:${IMAGE_TAG}"
-          APP_NAME="opal-upscale-worker-${ENV_NAME}"
-
-          echo "Deploying Upscale Worker: ${APP_NAME}"
-
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${RG_NAME}" \
-            --image "${IMAGE}" \
-            --set-env-vars \
-              ENV_NAME="${ENV_NAME}" \
-              STORAGE_ACCOUNT_NAME="${STORAGE}" \
-              SERVICEBUS_NAMESPACE="${SB}" \
-              DATABASE_URL="postgresql+psycopg://opaladmin:${{ secrets.POSTGRES_ADMIN_PASSWORD }}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require" \
-            || echo "⚠️ Upscale Worker update failed or doesn't exist yet"
+          echo "✅ All Container Apps deployed successfully"
 
   # ========================================
   # JOB 4: Deploy Frontend
