@@ -31,6 +31,9 @@ jobs:
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
+      bg_removal_worker: ${{ steps.filter.outputs.bg_removal_worker }}
+      scene_worker: ${{ steps.filter.outputs.scene_worker }}
+      upscale_worker: ${{ steps.filter.outputs.upscale_worker }}
     steps:
       - uses: actions/checkout@v4
       - name: Paths filter
@@ -50,6 +53,12 @@ jobs:
               - 'src/billing_service/**'
             aml_sd_stub:
               - 'src/aml_sd_stub/**'
+            bg_removal_worker:
+              - 'src/bg_removal_worker/**'
+            scene_worker:
+              - 'src/scene_worker/**'
+            upscale_worker:
+              - 'src/upscale_worker/**'
 
   build_and_deploy:
     name: Build + Deploy (dev)
@@ -84,6 +93,9 @@ jobs:
           ORCH="${{ needs.changes.outputs.orchestrator }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
+          BG_REMOVAL="${{ needs.changes.outputs.bg_removal_worker }}"
+          SCENE="${{ needs.changes.outputs.scene_worker }}"
+          UPSCALE="${{ needs.changes.outputs.upscale_worker }}"
 
           # If shared changed, everything rebuilds/redeploys
           if [ "${SHARED}" = "true" ]; then
@@ -92,6 +104,9 @@ jobs:
             ORCH=true
             BILLING=true
             AML=true
+            BG_REMOVAL=true
+            SCENE=true
+            UPSCALE=true
           fi
 
           echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
@@ -99,6 +114,9 @@ jobs:
           echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
           echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
+          echo "bg_removal_worker=${BG_REMOVAL}" >> "$GITHUB_OUTPUT"
+          echo "scene_worker=${SCENE}" >> "$GITHUB_OUTPUT"
+          echo "upscale_worker=${UPSCALE}" >> "$GITHUB_OUTPUT"
 
       - name: Discover infra in Azure (dev RG)
         run: |
@@ -139,6 +157,22 @@ jobs:
           set -euo pipefail
           az acr login --name "${ACR_NAME}"
 
+      - name: Ensure Service Bus queues exist (idempotent)
+        run: |
+          set -euo pipefail
+          for Q in bg-removal scene-gen upscale; do
+            if ! az servicebus queue show -g "${RG_NAME}" --namespace-name "${SB}" --name "${Q}" >/dev/null 2>&1; then
+              echo "Creating queue: ${Q}"
+              az servicebus queue create -g "${RG_NAME}" --namespace-name "${SB}" \
+                --name "${Q}" \
+                --max-delivery-count 5 \
+                --lock-duration PT10M \
+                --default-message-time-to-live P7D
+            else
+              echo "Queue already exists: ${Q}"
+            fi
+          done
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -169,6 +203,15 @@ jobs:
           fi
           if [ "${{ steps.decide.outputs.aml_sd_stub }}" = "true" ]; then
             build_push "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" "src/aml_sd_stub/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" "src/bg_removal_worker/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.scene_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" "src/scene_worker/Dockerfile"
+          fi
+          if [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" "src/upscale_worker/Dockerfile"
           fi
 
       - name: Create/Update Container Apps (only affected apps)
@@ -212,6 +255,10 @@ jobs:
           AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
           AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
 
+          BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}"
+          IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}"
+          FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
+
           ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
             "DATABASE_URL=${DATABASE_URL}"
@@ -219,6 +266,9 @@ jobs:
             "SERVICEBUS_NAMESPACE=${SB}"
             "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
             "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
+            "BACKGROUND_REMOVAL_PROVIDER=${BACKGROUND_REMOVAL_PROVIDER}"
+            "IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER}"
+            "FAL_API_KEY=${FAL_API_KEY}"
           )
 
           PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
@@ -354,6 +404,25 @@ jobs:
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${EXPORT}" >/dev/null 2>&1; then
             ensure_app_exists "${EXPORT}" "none" 0
             deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+          fi
+
+          BG_REMOVAL_APP="opal-bg-removal-worker-${ENV_NAME}"
+          SCENE_APP="opal-scene-worker-${ENV_NAME}"
+          UPSCALE_APP="opal-upscale-worker-${ENV_NAME}"
+
+          if [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${BG_REMOVAL_APP}" >/dev/null 2>&1; then
+            ensure_app_exists "${BG_REMOVAL_APP}" "none" 0
+            deploy_image "${BG_REMOVAL_APP}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}"
+          fi
+
+          if [ "${{ steps.decide.outputs.scene_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${SCENE_APP}" >/dev/null 2>&1; then
+            ensure_app_exists "${SCENE_APP}" "none" 0
+            deploy_image "${SCENE_APP}" "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}"
+          fi
+
+          if [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${UPSCALE_APP}" >/dev/null 2>&1; then
+            ensure_app_exists "${UPSCALE_APP}" "none" 0
+            deploy_image "${UPSCALE_APP}" "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}"
           fi
 
 

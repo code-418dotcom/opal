@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     SERVICEBUS_NAMESPACE: str = Field(default='', env='SERVICEBUS_NAMESPACE')
     SERVICEBUS_JOBS_QUEUE: str = "jobs"
     SERVICEBUS_EXPORTS_QUEUE: str = "exports"
+    SERVICEBUS_BG_REMOVAL_QUEUE: str = "bg-removal"
+    SERVICEBUS_SCENE_GEN_QUEUE: str = "scene-gen"
+    SERVICEBUS_UPSCALE_QUEUE: str = "upscale"
 
     # Azure ML endpoint (OPTIONAL for now)
     AML_ENDPOINT_URL: str | None = None

@@ -51,10 +51,17 @@ class RealESRGANProvider(UpscalingProvider):
             RealESRGANProvider._Image = Image
             RealESRGANProvider._np = np
 
+            import os
+            # Use baked-in model if available (Dockerfile downloads it to /app/models/),
+            # otherwise fall back to downloading from GitHub at runtime.
+            _local = '/app/models/RealESRGAN_x2plus.pth'
+            _model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth'
+            _model_path = _local if os.path.exists(_local) else _model_url
+
             model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
             RealESRGANProvider._upsampler = RealESRGANer(
                 scale=2,
-                model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
+                model_path=_model_path,
                 model=model,
                 tile=400,
                 tile_pad=10,

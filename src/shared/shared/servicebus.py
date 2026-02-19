@@ -62,6 +62,54 @@ def send_job_message(payload: Dict[str, Any]) -> None:
         raise
 
 
+def send_bg_removal_message(payload: Dict[str, Any]) -> None:
+    """Send pipeline message to bg-removal queue."""
+    try:
+        with get_client() as client:
+            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_BG_REMOVAL_QUEUE)
+            with sender:
+                message = ServiceBusMessage(json.dumps(payload))
+                sender.send_messages(message)
+                LOG.info("Sent bg-removal message: job_id=%s item_id=%s",
+                         payload.get("job_id"), payload.get("item_id"))
+    except Exception as e:
+        LOG.error("Failed to send bg-removal message: job_id=%s error=%s",
+                  payload.get("job_id"), e)
+        raise
+
+
+def send_scene_gen_message(payload: Dict[str, Any]) -> None:
+    """Send pipeline message to scene-gen queue."""
+    try:
+        with get_client() as client:
+            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_SCENE_GEN_QUEUE)
+            with sender:
+                message = ServiceBusMessage(json.dumps(payload))
+                sender.send_messages(message)
+                LOG.info("Sent scene-gen message: job_id=%s item_id=%s",
+                         payload.get("job_id"), payload.get("item_id"))
+    except Exception as e:
+        LOG.error("Failed to send scene-gen message: job_id=%s error=%s",
+                  payload.get("job_id"), e)
+        raise
+
+
+def send_upscale_message(payload: Dict[str, Any]) -> None:
+    """Send pipeline message to upscale queue."""
+    try:
+        with get_client() as client:
+            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_UPSCALE_QUEUE)
+            with sender:
+                message = ServiceBusMessage(json.dumps(payload))
+                sender.send_messages(message)
+                LOG.info("Sent upscale message: job_id=%s item_id=%s",
+                         payload.get("job_id"), payload.get("item_id"))
+    except Exception as e:
+        LOG.error("Failed to send upscale message: job_id=%s error=%s",
+                  payload.get("job_id"), e)
+        raise
+
+
 def send_export_message(payload: Dict[str, Any]) -> None:
     """
     Send a message to the exports queue.
