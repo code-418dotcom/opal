@@ -352,10 +352,13 @@ jobs:
             fi
 
             ensure_identity "${NAME}"
-            ensure_registry_binding "${NAME}"
 
-            # ACR pull
+            # Grant AcrPull BEFORE binding registry — Azure validates MI access on bind
             ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
+            echo "Waiting 30s for AcrPull role to propagate..."
+            sleep 30
+
+            ensure_registry_binding "${NAME}"
 
             # Storage access
             STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
