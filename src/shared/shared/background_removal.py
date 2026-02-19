@@ -84,10 +84,11 @@ class AzureVisionProvider(BackgroundRemovalProvider):
         LOG.info("Processing with Azure Computer Vision Image Analysis 4.0")
 
         # Use Image Analysis 4.0 API with backgroundRemoval feature
-        # Endpoint format: {endpoint}/computervision/imageanalysis:segment
+        # Requires resource-specific endpoint: {resource}.cognitiveservices.azure.com
+        # (NOT the regional endpoint westeurope.api.cognitive.microsoft.com)
         url = f"{self.endpoint}/computervision/imageanalysis:segment"
         params = {
-            "api-version": "2024-02-01",  # Updated to latest stable version
+            "api-version": "2023-10-01",  # GA version for Image Analysis 4.0
             "mode": "backgroundRemoval"
         }
         headers = {
