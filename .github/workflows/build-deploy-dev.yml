@@ -166,7 +166,7 @@ jobs:
               az servicebus queue create -g "${RG_NAME}" --namespace-name "${SB}" \
                 --name "${Q}" \
                 --max-delivery-count 5 \
-                --lock-duration PT10M \
+                --lock-duration PT5M \
                 --default-message-time-to-live P7D
             else
               echo "Queue already exists: ${Q}"
