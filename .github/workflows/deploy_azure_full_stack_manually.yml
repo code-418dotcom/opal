@@ -321,8 +321,20 @@ jobs:
           }
 
           ensure_identity () {
-            az containerapp identity assign -g "${RG_NAME}" -n "$1" --system-assigned >/dev/null
-            wait_ready "$1"
+            local NAME="$1"
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
+            # Poll for principalId (not full provisioning state) — identity assign is a fast ARM op
+            for i in $(seq 1 12); do
+              PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+              if [ -n "${PID}" ]; then
+                echo "Identity confirmed for ${NAME}: ${PID}"
+                return 0
+              fi
+              echo "  Waiting for identity on ${NAME} (${i}/12)..."
+              sleep 5
+            done
+            echo "ERROR: System identity not confirmed for ${NAME} after 60s"
+            return 1
           }
 
           ensure_role () {
@@ -333,10 +345,22 @@ jobs:
           }
 
           ensure_registry_binding () {
-            echo "Binding registry for $1..."
-            az containerapp registry set -g "${RG_NAME}" -n "$1" \
-              --server "${ACR_LOGIN}" --identity system >/dev/null
-            wait_ready "$1"
+            local NAME="$1"
+            echo "Binding registry for ${NAME}..."
+            for attempt in 1 2 3; do
+              az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
+                --server "${ACR_LOGIN}" --identity system >/dev/null 2>&1 || true
+              sleep 15
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" \
+                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
+              if [ "${STATE}" != "Failed" ]; then
+                echo "Registry bound for ${NAME} (state: ${STATE})"
+                return 0
+              fi
+              echo "  Registry binding attempt ${attempt}/3 left app in Failed state; waiting 30s before retry..."
+              sleep 30
+            done
+            echo "WARNING: Registry binding unstable after 3 attempts — proceeding (deploy_image will validate)"
           }
 
           wait_for_acr_pull () {
@@ -390,7 +414,8 @@ jobs:
                 --image "${PLACEHOLDER_IMAGE}" \
                 --min-replicas 1 --max-replicas 3 \
                 --env-vars "${ENV_VARS[@]}" >/dev/null
-              wait_ready "${NAME}"
+              # Don't wait for success here; let the real image deployment fix any failures
+              sleep 5  # Give Azure time to process the create request
             fi
 
             ensure_identity "${NAME}"
@@ -412,10 +437,11 @@ jobs:
           deploy_image () {
             local NAME="$1" IMAGE="$2"
             echo "Deploying ${NAME} -> ${IMAGE}"
-            wait_ready "${NAME}"
+            # Force the update with correct image - don't wait for previous state
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
+            # Now wait for it to be ready with the correct image
             wait_ready "${NAME}"
           }
 

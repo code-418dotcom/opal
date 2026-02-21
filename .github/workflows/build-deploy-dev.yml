@@ -275,8 +275,7 @@ jobs:
 
           ensure_identity () {
             local NAME="$1"
-            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null
-            wait_ready "${NAME}"
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
           }
 
           ensure_role () {
@@ -300,7 +299,8 @@ jobs:
             az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
               --server "${ACR_LOGIN}" \
               --identity system >/dev/null
-            wait_ready "${NAME}"
+            # Give Azure time to propagate the registry bind before image deploy
+            sleep 15
           }
 
           wait_for_acr_pull () {
@@ -338,13 +338,14 @@ jobs:
               --target-port "${PORT}" \
               --transport auto >/dev/null 2>&1 || true
 
-            wait_ready "${NAME}"
+            # Allow Azure to process ingress changes; final readiness is enforced after image deploy
+            sleep 5
 
             az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
               --type "${MODE}" \
               --target-port "${PORT}" >/dev/null 2>&1 || true
 
-            wait_ready "${NAME}"
+            sleep 5
           }
 
           ensure_app_exists () {
@@ -369,7 +370,8 @@ jobs:
                 --image "${PLACEHOLDER_IMAGE}" \
                 --min-replicas 1 --max-replicas 3 \
                 --env-vars "${ENV_VARS[@]}" >/dev/null
-              wait_ready "${NAME}"
+              # Don't wait for success here; let the real image deployment fix any failures
+              sleep 5  # Give Azure time to process the create request
             fi
 
             ensure_identity "${NAME}"
@@ -395,12 +397,12 @@ jobs:
             local NAME="$1"
             local IMAGE="$2"
             echo "Deploying ${NAME} -> ${IMAGE}"
-            wait_ready "${NAME}"
-
+            # Force the update with correct image - don't wait for previous state
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
 
+            # Now wait for it to be ready with the correct image
             wait_ready "${NAME}"
           }
 
