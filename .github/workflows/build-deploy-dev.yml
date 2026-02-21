@@ -181,37 +181,39 @@ jobs:
           set -euo pipefail
 
           build_push () {
-            local IMAGE="$1"
+            local NAME="$1"
             local DOCKERFILE="$2"
-            echo "Building ${IMAGE} using ${DOCKERFILE}"
+            echo "Building ${NAME} using ${DOCKERFILE}"
+            # Tag with both SHA (for traceability) and latest (for fallback on new environments)
             docker buildx build --platform linux/amd64 \
-              -t "${IMAGE}" \
+              -t "${ACR_LOGIN}/${NAME}:${IMAGE_TAG}" \
+              -t "${ACR_LOGIN}/${NAME}:latest" \
               -f "${DOCKERFILE}" . --push
           }
 
           if [ "${{ steps.decide.outputs.web_api }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" "src/web_api/Dockerfile"
+            build_push "opal/web-api" "src/web_api/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}" "src/orchestrator/Dockerfile"
+            build_push "opal/orchestrator" "src/orchestrator/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" "src/export_worker/Dockerfile"
+            build_push "opal/export-worker" "src/export_worker/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.billing_service }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" "src/billing_service/Dockerfile"
+            build_push "opal/billing-service" "src/billing_service/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.aml_sd_stub }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" "src/aml_sd_stub/Dockerfile"
+            build_push "opal/aml-sd-stub" "src/aml_sd_stub/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" "src/bg_removal_worker/Dockerfile"
+            build_push "opal/bg-removal-worker" "src/bg_removal_worker/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.scene_worker }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" "src/scene_worker/Dockerfile"
+            build_push "opal/scene-worker" "src/scene_worker/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ]; then
-            build_push "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" "src/upscale_worker/Dockerfile"
+            build_push "opal/upscale-worker" "src/upscale_worker/Dockerfile"
           fi
 
       - name: Create/Update Container Apps (only affected apps)
@@ -396,59 +398,56 @@ jobs:
           deploy_image () {
             local NAME="$1"
             local IMAGE="$2"
+            local MAX="${3:-60}"   # allow callers to pass a larger timeout
             echo "Deploying ${NAME} -> ${IMAGE}"
-            # Force the update with correct image - don't wait for previous state
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
-
-            # Now wait for it to be ready with the correct image
-            wait_ready "${NAME}"
+            wait_ready "${NAME}" "${MAX}"
           }
 
           WEB="opal-web-api-${ENV_NAME}"
           BILL="opal-billing-service-${ENV_NAME}"
           ORCH="opal-orchestrator-${ENV_NAME}"
           EXPORT="opal-export-worker-${ENV_NAME}"
-
-          if [ "${{ steps.decide.outputs.web_api }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${WEB}" >/dev/null 2>&1; then
-            ensure_app_exists "${WEB}" "external" 8080
-            deploy_image "${WEB}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
-          fi
-
-          if [ "${{ steps.decide.outputs.billing_service }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${BILL}" >/dev/null 2>&1; then
-            ensure_app_exists "${BILL}" "external" 8080
-            deploy_image "${BILL}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
-          fi
-
-          if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${ORCH}" >/dev/null 2>&1; then
-            ensure_app_exists "${ORCH}" "internal" 8080
-            deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
-          fi
-
-          if [ "${{ steps.decide.outputs.export_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${EXPORT}" >/dev/null 2>&1; then
-            ensure_app_exists "${EXPORT}" "none" 0
-            deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
-          fi
-
           BG_REMOVAL_APP="opal-bg-removal-worker-${ENV_NAME}"
           SCENE_APP="opal-scene-worker-${ENV_NAME}"
           UPSCALE_APP="opal-upscale-worker-${ENV_NAME}"
 
-          if [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${BG_REMOVAL_APP}" >/dev/null 2>&1; then
-            ensure_app_exists "${BG_REMOVAL_APP}" "none" 0
-            deploy_image "${BG_REMOVAL_APP}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}"
-          fi
+          # Phase 1: ensure every app exists with correct RBAC (always idempotent).
+          # This is decoupled from image deployment so a workflow-only push never
+          # tries to pull a SHA-tagged image that was never built.
+          ensure_app_exists "${WEB}"          "external" 8080
+          ensure_app_exists "${BILL}"         "external" 8080
+          ensure_app_exists "${ORCH}"         "internal" 8080
+          ensure_app_exists "${EXPORT}"       "none"     0
+          ensure_app_exists "${BG_REMOVAL_APP}" "none"   0
+          ensure_app_exists "${SCENE_APP}"    "none"     0
+          ensure_app_exists "${UPSCALE_APP}"  "none"     0
 
-          if [ "${{ steps.decide.outputs.scene_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${SCENE_APP}" >/dev/null 2>&1; then
-            ensure_app_exists "${SCENE_APP}" "none" 0
-            deploy_image "${SCENE_APP}" "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}"
-          fi
+          # Phase 2: deploy images — only for services where a build was triggered.
+          # Large ML-worker images (bg-removal, scene, upscale) use a 20-min timeout
+          # because pulling 2-4 GB from ACR on a cold start exceeds the 5-min default.
+          [ "${{ steps.decide.outputs.web_api }}" = "true" ] && \
+            deploy_image "${WEB}"  "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
 
-          if [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ] || ! az containerapp show -g "${RG_NAME}" -n "${UPSCALE_APP}" >/dev/null 2>&1; then
-            ensure_app_exists "${UPSCALE_APP}" "none" 0
-            deploy_image "${UPSCALE_APP}" "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}"
-          fi
+          [ "${{ steps.decide.outputs.billing_service }}" = "true" ] && \
+            deploy_image "${BILL}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
+
+          [ "${{ steps.decide.outputs.orchestrator }}" = "true" ] && \
+            deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
+
+          [ "${{ steps.decide.outputs.export_worker }}" = "true" ] && \
+            deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+
+          [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ] && \
+            deploy_image "${BG_REMOVAL_APP}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" 240
+
+          [ "${{ steps.decide.outputs.scene_worker }}" = "true" ] && \
+            deploy_image "${SCENE_APP}" "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" 240
+
+          [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ] && \
+            deploy_image "${UPSCALE_APP}" "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" 240
 
 
       - name: Print Web API URL
