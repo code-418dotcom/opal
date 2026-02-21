@@ -275,6 +275,17 @@ jobs:
       - name: Login to ACR (for registry binding)
         run: az acr login --name "${ACR_NAME}"
 
+      # Re-authenticate so the Azure access token is fresh for the long deploy phase.
+      # GitHub OIDC JWTs are only valid for 5 minutes; the CLI's cached access token
+      # expires after ~1 hour. Re-logging in here ensures we have a full hour for
+      # the sequential ensure_app_exists + deploy_image operations that follow.
+      - name: Refresh Azure authentication before deploy
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Create & deploy all Container Apps
         run: |
           set -euo pipefail
@@ -378,6 +389,13 @@ jobs:
                 sleep 20
                 return 0
               fi
+              # After 2 min with no visibility, the initial ensure_role likely hit an Azure AD
+              # replication lag for the new managed identity. Re-attempt the assignment.
+              if [ "${i}" = "12" ]; then
+                echo "  AcrPull still not visible after 2 min; re-attempting role assignment..."
+                az role assignment create \
+                  --assignee "${PID}" --role "AcrPull" --scope "${ACR_ID}" >/dev/null 2>&1 || true
+              fi
               echo "  AcrPull not yet visible (${i}/30), waiting 10s..."
               sleep 10
             done
@@ -436,13 +454,12 @@ jobs:
 
           deploy_image () {
             local NAME="$1" IMAGE="$2"
+            local MAX="${3:-60}"   # default 5 min; callers can pass larger for big images
             echo "Deploying ${NAME} -> ${IMAGE}"
-            # Force the update with correct image - don't wait for previous state
             az containerapp update -g "${RG_NAME}" -n "${NAME}" \
               --image "${IMAGE}" \
               --set-env-vars "${ENV_VARS[@]}" >/dev/null
-            # Now wait for it to be ready with the correct image
-            wait_ready "${NAME}"
+            wait_ready "${NAME}" "${MAX}"
           }
 
           # Create + wire up all apps (idempotent)
@@ -454,14 +471,17 @@ jobs:
           ensure_app_exists "opal-scene-worker-${ENV_NAME}"     "none"     0
           ensure_app_exists "opal-upscale-worker-${ENV_NAME}"   "none"     0
 
-          # Deploy images
+          # Deploy images.
+          # ML worker images (bg-removal, scene, upscale) carry PyTorch + large model
+          # files (2-4 GB); cold-pull + startup can exceed the 5-min default, so use
+          # MAX=240 (20 min) for those.
           deploy_image "opal-web-api-${ENV_NAME}"           "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
           deploy_image "opal-orchestrator-${ENV_NAME}"      "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
           deploy_image "opal-export-worker-${ENV_NAME}"     "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           deploy_image "opal-billing-service-${ENV_NAME}"   "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
-          deploy_image "opal-bg-removal-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}"
-          deploy_image "opal-scene-worker-${ENV_NAME}"      "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}"
-          deploy_image "opal-upscale-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}"
+          deploy_image "opal-bg-removal-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" 240
+          deploy_image "opal-scene-worker-${ENV_NAME}"      "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" 240
+          deploy_image "opal-upscale-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" 240
 
           echo "✅ All Container Apps deployed successfully"
 
