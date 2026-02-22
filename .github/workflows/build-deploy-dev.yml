@@ -287,8 +287,12 @@ jobs:
             PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
             [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
 
+            # Use --assignee-object-id + --assignee-principal-type to bypass Azure AD graph
+            # lookup. Without this, the lookup for a freshly-created managed identity can
+            # fail silently, leaving the role unassigned.
             az role assignment create \
-              --assignee "${PID}" \
+              --assignee-object-id "${PID}" \
+              --assignee-principal-type ServicePrincipal \
               --role "${ROLE}" \
               --scope "${SCOPE}" >/dev/null 2>&1 || true
           }
@@ -309,9 +313,11 @@ jobs:
             PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
             echo "Polling until AcrPull is visible in ARM for ${NAME} (max 5 min)..."
             for i in $(seq 1 30); do
+              # Filter by principalId in JMESPath rather than using --assignee, which
+              # triggers an Azure AD graph lookup that is unreliable for managed identities.
               COUNT=$(az role assignment list \
-                --assignee "${PID}" --scope "${ACR_ID}" \
-                --query "[?roleDefinitionName=='AcrPull'] | length(@)" \
+                --scope "${ACR_ID}" \
+                --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
                 -o tsv 2>/dev/null || echo "0")
               if [ "${COUNT:-0}" -gt 0 ]; then
                 echo "AcrPull confirmed in ARM (attempt ${i}). Waiting 20s for enforcement to catch up..."
