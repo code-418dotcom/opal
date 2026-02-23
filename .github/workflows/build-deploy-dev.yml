@@ -290,6 +290,19 @@ jobs:
           ensure_identity () {
             local NAME="$1"
             az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
+            # Poll until principalId is visible — ARM can take ~30s to propagate a new identity
+            for i in $(seq 1 12); do
+              local PID
+              PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+              if [ -n "${PID}" ]; then
+                echo "Identity confirmed for ${NAME}: ${PID}"
+                return 0
+              fi
+              echo "  Waiting for identity on ${NAME} (${i}/12)..."
+              sleep 5
+            done
+            echo "ERROR: System identity not confirmed for ${NAME} after 60s"
+            return 1
           }
 
           ensure_role () {
@@ -314,11 +327,20 @@ jobs:
           ensure_registry_binding () {
             local NAME="$1"
             echo "Binding registry for ${NAME}..."
-            az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
-              --server "${ACR_LOGIN}" \
-              --identity system >/dev/null
-            # Give Azure time to propagate the registry bind before image deploy
-            sleep 15
+            for attempt in 1 2 3; do
+              az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
+                --server "${ACR_LOGIN}" --identity system >/dev/null 2>&1 || true
+              sleep 15
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" \
+                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
+              if [ "${STATE}" != "Failed" ]; then
+                echo "Registry bound for ${NAME} (state: ${STATE})"
+                return 0
+              fi
+              echo "  Registry binding attempt ${attempt}/3 left app in Failed state; waiting 30s before retry..."
+              sleep 30
+            done
+            echo "WARNING: Registry binding unstable after 3 attempts — proceeding (deploy_image will validate)"
           }
 
           wait_for_acr_pull () {
