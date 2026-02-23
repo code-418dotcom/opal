@@ -14,7 +14,7 @@ from shared.db import SessionLocal
 from shared.models import JobItem, ItemStatus
 from shared.storage import generate_read_sas, generate_write_sas, build_output_blob_path
 from shared.servicebus import get_client, send_upscale_message, send_export_message
-from shared.pipeline import PipelineMessage, finalize_job_status
+from shared.pipeline import PipelineMessage, finalize_job_status, mark_item_failed
 from shared.image_generation import get_image_gen_provider
 from shared.util import new_id
 
@@ -120,6 +120,16 @@ def process_message(data: dict) -> None:
 
     LOG.info('scene_worker: job_id=%s item_id=%s', msg.job_id, msg.item_id)
 
+    # Guard: skip if already completed (duplicate delivery)
+    with SessionLocal() as s:
+        item = s.get(JobItem, msg.item_id)
+        if not item:
+            LOG.warning('Item not found: %s', msg.item_id)
+            return
+        if item.status == ItemStatus.completed:
+            LOG.info('Item already completed, skipping: %s', msg.item_id)
+            return
+
     # Fetch best available input (bg-removed preferred over raw)
     container, blob_path = msg.best_available_blob()
     input_sas = generate_read_sas(container=container, blob_path=blob_path)
@@ -198,9 +208,11 @@ def main():
                     messages = receiver.receive_messages(max_message_count=5, max_wait_time=20)
                     for m in messages:
                         item_id = None
+                        job_id = None
                         try:
                             data = json.loads(str(m))
                             item_id = data.get('item_id')
+                            job_id = data.get('job_id')
                             renewer.register(receiver, m, max_lock_renewal_duration=300)
                             process_message(data)
                             receiver.complete_message(m)
@@ -212,7 +224,7 @@ def main():
                         except Exception as e:
                             LOG.exception('Processing failed: %s', e)
                             try:
-                                _mark_failed(item_id, str(e))
+                                mark_item_failed(job_id, item_id, str(e))
                             except Exception:
                                 pass
                             receiver.abandon_message(m)

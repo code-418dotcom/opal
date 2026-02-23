@@ -43,6 +43,7 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
         "brand_profile_id": body.brand_profile_id,
         "status": "created",
         "correlation_id": corr,
+        "processing_options": body.processing_options.model_dump(),
     }
     create_job_record(job_data)
 
@@ -113,6 +114,7 @@ def enqueue_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
                     "job_id": job_id,
                     "item_id": it["id"],
                     "correlation_id": job["correlation_id"],
+                    "processing_options": job.get("processing_options") or {},
                 }
             )
 

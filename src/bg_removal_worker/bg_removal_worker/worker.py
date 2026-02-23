@@ -13,7 +13,7 @@ from shared.models import JobItem, ItemStatus
 from shared.storage import generate_read_sas, generate_write_sas, build_output_blob_path
 from shared.servicebus import (get_client, send_scene_gen_message,
                                 send_upscale_message, send_export_message)
-from shared.pipeline import PipelineMessage, finalize_job_status
+from shared.pipeline import PipelineMessage, finalize_job_status, mark_item_failed
 from shared.background_removal import get_provider
 from shared.util import new_id
 
@@ -195,9 +195,11 @@ def main():
                     messages = receiver.receive_messages(max_message_count=5, max_wait_time=20)
                     for m in messages:
                         item_id = None
+                        job_id = None
                         try:
                             data = json.loads(str(m))
                             item_id = data.get('item_id')
+                            job_id = data.get('job_id')
                             renewer.register(receiver, m, max_lock_renewal_duration=600)
                             process_message(data)
                             receiver.complete_message(m)
@@ -209,7 +211,7 @@ def main():
                         except Exception as e:
                             LOG.exception('Processing failed: %s', e)
                             try:
-                                _mark_failed(item_id, str(e))
+                                mark_item_failed(job_id, item_id, str(e))
                             except Exception:
                                 pass
                             receiver.abandon_message(m)

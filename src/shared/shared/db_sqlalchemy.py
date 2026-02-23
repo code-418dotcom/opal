@@ -21,6 +21,7 @@ def create_job_record(job_data: Dict[str, Any]) -> Dict[str, Any]:
             brand_profile_id=job_data["brand_profile_id"],
             correlation_id=job_data["correlation_id"],
             status=JobStatus(job_data.get("status", "created")),
+            processing_options=job_data.get("processing_options"),
             created_at=job_data.get("created_at", datetime.utcnow()),
             updated_at=job_data.get("updated_at", datetime.utcnow()),
         )
@@ -35,6 +36,7 @@ def create_job_record(job_data: Dict[str, Any]) -> Dict[str, Any]:
             "brand_profile_id": job.brand_profile_id,
             "correlation_id": job.correlation_id,
             "status": job.status.value,
+            "processing_options": job.processing_options,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }
@@ -96,6 +98,7 @@ def get_job_by_id(job_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
             "brand_profile_id": job.brand_profile_id,
             "correlation_id": job.correlation_id,
             "status": job.status.value,
+            "processing_options": job.processing_options,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }

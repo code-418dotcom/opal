@@ -95,6 +95,26 @@ class PipelineMessage:
         return "raw", self.raw_blob_path
 
 
+def mark_item_failed(job_id: str, item_id: str, error: str) -> None:
+    """
+    Mark an item as failed and immediately reconcile the parent job status.
+    Call this from worker exception handlers so the job never stays stuck in 'processing'.
+    """
+    from shared.db import SessionLocal
+    from shared.models import JobItem, ItemStatus
+
+    if not item_id:
+        return
+    with SessionLocal() as s:
+        item = s.get(JobItem, item_id)
+        if item:
+            item.status = ItemStatus.failed
+            item.error_message = str(error)[:4000]
+            s.commit()
+    if job_id:
+        finalize_job_status(job_id)
+
+
 def finalize_job_status(job_id: str) -> None:
     """
     Update overall job status based on all item statuses.

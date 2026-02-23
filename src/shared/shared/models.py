@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -29,6 +29,7 @@ class Job(Base):
     brand_profile_id = Column(String, nullable=False)
     correlation_id = Column(String, nullable=False, index=True)
     status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.created, index=True)
+    processing_options = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
