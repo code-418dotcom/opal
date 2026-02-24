@@ -272,6 +272,18 @@ jobs:
             fi
           done
 
+      - name: Ensure blob containers exist (idempotent)
+        run: |
+          set -euo pipefail
+          for CONTAINER in raw outputs exports; do
+            if ! az storage container show --account-name "${STORAGE}" --name "${CONTAINER}" --auth-mode login >/dev/null 2>&1; then
+              echo "Creating container: ${CONTAINER}"
+              az storage container create --account-name "${STORAGE}" --name "${CONTAINER}" --auth-mode login --public-access off
+            else
+              echo "Container already exists: ${CONTAINER}"
+            fi
+          done
+
       - name: Login to ACR (for registry binding)
         run: az acr login --name "${ACR_NAME}"
 
@@ -457,6 +469,8 @@ jobs:
 
             STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
             ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+            # Storage Blob Delegator is required to generate user delegation SAS tokens
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Delegator"
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
 

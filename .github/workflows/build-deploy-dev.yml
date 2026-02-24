@@ -171,6 +171,18 @@ jobs:
             fi
           done
 
+      - name: Ensure blob containers exist (idempotent)
+        run: |
+          set -euo pipefail
+          for CONTAINER in raw outputs exports; do
+            if ! az storage container show --account-name "${STORAGE}" --name "${CONTAINER}" --auth-mode login >/dev/null 2>&1; then
+              echo "Creating container: ${CONTAINER}"
+              az storage container create --account-name "${STORAGE}" --name "${CONTAINER}" --auth-mode login --public-access off
+            else
+              echo "Container already exists: ${CONTAINER}"
+            fi
+          done
+
       - name: Run DB migrations (idempotent)
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
@@ -427,6 +439,8 @@ jobs:
             # Storage access
             STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
             ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+            # Storage Blob Delegator is required to generate user delegation SAS tokens
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Delegator"
 
             # Service Bus access (MI auth)
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
