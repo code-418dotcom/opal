@@ -26,79 +26,66 @@ export const ProcessingOptions: React.FC<ProcessingOptionsProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 mb-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Settings size={20} className="text-gray-600" />
-        <h3 className="text-lg font-semibold">Processing Options</h3>
+    <div className="processing-options">
+      <div className="processing-options-header">
+        <Settings size={20} />
+        <h3>Processing Options</h3>
       </div>
 
-      <p className="text-sm text-gray-600 mb-4">
+      <p className="processing-options-desc">
         Choose which AI enhancements to apply to your images
       </p>
 
-      <div className="space-y-4">
-        {/* Background Removal */}
-        <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-          <div className="flex-1">
-            <div className="font-medium text-gray-900">Remove Background</div>
-            <div className="text-sm text-gray-600">
+      <div className="processing-options-list">
+        <label className="processing-option">
+          <div className="processing-option-info">
+            <div className="processing-option-name">Remove Background</div>
+            <div className="processing-option-desc">
               Extract product from background using Azure Computer Vision
             </div>
           </div>
-          <div className="ml-4">
-            <input
-              type="checkbox"
-              checked={options.remove_background}
-              onChange={() => handleToggle('remove_background')}
-              disabled={disabled}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            />
-          </div>
+          <input
+            type="checkbox"
+            checked={options.remove_background}
+            onChange={() => handleToggle('remove_background')}
+            disabled={disabled}
+          />
         </label>
 
-        {/* Scene Generation */}
-        <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-          <div className="flex-1">
-            <div className="font-medium text-gray-900">Generate Lifestyle Scene</div>
-            <div className="text-sm text-gray-600">
+        <label className="processing-option">
+          <div className="processing-option-info">
+            <div className="processing-option-name">Generate Lifestyle Scene</div>
+            <div className="processing-option-desc">
               Create AI-generated background and composite product into scene
             </div>
           </div>
-          <div className="ml-4">
-            <input
-              type="checkbox"
-              checked={options.generate_scene}
-              onChange={() => handleToggle('generate_scene')}
-              disabled={disabled}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            />
-          </div>
+          <input
+            type="checkbox"
+            checked={options.generate_scene}
+            onChange={() => handleToggle('generate_scene')}
+            disabled={disabled}
+          />
         </label>
 
-        {/* Upscaling */}
-        <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-          <div className="flex-1">
-            <div className="font-medium text-gray-900">Upscale Image</div>
-            <div className="text-sm text-gray-600">
+        <label className="processing-option">
+          <div className="processing-option-info">
+            <div className="processing-option-name">Upscale Image</div>
+            <div className="processing-option-desc">
               Enhance resolution using Real-ESRGAN (slower but higher quality)
             </div>
           </div>
-          <div className="ml-4">
-            <input
-              type="checkbox"
-              checked={options.upscale}
-              onChange={() => handleToggle('upscale')}
-              disabled={disabled}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            />
-          </div>
+          <input
+            type="checkbox"
+            checked={options.upscale}
+            onChange={() => handleToggle('upscale')}
+            disabled={disabled}
+          />
         </label>
       </div>
 
-      {/* Info message */}
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-sm text-blue-800">
-          💡 <strong>Tip:</strong> Disable features you don't need to speed up processing and reduce costs.
+      <div className="processing-option-tip">
+        <p>
+          Tip: Disable features you don't need to speed up processing and reduce costs.
         </p>
       </div>
     </div>

@@ -10,7 +10,6 @@ interface Props {
 interface FileWithStatus {
   file: File;
   status: 'pending' | 'uploading' | 'completed' | 'failed';
-  progress: number;
   error?: string;
 }
 
@@ -58,7 +57,6 @@ export default function UploadSection({ onJobCreated }: Props) {
     const filesWithStatus: FileWithStatus[] = newFiles.map((file) => ({
       file,
       status: 'pending',
-      progress: 0,
     }));
 
     setFiles((prev) => [...prev, ...filesWithStatus]);
@@ -87,7 +85,7 @@ export default function UploadSection({ onJobCreated }: Props) {
         try {
           setFiles((prev) =>
             prev.map((f, idx) =>
-              idx === i ? { ...f, status: 'uploading', progress: 25 } : f
+              idx === i ? { ...f, status: 'uploading' } : f
             )
           );
 
@@ -95,7 +93,7 @@ export default function UploadSection({ onJobCreated }: Props) {
 
           setFiles((prev) =>
             prev.map((f, idx) =>
-              idx === i ? { ...f, status: 'completed', progress: 100 } : f
+              idx === i ? { ...f, status: 'completed' } : f
             )
           );
         } catch (error) {
@@ -185,14 +183,6 @@ export default function UploadSection({ onJobCreated }: Props) {
                 </div>
               </div>
               <div className="file-status">
-                {fileItem.status === 'uploading' && (
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{ width: `${fileItem.progress}%` }}
-                    ></div>
-                  </div>
-                )}
                 {getStatusIcon(fileItem.status)}
                 {fileItem.error && (
                   <span className="error-text">{fileItem.error}</span>

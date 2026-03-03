@@ -2,11 +2,6 @@ name: Build Images Only (dev) - Smart
 
 on:
   workflow_dispatch: {}
-  push:
-    branches: [ "main" ]
-    paths:
-      - "src/**"
-      - ".github/workflows/build-only-dev.yml"
 
 permissions:
   id-token: write
@@ -29,6 +24,9 @@ jobs:
       orchestrator: ${{ steps.filter.outputs.orchestrator }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
+      bg_removal_worker: ${{ steps.filter.outputs.bg_removal_worker }}
+      scene_worker: ${{ steps.filter.outputs.scene_worker }}
+      upscale_worker: ${{ steps.filter.outputs.upscale_worker }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +47,12 @@ jobs:
               - 'src/billing_service/**'
             aml_sd_stub:
               - 'src/aml_sd_stub/**'
+            bg_removal_worker:
+              - 'src/bg_removal_worker/**'
+            scene_worker:
+              - 'src/scene_worker/**'
+            upscale_worker:
+              - 'src/upscale_worker/**'
 
   build_only:
     name: Build & Push (dev)
@@ -83,6 +87,9 @@ jobs:
           ORCH="${{ needs.changes.outputs.orchestrator }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
+          BG_REMOVAL="${{ needs.changes.outputs.bg_removal_worker }}"
+          SCENE="${{ needs.changes.outputs.scene_worker }}"
+          UPSCALE="${{ needs.changes.outputs.upscale_worker }}"
 
           # If shared changed, everything that imports shared must rebuild
           if [ "${SHARED}" = "true" ]; then
@@ -91,6 +98,9 @@ jobs:
             ORCH=true
             BILLING=true
             AML=true
+            BG_REMOVAL=true
+            SCENE=true
+            UPSCALE=true
           fi
 
           echo "build_web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
@@ -98,6 +108,9 @@ jobs:
           echo "build_orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
           echo "build_billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "build_aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
+          echo "build_bg_removal_worker=${BG_REMOVAL}" >> "$GITHUB_OUTPUT"
+          echo "build_scene_worker=${SCENE}" >> "$GITHUB_OUTPUT"
+          echo "build_upscale_worker=${UPSCALE}" >> "$GITHUB_OUTPUT"
 
           echo "Will build:"
           echo "  web_api=${WEB_API}"
@@ -105,6 +118,9 @@ jobs:
           echo "  orchestrator=${ORCH}"
           echo "  billing_service=${BILLING}"
           echo "  aml_sd_stub=${AML}"
+          echo "  bg_removal_worker=${BG_REMOVAL}"
+          echo "  scene_worker=${SCENE}"
+          echo "  upscale_worker=${UPSCALE}"
 
       - name: Discover ACR in Azure
         run: |
@@ -157,6 +173,18 @@ jobs:
             build_push "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}" "src/aml_sd_stub/Dockerfile"
           fi
 
+          if [ "${{ steps.decide.outputs.build_bg_removal_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" "src/bg_removal_worker/Dockerfile"
+          fi
+
+          if [ "${{ steps.decide.outputs.build_scene_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" "src/scene_worker/Dockerfile"
+          fi
+
+          if [ "${{ steps.decide.outputs.build_upscale_worker }}" = "true" ]; then
+            build_push "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" "src/upscale_worker/Dockerfile"
+          fi
+
       - name: Summary
         run: |
           echo "Pushed tags:"
@@ -165,3 +193,6 @@ jobs:
           echo "  ${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
           echo "  ${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
           echo "  ${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}"
+          echo "  ${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}"

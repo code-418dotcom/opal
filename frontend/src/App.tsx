@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Upload, Activity, Bug, Image as ImageIcon } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import DebugConsole from './components/DebugConsole';
 import ResultsGallery from './components/ResultsGallery';
+import { api } from './api';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -18,7 +19,7 @@ const queryClient = new QueryClient({
 
 type Tab = 'upload' | 'monitor' | 'debug' | 'results';
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
     // Restore job ID from localStorage
@@ -38,8 +39,15 @@ function App() {
     { id: 'results' as Tab, label: 'Results', icon: ImageIcon },
   ];
 
+  const { data: health } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => api.checkHealth(),
+    refetchInterval: 30000,
+  });
+
+  const isHealthy = health?.status === 'ok';
+
   return (
-    <QueryClientProvider client={queryClient}>
       <div className="app">
         <header className="header">
           <div className="container">
@@ -51,7 +59,7 @@ function App() {
               </h1>
               <div className="header-info">
                 <span className="api-status">
-                  <span className="status-dot"></span>
+                  <span className={`status-dot ${isHealthy ? '' : 'status-dot-error'}`}></span>
                   API: {import.meta.env.VITE_API_URL || 'http://localhost:8080'}
                 </span>
               </div>
@@ -97,6 +105,13 @@ function App() {
           </div>
         </footer>
       </div>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
     </QueryClientProvider>
   );
 }

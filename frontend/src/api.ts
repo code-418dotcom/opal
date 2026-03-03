@@ -260,7 +260,7 @@ class ApiClient {
     try {
       return await this.request<{ status: string }>(endpoint);
     } catch {
-      return { status: 'ok' }; // Fallback
+      return { status: 'error' };
     }
   }
 }

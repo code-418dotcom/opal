@@ -4,6 +4,53 @@ import { Image as ImageIcon, Download, ExternalLink, Loader, AlertCircle } from 
 import { api } from '../api';
 import type { Job } from '../types';
 
+function ResultImage({ itemId }: { itemId: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getDownloadUrl(itemId, 'outputs')
+      .then((url) => {
+        if (!cancelled) setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [itemId]);
+
+  if (loading) {
+    return (
+      <div className="result-placeholder">
+        <Loader className="spinning" size={32} />
+      </div>
+    );
+  }
+
+  if (error || !src) {
+    return (
+      <div className="result-placeholder">
+        <ImageIcon size={48} />
+        <p>Preview unavailable</p>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className="result-image"
+      src={src}
+      alt="Processed result"
+      onError={() => setError(true)}
+    />
+  );
+}
+
 interface Props {
   jobId: string | null;
 }
@@ -70,13 +117,7 @@ export default function ResultsGallery({ jobId: initialJobId }: Props) {
           {completedItems.map((item) => (
             <div key={item.item_id} className="result-card">
               <div className="result-preview">
-                <div className="result-placeholder">
-                  <ImageIcon size={48} />
-                  <p>Image Preview</p>
-                  <span className="hint">
-                    Output available at: {item.output_blob_path}
-                  </span>
-                </div>
+                <ResultImage itemId={item.item_id} />
               </div>
 
               <div className="result-info">

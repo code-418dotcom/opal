@@ -48,8 +48,8 @@ jobs:
         env:
           # Azure Backend Configuration
           VITE_BACKEND_TYPE: azure
-          VITE_API_URL: https://opal-web-api-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io
-          VITE_API_KEY: dev_testkey123
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
