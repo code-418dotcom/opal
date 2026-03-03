@@ -240,39 +240,9 @@ jobs:
             build_push "opal/upscale-worker" "src/upscale_worker/Dockerfile"
           fi
 
-      - name: Create/Update Container Apps (only affected apps)
+      - name: Ensure Container Apps exist with correct RBAC (Phase 1)
         run: |
           set -euo pipefail
-
-          wait_ready () {
-            local NAME="$1"
-            local MAX="${2:-60}"
-            local SLEEP="${3:-5}"
-
-            echo "Waiting for ${NAME} to be ready (provisioningState=Succeeded)..."
-            for i in $(seq 1 "${MAX}"); do
-              local STATE
-              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv 2>/dev/null || true)
-
-              if [ "${STATE}" = "Succeeded" ]; then
-                echo "${NAME} is ready."
-                return 0
-              fi
-
-              if [ "${STATE}" = "Failed" ]; then
-                echo "ERROR: ${NAME} provisioningState=Failed"
-                az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
-                return 1
-              fi
-
-              echo "  ${NAME}: provisioningState=${STATE:-<none>} (attempt ${i}/${MAX})"
-              sleep "${SLEEP}"
-            done
-
-            echo "ERROR: Timeout waiting for ${NAME} to reach provisioningState=Succeeded"
-            az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
-            return 1
-          }
 
           DB_USER="opaladmin"
           DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
@@ -301,10 +271,16 @@ jobs:
 
           ensure_identity () {
             local NAME="$1"
+            # Check if identity is already assigned before doing anything
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+            if [ -n "${PID}" ]; then
+              echo "Identity already exists for ${NAME}: ${PID}"
+              return 0
+            fi
             az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
             # Poll until principalId is visible — ARM can take ~30s to propagate a new identity
             for i in $(seq 1 12); do
-              local PID
               PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
               if [ -n "${PID}" ]; then
                 echo "Identity confirmed for ${NAME}: ${PID}"
@@ -324,20 +300,50 @@ jobs:
 
             local PID
             PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
-            [ -n "${PID}" ] || (echo "ERROR: No principalId for ${NAME}"; exit 1)
+            [ -n "${PID}" ] || { echo "ERROR: No principalId for ${NAME}"; return 1; }
 
+            # Check if role is already assigned — skip if so
+            local COUNT
+            COUNT=$(az role assignment list \
+              --scope "${SCOPE}" \
+              --query "[?principalId=='${PID}' && roleDefinitionName=='${ROLE}'] | length(@)" \
+              -o tsv 2>/dev/null || echo "0")
+            if [ "${COUNT:-0}" -gt 0 ]; then
+              echo "Role '${ROLE}' already assigned to ${NAME}"
+              return 0
+            fi
+
+            echo "Assigning role '${ROLE}' to ${NAME} (${PID})..."
             # Use --assignee-object-id + --assignee-principal-type to bypass Azure AD graph
             # lookup. Without this, the lookup for a freshly-created managed identity can
             # fail silently, leaving the role unassigned.
-            az role assignment create \
+            if ! az role assignment create \
               --assignee-object-id "${PID}" \
               --assignee-principal-type ServicePrincipal \
               --role "${ROLE}" \
-              --scope "${SCOPE}" >/dev/null 2>&1 || true
+              --scope "${SCOPE}" >/dev/null 2>&1; then
+              echo "WARNING: Failed to assign role '${ROLE}' to ${NAME} — will retry once after 10s"
+              sleep 10
+              az role assignment create \
+                --assignee-object-id "${PID}" \
+                --assignee-principal-type ServicePrincipal \
+                --role "${ROLE}" \
+                --scope "${SCOPE}" >/dev/null 2>&1 || { echo "ERROR: Role assignment '${ROLE}' failed for ${NAME}"; return 1; }
+            fi
+            echo "Role '${ROLE}' assigned to ${NAME}"
           }
 
           ensure_registry_binding () {
             local NAME="$1"
+            # Check if registry is already bound
+            local EXISTING
+            EXISTING=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" \
+              --query "properties.configuration.registries[?server=='${ACR_LOGIN}'].identity | [0]" \
+              -o tsv 2>/dev/null || echo "")
+            if [ "${EXISTING}" = "system" ] || [ "${EXISTING}" = "SystemAssigned" ]; then
+              echo "Registry already bound for ${NAME}"
+              return 0
+            fi
             echo "Binding registry for ${NAME}..."
             for attempt in 1 2 3; do
               az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
@@ -359,23 +365,30 @@ jobs:
             local NAME="$1"
             local PID
             PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
-            echo "Polling until AcrPull is visible in ARM for ${NAME} (max 5 min)..."
-            for i in $(seq 1 30); do
-              # Filter by principalId in JMESPath rather than using --assignee, which
-              # triggers an Azure AD graph lookup that is unreliable for managed identities.
+            # Quick check — if AcrPull is already visible, skip the polling loop entirely
+            COUNT=$(az role assignment list \
+              --scope "${ACR_ID}" \
+              --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
+              -o tsv 2>/dev/null || echo "0")
+            if [ "${COUNT:-0}" -gt 0 ]; then
+              echo "AcrPull already confirmed for ${NAME} — skipping wait"
+              return 0
+            fi
+            echo "Polling until AcrPull is visible in ARM for ${NAME} (max 2 min)..."
+            for i in $(seq 1 12); do
               COUNT=$(az role assignment list \
                 --scope "${ACR_ID}" \
                 --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
                 -o tsv 2>/dev/null || echo "0")
               if [ "${COUNT:-0}" -gt 0 ]; then
-                echo "AcrPull confirmed in ARM (attempt ${i}). Waiting 20s for enforcement to catch up..."
-                sleep 20
+                echo "AcrPull confirmed in ARM (attempt ${i}). Waiting 10s for enforcement..."
+                sleep 10
                 return 0
               fi
-              echo "  AcrPull not yet visible (${i}/30), waiting 10s..."
+              echo "  AcrPull not yet visible (${i}/12), waiting 10s..."
               sleep 10
             done
-            echo "WARNING: AcrPull not confirmed after 5 min — proceeding anyway"
+            echo "WARNING: AcrPull not confirmed after 2 min — proceeding anyway"
           }
 
           ensure_ingress () {
@@ -449,17 +462,6 @@ jobs:
             ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
           }
 
-          deploy_image () {
-            local NAME="$1"
-            local IMAGE="$2"
-            local MAX="${3:-60}"   # allow callers to pass a larger timeout
-            echo "Deploying ${NAME} -> ${IMAGE}"
-            az containerapp update -g "${RG_NAME}" -n "${NAME}" \
-              --image "${IMAGE}" \
-              --set-env-vars "${ENV_VARS[@]}" >/dev/null
-            wait_ready "${NAME}" "${MAX}"
-          }
-
           WEB="opal-web-api-${ENV_NAME}"
           BILL="opal-billing-service-${ENV_NAME}"
           ORCH="opal-orchestrator-${ENV_NAME}"
@@ -478,6 +480,91 @@ jobs:
           ensure_app_exists "${BG_REMOVAL_APP}" "none"   0
           ensure_app_exists "${SCENE_APP}"    "none"     0
           ensure_app_exists "${UPSCALE_APP}"  "none"     0
+
+          echo "Phase 1 complete — all apps exist with correct RBAC."
+
+      - name: Azure Login (refresh for Phase 2)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy images (only affected apps)
+        run: |
+          set -euo pipefail
+
+          wait_ready () {
+            local NAME="$1"
+            local MAX="${2:-60}"
+            local SLEEP="${3:-5}"
+
+            echo "Waiting for ${NAME} to be ready (provisioningState=Succeeded)..."
+            for i in $(seq 1 "${MAX}"); do
+              local STATE
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv 2>/dev/null || true)
+
+              if [ "${STATE}" = "Succeeded" ]; then
+                echo "${NAME} is ready."
+                return 0
+              fi
+
+              if [ "${STATE}" = "Failed" ]; then
+                echo "ERROR: ${NAME} provisioningState=Failed"
+                az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
+                return 1
+              fi
+
+              echo "  ${NAME}: provisioningState=${STATE:-<none>} (attempt ${i}/${MAX})"
+              sleep "${SLEEP}"
+            done
+
+            echo "ERROR: Timeout waiting for ${NAME} to reach provisioningState=Succeeded"
+            az containerapp show -g "${RG_NAME}" -n "${NAME}" -o jsonc || true
+            return 1
+          }
+
+          DB_USER="opaladmin"
+          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
+          DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
+
+          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
+          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
+
+          BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}"
+          IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}"
+          FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
+
+          ENV_VARS=(
+            "ENV_NAME=${ENV_NAME}"
+            "DATABASE_URL=${DATABASE_URL}"
+            "STORAGE_ACCOUNT_NAME=${STORAGE}"
+            "SERVICEBUS_NAMESPACE=${SB}"
+            "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
+            "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
+            "BACKGROUND_REMOVAL_PROVIDER=${BACKGROUND_REMOVAL_PROVIDER}"
+            "IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER}"
+            "FAL_API_KEY=${FAL_API_KEY}"
+          )
+
+          deploy_image () {
+            local NAME="$1"
+            local IMAGE="$2"
+            local MAX="${3:-60}"
+            echo "Deploying ${NAME} -> ${IMAGE}"
+            az containerapp update -g "${RG_NAME}" -n "${NAME}" \
+              --image "${IMAGE}" \
+              --set-env-vars "${ENV_VARS[@]}" >/dev/null
+            wait_ready "${NAME}" "${MAX}"
+          }
+
+          WEB="opal-web-api-${ENV_NAME}"
+          BILL="opal-billing-service-${ENV_NAME}"
+          ORCH="opal-orchestrator-${ENV_NAME}"
+          EXPORT="opal-export-worker-${ENV_NAME}"
+          BG_REMOVAL_APP="opal-bg-removal-worker-${ENV_NAME}"
+          SCENE_APP="opal-scene-worker-${ENV_NAME}"
+          UPSCALE_APP="opal-upscale-worker-${ENV_NAME}"
 
           # Phase 2: deploy images — only for services where a build was triggered.
           # Large ML-worker images (bg-removal, scene, upscale) use a 20-min timeout
@@ -503,6 +590,7 @@ jobs:
           [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ] && \
             deploy_image "${UPSCALE_APP}" "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" 240
 
+          echo "Phase 2 complete — all deployments done."
 
       - name: Print Web API URL
         run: |
