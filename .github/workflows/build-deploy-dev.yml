@@ -477,18 +477,206 @@ jobs:
           SCENE_APP="opal-scene-worker-${ENV_NAME}"
           UPSCALE_APP="opal-upscale-worker-${ENV_NAME}"
 
-          # Phase 1: ensure every app exists with correct RBAC (always idempotent).
-          # This is decoupled from image deployment so a workflow-only push never
-          # tries to pull a SHA-tagged image that was never built.
+          # Phase 1a: ensure first batch of apps exist with correct RBAC.
+          # Split into two batches because OIDC tokens expire (~5 min) and
+          # processing 7 apps with multiple role assignments takes longer.
           ensure_app_exists "${WEB}"          "external" 8080
           ensure_app_exists "${BILL}"         "external" 8080
           ensure_app_exists "${ORCH}"         "internal" 8080
           ensure_app_exists "${EXPORT}"       "none"     0
+
+          echo "Phase 1a complete — first 4 apps done."
+
+      - name: Azure Login (refresh for Phase 1b)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure remaining Container Apps exist with correct RBAC (Phase 1b)
+        run: |
+          set -euo pipefail
+
+          # Re-discover infra vars (env context doesn't persist across steps for inline vars)
+          ACR_ID=$(az acr show -n "${ACR_NAME}" -g "${RG_NAME}" --query "id" -o tsv)
+          SB_ID=$(az servicebus namespace show -g "${RG_NAME}" -n "${SB}" --query id -o tsv)
+
+          # Paste the same helper functions — they're shell functions scoped to the step
+          ensure_identity () {
+            local NAME="$1"
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+            if [ -n "${PID}" ]; then
+              echo "Identity already exists for ${NAME}: ${PID}"
+              return 0
+            fi
+            az containerapp identity assign -g "${RG_NAME}" -n "${NAME}" --system-assigned >/dev/null || true
+            for i in $(seq 1 12); do
+              PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+              if [ -n "${PID}" ]; then
+                echo "Identity confirmed for ${NAME}: ${PID}"
+                return 0
+              fi
+              echo "  Waiting for identity on ${NAME} (${i}/12)..."
+              sleep 5
+            done
+            echo "ERROR: System identity not confirmed for ${NAME} after 60s"
+            return 1
+          }
+
+          ensure_role () {
+            local NAME="$1"
+            local SCOPE="$2"
+            local ROLE="$3"
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            [ -n "${PID}" ] || { echo "ERROR: No principalId for ${NAME}"; return 1; }
+            local COUNT
+            COUNT=$(az role assignment list \
+              --scope "${SCOPE}" \
+              --query "[?principalId=='${PID}' && roleDefinitionName=='${ROLE}'] | length(@)" \
+              -o tsv 2>/dev/null || echo "0")
+            if [ "${COUNT:-0}" -gt 0 ]; then
+              echo "Role '${ROLE}' already assigned to ${NAME}"
+              return 0
+            fi
+            echo "Assigning role '${ROLE}' to ${NAME} (${PID})..."
+            if ! az role assignment create \
+              --assignee-object-id "${PID}" \
+              --assignee-principal-type ServicePrincipal \
+              --role "${ROLE}" \
+              --scope "${SCOPE}" >/dev/null 2>&1; then
+              echo "WARNING: Failed to assign role '${ROLE}' to ${NAME} — will retry once after 10s"
+              sleep 10
+              az role assignment create \
+                --assignee-object-id "${PID}" \
+                --assignee-principal-type ServicePrincipal \
+                --role "${ROLE}" \
+                --scope "${SCOPE}" >/dev/null 2>&1 || { echo "ERROR: Role assignment '${ROLE}' failed for ${NAME}"; return 1; }
+            fi
+            echo "Role '${ROLE}' assigned to ${NAME}"
+          }
+
+          ensure_registry_binding () {
+            local NAME="$1"
+            local EXISTING
+            EXISTING=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" \
+              --query "properties.configuration.registries[?server=='${ACR_LOGIN}'].identity | [0]" \
+              -o tsv 2>/dev/null || echo "")
+            if [ "${EXISTING}" = "system" ] || [ "${EXISTING}" = "SystemAssigned" ]; then
+              echo "Registry already bound for ${NAME}"
+              return 0
+            fi
+            echo "Binding registry for ${NAME}..."
+            for attempt in 1 2 3; do
+              az containerapp registry set -g "${RG_NAME}" -n "${NAME}" \
+                --server "${ACR_LOGIN}" --identity system >/dev/null 2>&1 || true
+              sleep 15
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" \
+                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
+              if [ "${STATE}" != "Failed" ]; then
+                echo "Registry bound for ${NAME} (state: ${STATE})"
+                return 0
+              fi
+              echo "  Registry binding attempt ${attempt}/3 left app in Failed state; waiting 30s before retry..."
+              sleep 30
+            done
+            echo "WARNING: Registry binding unstable after 3 attempts — proceeding"
+          }
+
+          wait_for_acr_pull () {
+            local NAME="$1"
+            local PID
+            PID=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "identity.principalId" -o tsv)
+            COUNT=$(az role assignment list \
+              --scope "${ACR_ID}" \
+              --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
+              -o tsv 2>/dev/null || echo "0")
+            if [ "${COUNT:-0}" -gt 0 ]; then
+              echo "AcrPull already confirmed for ${NAME} — skipping wait"
+              return 0
+            fi
+            echo "Polling until AcrPull is visible in ARM for ${NAME} (max 2 min)..."
+            for i in $(seq 1 12); do
+              COUNT=$(az role assignment list \
+                --scope "${ACR_ID}" \
+                --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
+                -o tsv 2>/dev/null || echo "0")
+              if [ "${COUNT:-0}" -gt 0 ]; then
+                echo "AcrPull confirmed in ARM (attempt ${i}). Waiting 10s for enforcement..."
+                sleep 10
+                return 0
+              fi
+              echo "  AcrPull not yet visible (${i}/12), waiting 10s..."
+              sleep 10
+            done
+            echo "WARNING: AcrPull not confirmed after 2 min — proceeding anyway"
+          }
+
+          ensure_ingress () {
+            local NAME="$1"
+            local MODE="$2"
+            local PORT="$3"
+            if [ "${MODE}" = "none" ]; then
+              return 0
+            fi
+            az containerapp ingress enable -g "${RG_NAME}" -n "${NAME}" \
+              --type "${MODE}" --target-port "${PORT}" --transport auto >/dev/null 2>&1 || true
+            sleep 5
+            az containerapp ingress update -g "${RG_NAME}" -n "${NAME}" \
+              --type "${MODE}" --target-port "${PORT}" >/dev/null 2>&1 || true
+            sleep 5
+          }
+
+          ensure_app_exists () {
+            local NAME="$1"
+            local INGRESS="$2"
+            local PORT="$3"
+            local PLACEHOLDER_IMAGE="mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+
+            if az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
+              STATE=$(az containerapp show -g "${RG_NAME}" -n "${NAME}" --query "properties.provisioningState" -o tsv || true)
+              echo "App exists: ${NAME} (state: ${STATE})"
+              if [ "${STATE}" = "Failed" ]; then
+                echo "App is Failed -> deleting so it can be recreated cleanly..."
+                az containerapp delete -g "${RG_NAME}" -n "${NAME}" --yes
+              fi
+            fi
+
+            if ! az containerapp show -g "${RG_NAME}" -n "${NAME}" >/dev/null 2>&1; then
+              echo "Creating ${NAME} with placeholder image..."
+              az containerapp create -g "${RG_NAME}" -n "${NAME}" \
+                --environment "${CAE}" \
+                --image "${PLACEHOLDER_IMAGE}" \
+                --min-replicas 1 --max-replicas 3 >/dev/null
+              sleep 5
+            fi
+
+            ensure_identity "${NAME}"
+            ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
+            wait_for_acr_pull "${NAME}"
+            ensure_registry_binding "${NAME}"
+
+            STORAGE_ID=$(az storage account show -g "${RG_NAME}" -n "${STORAGE}" --query id -o tsv)
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Delegator"
+
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
+
+            ensure_ingress "${NAME}" "${INGRESS}" "${PORT}"
+          }
+
+          BG_REMOVAL_APP="opal-bg-removal-worker-${ENV_NAME}"
+          SCENE_APP="opal-scene-worker-${ENV_NAME}"
+          UPSCALE_APP="opal-upscale-worker-${ENV_NAME}"
+
           ensure_app_exists "${BG_REMOVAL_APP}" "none"   0
           ensure_app_exists "${SCENE_APP}"    "none"     0
           ensure_app_exists "${UPSCALE_APP}"  "none"     0
 
-          echo "Phase 1 complete — all apps exist with correct RBAC."
+          echo "Phase 1b complete — all apps exist with correct RBAC."
 
       - name: Azure Login (refresh for Phase 2)
         uses: azure/login@v2
