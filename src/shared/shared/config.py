@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     AML_ENDPOINT_URL: str | None = None
     AML_ENDPOINT_KEY: str | None = None
 
+    # CORS
+    CORS_ALLOWED_ORIGINS: str = Field(
+        default="https://dev.opaloptics.com,https://ambitious-smoke-04d5b1703.1.azurestaticapps.net,http://localhost:5173",
+        env="CORS_ALLOWED_ORIGINS",
+    )
+
     # App behavior
     LOG_LEVEL: str = "INFO"
 

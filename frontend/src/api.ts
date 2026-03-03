@@ -34,12 +34,14 @@ const BASE_URL = BACKEND_TYPE === 'azure'
   ? API_URL
   : `${SUPABASE_URL}/functions/v1`;
 
-console.log('[API Client] Configuration:', {
-  backendType: BACKEND_TYPE,
-  baseUrl: BASE_URL,
-  hasApiKey: !!API_KEY,
-  hasSupabaseKey: !!SUPABASE_ANON_KEY
-});
+if (import.meta.env.DEV) {
+  console.log('[API Client] Configuration:', {
+    backendType: BACKEND_TYPE,
+    baseUrl: BASE_URL,
+    hasApiKey: !!API_KEY,
+    hasSupabaseKey: !!SUPABASE_ANON_KEY
+  });
+}
 
 class ApiClient {
   private baseUrl: string;

@@ -19,6 +19,7 @@ from shared.servicebus import (
     send_upscale_message,
 )
 from shared.pipeline import PipelineMessage, ProcessingOptions, finalize_job_status
+from shared.db_sqlalchemy import get_brand_profile, get_job_by_id as get_job_record
 from shared.util import new_id
 
 LOG = logging.getLogger(__name__)
@@ -126,6 +127,23 @@ def process_message(data: dict) -> None:
         item.status = ItemStatus.processing
         s.commit()
 
+    # Build scene prompt from brand profile
+    scene_prompt = None
+    job_record = get_job_record(job_id, tenant_id)
+    if job_record and job_record.get("brand_profile_id") and job_record["brand_profile_id"] != "default":
+        bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
+        if bp:
+            parts = []
+            if bp.get("default_scene_prompt"):
+                parts.append(bp["default_scene_prompt"])
+            if bp.get("style_keywords"):
+                parts.append(", ".join(bp["style_keywords"]))
+            if bp.get("mood"):
+                parts.append(bp["mood"])
+            parts.append("photorealistic, high quality")
+            scene_prompt = ", ".join(parts)
+            LOG.info("Brand prompt for job=%s: %s", job_id, scene_prompt)
+
     msg = PipelineMessage(
         job_id=job_id,
         item_id=item_id,
@@ -133,6 +151,7 @@ def process_message(data: dict) -> None:
         correlation_id=correlation_id,
         raw_blob_path=raw_blob_path,
         processing_options=opts,
+        scene_prompt=scene_prompt,
     )
 
     if opts.remove_background:

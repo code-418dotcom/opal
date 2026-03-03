@@ -137,8 +137,10 @@ def process_message(data: dict) -> None:
 
     if opts.generate_scene and img_gen_provider:
         LOG.info('Generating scene with %s: %s', img_gen_provider.name, msg.item_id)
-        prompt = ("modern minimalist living room, bright natural lighting, "
-                  "wooden floor, white walls, plants, photorealistic, high quality")
+        prompt = msg.scene_prompt or (
+            "modern minimalist living room, bright natural lighting, "
+            "wooden floor, white walls, plants, photorealistic, high quality"
+        )
         scene_bytes = img_gen_provider.generate(prompt)
         composited_bytes = composite_product_on_scene(product_bytes, scene_bytes)
 

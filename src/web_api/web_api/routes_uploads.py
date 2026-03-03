@@ -105,10 +105,8 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
     update_job_item(body.item_id, {"status": "uploaded"})
 
     # Send message to queue to trigger processing
-    print(f"[UPLOAD_COMPLETE] job_id={body.job_id} item_id={body.item_id} tenant_id={tenant_id}", flush=True)
-    LOG.info(f"Sending queue message for job_id={body.job_id} item_id={body.item_id}")
+    LOG.info("Upload complete: job_id=%s item_id=%s tenant_id=%s", body.job_id, body.item_id, tenant_id)
     try:
-        print(f"[CALLING_SEND_JOB_MESSAGE] About to call send_job_message", flush=True)
         send_job_message({
             "tenant_id": tenant_id,
             "job_id": body.job_id,
@@ -116,11 +114,9 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
             "correlation_id": job["correlation_id"],
             "processing_options": body.processing_options.model_dump(),
         })
-        print(f"[SEND_COMPLETE] Queue message sent successfully for job_id={body.job_id}", flush=True)
-        LOG.info(f"Queue message sent successfully for job_id={body.job_id}")
+        LOG.info("Queue message sent successfully for job_id=%s", body.job_id)
     except Exception as e:
-        print(f"[SEND_FAILED] Error: {e}", flush=True)
-        LOG.error(f"Failed to send queue message: {e}", exc_info=True)
+        LOG.error("Failed to send queue message: %s", e, exc_info=True)
         # Don't fail the request - upload is complete even if queueing fails
 
     return {"ok": True}

@@ -5,7 +5,7 @@ For Azure deployment - replaces db_supabase.py functionality.
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from .db import SessionLocal
-from .models import Job, JobItem, JobStatus, ItemStatus
+from .models import Job, JobItem, JobStatus, ItemStatus, BrandProfile
 from datetime import datetime
 import logging
 
@@ -22,6 +22,7 @@ def create_job_record(job_data: Dict[str, Any]) -> Dict[str, Any]:
             correlation_id=job_data["correlation_id"],
             status=JobStatus(job_data.get("status", "created")),
             processing_options=job_data.get("processing_options"),
+            callback_url=job_data.get("callback_url"),
             created_at=job_data.get("created_at", datetime.utcnow()),
             updated_at=job_data.get("updated_at", datetime.utcnow()),
         )
@@ -37,6 +38,7 @@ def create_job_record(job_data: Dict[str, Any]) -> Dict[str, Any]:
             "correlation_id": job.correlation_id,
             "status": job.status.value,
             "processing_options": job.processing_options,
+            "callback_url": job.callback_url,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }
@@ -99,6 +101,7 @@ def get_job_by_id(job_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
             "correlation_id": job.correlation_id,
             "status": job.status.value,
             "processing_options": job.processing_options,
+            "callback_url": job.callback_url,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }
@@ -176,3 +179,121 @@ def update_job_item(item_id: str, updates: Dict[str, Any]) -> None:
 
             item.updated_at = datetime.utcnow()
             session.commit()
+
+
+# ── Brand Profile CRUD ──────────────────────────────────────────────
+
+def _brand_profile_to_dict(bp: BrandProfile) -> Dict[str, Any]:
+    return {
+        "id": bp.id,
+        "tenant_id": bp.tenant_id,
+        "name": bp.name,
+        "default_scene_prompt": bp.default_scene_prompt,
+        "style_keywords": bp.style_keywords or [],
+        "color_palette": bp.color_palette or [],
+        "mood": bp.mood,
+        "created_at": bp.created_at.isoformat() if bp.created_at else None,
+        "updated_at": bp.updated_at.isoformat() if bp.updated_at else None,
+    }
+
+
+def get_brand_profile(profile_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
+    """Get a brand profile by ID, scoped to tenant."""
+    with SessionLocal() as session:
+        bp = session.query(BrandProfile).filter(
+            BrandProfile.id == profile_id,
+            BrandProfile.tenant_id == tenant_id,
+        ).first()
+        return _brand_profile_to_dict(bp) if bp else None
+
+
+def list_brand_profiles(tenant_id: str) -> List[Dict[str, Any]]:
+    """List all brand profiles for a tenant."""
+    with SessionLocal() as session:
+        profiles = session.query(BrandProfile).filter(
+            BrandProfile.tenant_id == tenant_id
+        ).order_by(BrandProfile.created_at.desc()).all()
+        return [_brand_profile_to_dict(bp) for bp in profiles]
+
+
+def create_brand_profile(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new brand profile."""
+    with SessionLocal() as session:
+        bp = BrandProfile(
+            id=data["id"],
+            tenant_id=data["tenant_id"],
+            name=data["name"],
+            default_scene_prompt=data.get("default_scene_prompt"),
+            style_keywords=data.get("style_keywords"),
+            color_palette=data.get("color_palette"),
+            mood=data.get("mood"),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(bp)
+        session.commit()
+        session.refresh(bp)
+        return _brand_profile_to_dict(bp)
+
+
+def update_brand_profile(profile_id: str, tenant_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update a brand profile. Returns updated dict or None if not found."""
+    with SessionLocal() as session:
+        bp = session.query(BrandProfile).filter(
+            BrandProfile.id == profile_id,
+            BrandProfile.tenant_id == tenant_id,
+        ).first()
+        if not bp:
+            return None
+        for field in ("name", "default_scene_prompt", "style_keywords", "color_palette", "mood"):
+            if field in updates:
+                setattr(bp, field, updates[field])
+        bp.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(bp)
+        return _brand_profile_to_dict(bp)
+
+
+def delete_brand_profile(profile_id: str, tenant_id: str) -> bool:
+    """Delete a brand profile. Returns True if deleted."""
+    with SessionLocal() as session:
+        bp = session.query(BrandProfile).filter(
+            BrandProfile.id == profile_id,
+            BrandProfile.tenant_id == tenant_id,
+        ).first()
+        if not bp:
+            return False
+        session.delete(bp)
+        session.commit()
+        return True
+
+
+# ── Job listing ──────────────────────────────────────────────────────
+
+def list_jobs(
+    tenant_id: str,
+    status: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """List jobs for a tenant with optional status filter and pagination."""
+    with SessionLocal() as session:
+        q = session.query(Job).filter(Job.tenant_id == tenant_id)
+        if status:
+            q = q.filter(Job.status == JobStatus(status))
+        q = q.order_by(Job.created_at.desc()).offset(offset).limit(limit)
+        return [
+            {
+                "id": job.id,
+                "job_id": job.id,
+                "tenant_id": job.tenant_id,
+                "brand_profile_id": job.brand_profile_id,
+                "correlation_id": job.correlation_id,
+                "status": job.status.value,
+                "processing_options": job.processing_options,
+                "callback_url": job.callback_url,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            }
+            for job in q.all()
+        ]

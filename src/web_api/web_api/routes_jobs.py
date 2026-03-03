@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 from shared.db_sqlalchemy import (
     create_job_record,
@@ -6,6 +7,8 @@ from shared.db_sqlalchemy import (
     get_job_by_id,
     get_job_items,
     update_job_status,
+    list_jobs,
+    get_brand_profile,
 )
 from shared.util import new_id, new_correlation_id
 from shared.queue_unified import send_job_message
@@ -29,10 +32,17 @@ class CreateJobIn(BaseModel):
     brand_profile_id: str = "default"
     items: list[ItemIn] = Field(..., min_length=1, max_length=100)
     processing_options: ProcessingOptions = Field(default_factory=ProcessingOptions)
+    callback_url: str | None = None
 
 
 @router.post("/jobs")
 def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_key)):
+    # Validate brand profile exists (skip for backward-compat "default")
+    if body.brand_profile_id != "default":
+        bp = get_brand_profile(body.brand_profile_id, tenant_id)
+        if not bp:
+            raise HTTPException(status_code=404, detail="Brand profile not found")
+
     job_id = new_id("job")
     corr = new_correlation_id()
 
@@ -44,6 +54,7 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
         "status": "created",
         "correlation_id": corr,
         "processing_options": body.processing_options.model_dump(),
+        "callback_url": body.callback_url,
     }
     create_job_record(job_data)
 
@@ -70,6 +81,17 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
         "items": created_items,
         "processing_options": body.processing_options.model_dump()
     }
+
+
+@router.get("/jobs")
+def list_all_jobs(
+    tenant_id: str = Depends(get_tenant_from_api_key),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    jobs = list_jobs(tenant_id, status=status, limit=limit, offset=offset)
+    return {"jobs": jobs, "limit": limit, "offset": offset}
 
 
 @router.get("/jobs/{job_id}")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -21,6 +21,23 @@ class JobStatus(str, enum.Enum):
     partial = 'partial'
 
 
+class BrandProfile(Base):
+    __tablename__ = 'brand_profiles'
+
+    id = Column(String, primary_key=True, name='id')
+    tenant_id = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    default_scene_prompt = Column(String, nullable=True)
+    style_keywords = Column(ARRAY(String), nullable=True)
+    color_palette = Column(ARRAY(String), nullable=True)
+    mood = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<BrandProfile {self.id} name={self.name}>'
+
+
 class Job(Base):
     __tablename__ = 'jobs'
 
@@ -30,6 +47,7 @@ class Job(Base):
     correlation_id = Column(String, nullable=False, index=True)
     status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.created, index=True)
     processing_options = Column(JSON, nullable=True)
+    callback_url = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

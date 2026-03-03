@@ -50,6 +50,7 @@ class PipelineMessage:
     processing_options: ProcessingOptions = field(default_factory=ProcessingOptions)
     bg_removed_blob_path: Optional[str] = None   # set by bg_removal_worker
     scene_blob_path: Optional[str] = None         # set by scene_worker
+    scene_prompt: Optional[str] = None            # set by orchestrator from brand profile
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "PipelineMessage":
@@ -62,6 +63,7 @@ class PipelineMessage:
             processing_options=ProcessingOptions.from_dict(d.get("processing_options", {})),
             bg_removed_blob_path=d.get("bg_removed_blob_path"),
             scene_blob_path=d.get("scene_blob_path"),
+            scene_prompt=d.get("scene_prompt"),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -74,6 +76,7 @@ class PipelineMessage:
             "processing_options": self.processing_options.to_dict(),
             "bg_removed_blob_path": self.bg_removed_blob_path,
             "scene_blob_path": self.scene_blob_path,
+            "scene_prompt": self.scene_prompt,
         }
 
     @classmethod
@@ -120,9 +123,13 @@ def finalize_job_status(job_id: str) -> None:
     Update overall job status based on all item statuses.
     Call after an item reaches completed or failed.
     Moved from orchestrator so all workers can import it.
+    Fires webhook callback on terminal states (completed/failed/partial).
     """
     from shared.db import SessionLocal
     from shared.models import Job, JobItem, JobStatus, ItemStatus
+
+    callback_url = None
+    new_status = None
 
     with SessionLocal() as s:
         job = s.get(Job, job_id)
@@ -137,15 +144,37 @@ def finalize_job_status(job_id: str) -> None:
         completed = statuses.count(ItemStatus.completed)
         failed = statuses.count(ItemStatus.failed)
         processing = statuses.count(ItemStatus.processing)
+        pending = len(items) - completed - failed - processing  # created/uploaded
 
         if completed == len(items):
             job.status = JobStatus.completed
+            new_status = "completed"
             LOG.info("Job COMPLETED: %s", job_id)
-        elif processing > 0:
+        elif pending > 0 or processing > 0:
             job.status = JobStatus.processing
         elif failed == len(items):
             job.status = JobStatus.failed
+            new_status = "failed"
         elif failed > 0:
             job.status = JobStatus.partial
+            new_status = "partial"
 
         s.commit()
+
+        if new_status and job.callback_url:
+            callback_url = job.callback_url
+
+    if callback_url:
+        _fire_webhook(callback_url, job_id, new_status)
+
+
+def _fire_webhook(url: str, job_id: str, status: str) -> None:
+    """Fire-and-forget webhook POST on job completion. No retries (MVP)."""
+    import httpx
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            client.post(url, json={"job_id": job_id, "status": status})
+        LOG.info("Webhook fired: job=%s status=%s url=%s", job_id, status, url)
+    except Exception as e:
+        LOG.warning("Webhook failed: job=%s url=%s error=%s", job_id, url, e)
