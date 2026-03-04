@@ -1,10 +1,16 @@
+import io
 import json
 import logging
 import time
+import zipfile
+from pathlib import PurePosixPath
 from azure.servicebus import ServiceBusReceiveMode
 
 from shared.config import settings
+from shared.db import SessionLocal
+from shared.models import Job, JobItem, ItemStatus, JobStatus
 from shared.servicebus import get_client
+from shared.storage import download_blob, upload_blob
 
 log = logging.getLogger("export_worker")
 
@@ -21,6 +27,80 @@ def _extract_payload(m) -> dict:
     except Exception:
         pass
     return {"job_id": text}
+
+
+def _build_zip_filename(item: JobItem) -> str:
+    """Build a descriptive filename for the ZIP entry."""
+    stem = PurePosixPath(item.filename).stem
+    suffix = PurePosixPath(item.filename).suffix or ".png"
+
+    if item.scene_index is not None:
+        label = item.scene_type or f"scene{item.scene_index}"
+        return f"{stem}_{label}{suffix}"
+    return f"{stem}{suffix}"
+
+
+def process_export(job_id: str, tenant_id: str) -> None:
+    """Build a ZIP of all completed items for a job."""
+    with SessionLocal() as s:
+        job = s.get(Job, job_id)
+        if not job:
+            log.warning("Job not found: %s", job_id)
+            return
+
+        # Idempotent: already exported
+        if job.export_blob_path:
+            log.info("Export already exists for job=%s at %s", job_id, job.export_blob_path)
+            return
+
+        items = list(job.items)
+        terminal = [it for it in items if it.status in (ItemStatus.completed, ItemStatus.failed)]
+
+        if len(terminal) < len(items):
+            log.info("Job %s not fully done (%d/%d terminal), skipping export",
+                     job_id, len(terminal), len(items))
+            return
+
+        completed = [it for it in items if it.status == ItemStatus.completed and it.output_blob_path]
+        if not completed:
+            log.warning("Job %s has no completed items with output paths", job_id)
+            return
+
+        # Build ZIP in memory
+        buf = io.BytesIO()
+        used_names: dict[str, int] = {}
+
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in completed:
+                try:
+                    data = download_blob("outputs", item.output_blob_path)
+                except Exception as e:
+                    log.error("Failed to download blob for item=%s: %s", item.id, e)
+                    continue
+
+                name = _build_zip_filename(item)
+                # Deduplicate filenames
+                if name in used_names:
+                    used_names[name] += 1
+                    stem = PurePosixPath(name).stem
+                    suffix = PurePosixPath(name).suffix
+                    name = f"{stem}_{used_names[name]}{suffix}"
+                else:
+                    used_names[name] = 0
+
+                zf.writestr(name, data)
+                log.info("Added to ZIP: %s (%d bytes)", name, len(data))
+
+        zip_bytes = buf.getvalue()
+        export_path = f"{tenant_id}/jobs/{job_id}/export.zip"
+
+        upload_blob("exports", export_path, zip_bytes, content_type="application/zip")
+        log.info("Uploaded export ZIP for job=%s: %s (%d bytes)", job_id, export_path, len(zip_bytes))
+
+        # Update job record
+        job.export_blob_path = export_path
+        s.commit()
+        log.info("Job %s export_blob_path set to %s", job_id, export_path)
 
 
 def main():
@@ -49,10 +129,9 @@ def main():
                                 receiver.complete_message(m)
                                 continue
 
-                            # TODO: Option A “truth”: load job from DB and do real work here
                             log.info("Processing export for job_id=%s tenant_id=%s", job_id, tenant_id)
+                            process_export(job_id, tenant_id or "default")
 
-                            # Stub: complete
                             receiver.complete_message(m)
                             log.info("Completed export message for job_id=%s", job_id)
 

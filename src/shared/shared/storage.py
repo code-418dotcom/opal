@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions, ContentSettings
 from .config import settings
 
 
@@ -79,6 +79,20 @@ def generate_write_sas(container: str, blob_path: str, expiry_minutes: int = 30)
         start=start,
     )
     return f"{_account_url()}/{container}/{blob_path}?{sas}"
+
+
+def download_blob(container: str, blob_path: str) -> bytes:
+    """Download a blob's content using managed identity."""
+    client = get_blob_service_client()
+    blob_client = client.get_blob_client(container=container, blob=blob_path)
+    return blob_client.download_blob().readall()
+
+
+def upload_blob(container: str, blob_path: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+    """Upload data to a blob using managed identity."""
+    client = get_blob_service_client()
+    blob_client = client.get_blob_client(container=container, blob=blob_path)
+    blob_client.upload_blob(data, overwrite=True, content_settings=ContentSettings(content_type=content_type))
 
 
 def generate_read_sas(container: str, blob_path: str, expiry_minutes: int = 30) -> str:

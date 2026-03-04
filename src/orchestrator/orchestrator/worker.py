@@ -113,8 +113,8 @@ def process_message(data: dict) -> None:
         if not item:
             LOG.warning('Item not found: %s', item_id)
             return
-        if item.status in (ItemStatus.processing, ItemStatus.completed):
-            LOG.info('Item already %s, skipping: %s', item.status, item_id)
+        if item.status == ItemStatus.completed:
+            LOG.info('Item already completed, skipping: %s', item_id)
             return
         if not item.raw_blob_path:
             LOG.error('Missing raw_blob_path: %s', item_id)
@@ -124,25 +124,48 @@ def process_message(data: dict) -> None:
             return
 
         raw_blob_path = item.raw_blob_path
+        item_scene_prompt = item.scene_prompt
+        item_scene_type = item.scene_type
         item.status = ItemStatus.processing
         s.commit()
 
-    # Build scene prompt from brand profile
+    # Build scene prompt: item.scene_prompt → scene_type lookup → brand profile → default
+    from shared.scene_types import SCENE_PROMPTS
+
     scene_prompt = None
-    job_record = get_job_record(job_id, tenant_id)
-    if job_record and job_record.get("brand_profile_id") and job_record["brand_profile_id"] != "default":
-        bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
-        if bp:
-            parts = []
-            if bp.get("default_scene_prompt"):
-                parts.append(bp["default_scene_prompt"])
-            if bp.get("style_keywords"):
-                parts.append(", ".join(bp["style_keywords"]))
-            if bp.get("mood"):
-                parts.append(bp["mood"])
-            parts.append("photorealistic, high quality")
-            scene_prompt = ", ".join(parts)
-            LOG.info("Brand prompt for job=%s: %s", job_id, scene_prompt)
+
+    if item_scene_prompt:
+        scene_prompt = item_scene_prompt
+        LOG.info("Using item scene_prompt for item=%s: %s", item_id, scene_prompt)
+    elif item_scene_type and item_scene_type in SCENE_PROMPTS:
+        # Use scene type prompt, optionally enhanced by brand profile
+        parts = [SCENE_PROMPTS[item_scene_type]]
+        job_record = get_job_record(job_id, tenant_id)
+        if job_record and job_record.get("brand_profile_id") and job_record["brand_profile_id"] != "default":
+            bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
+            if bp:
+                if bp.get("style_keywords"):
+                    parts.append(", ".join(bp["style_keywords"]))
+                if bp.get("mood"):
+                    parts.append(bp["mood"])
+        parts.append("photorealistic, high quality")
+        scene_prompt = ", ".join(parts)
+        LOG.info("Scene type prompt for item=%s type=%s: %s", item_id, item_scene_type, scene_prompt)
+    else:
+        job_record = get_job_record(job_id, tenant_id)
+        if job_record and job_record.get("brand_profile_id") and job_record["brand_profile_id"] != "default":
+            bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
+            if bp:
+                parts = []
+                if bp.get("default_scene_prompt"):
+                    parts.append(bp["default_scene_prompt"])
+                if bp.get("style_keywords"):
+                    parts.append(", ".join(bp["style_keywords"]))
+                if bp.get("mood"):
+                    parts.append(bp["mood"])
+                parts.append("photorealistic, high quality")
+                scene_prompt = ", ".join(parts)
+                LOG.info("Brand prompt for job=%s: %s", job_id, scene_prompt)
 
     msg = PipelineMessage(
         job_id=job_id,

@@ -86,17 +86,30 @@ class ApiClient {
     return response.json();
   }
 
-  async createJob(filenames: string[], processingOptions?: {
-    remove_background: boolean;
-    generate_scene: boolean;
-    upscale: boolean;
-  }): Promise<CreateJobResponse> {
+  async createJob(
+    filenames: string[],
+    processingOptions?: {
+      remove_background: boolean;
+      generate_scene: boolean;
+      upscale: boolean;
+    },
+    sceneOptions?: {
+      scene_count?: number;
+      scene_types?: string[];
+    },
+  ): Promise<CreateJobResponse> {
     const endpoint = this.backendType === 'azure' ? '/v1/jobs' : '/create-job';
     const body = this.backendType === 'azure'
       ? {
           tenant_id: 'default',
           brand_profile_id: 'default',
-          items: filenames.map(filename => ({ filename })),
+          items: filenames.map(filename => ({
+            filename,
+            ...(sceneOptions?.scene_count && sceneOptions.scene_count > 1
+              ? { scene_count: sceneOptions.scene_count }
+              : {}),
+            ...(sceneOptions?.scene_types ? { scene_types: sceneOptions.scene_types } : {}),
+          })),
           processing_options: processingOptions || {
             remove_background: true,
             generate_scene: true,
@@ -111,6 +124,13 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  }
+
+  async getExportDownloadUrl(jobId: string): Promise<string> {
+    const response = await this.request<{ download_url: string }>(
+      `/v1/downloads/jobs/${jobId}/export`
+    );
+    return response.download_url;
   }
 
   async getJob(jobId: string): Promise<Job> {
@@ -139,7 +159,7 @@ class ApiClient {
     generate_scene: boolean;
     upscale: boolean;
   }): Promise<void> {
-    // Step 1: Get SAS URL for upload
+    // Step 1: Get SAS URL for upload (also sets raw_blob_path on all siblings)
     const sasResponse = await this.request<{ upload_url: string }>('/v1/uploads/sas', {
       method: 'POST',
       body: JSON.stringify({
@@ -165,7 +185,7 @@ class ApiClient {
       throw new Error(`Upload to Azure Blob failed: ${uploadResponse.statusText}`);
     }
 
-    // Step 3: Finalize upload with processing options
+    // Step 3: Finalize upload (sends queue messages for all siblings)
     await this.request('/v1/uploads/complete', {
       method: 'POST',
       body: JSON.stringify({

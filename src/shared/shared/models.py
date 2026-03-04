@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -48,6 +48,7 @@ class Job(Base):
     status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.created, index=True)
     processing_options = Column(JSON, nullable=True)
     callback_url = Column(String, nullable=True)
+    export_blob_path = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -72,6 +73,9 @@ class JobItem(Base):
     raw_blob_path = Column(String, nullable=True)
     output_blob_path = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
+    scene_prompt = Column(String, nullable=True)
+    scene_index = Column(Integer, nullable=True)
+    scene_type = Column(String(50), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

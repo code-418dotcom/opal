@@ -19,6 +19,9 @@ router = APIRouter(prefix="/v1", tags=["jobs"])
 
 class ItemIn(BaseModel):
     filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
+    scene_prompt: str | None = None
+    scene_count: int = Field(default=1, ge=1, le=10)
+    scene_types: list[str] | None = None
 
 
 class ProcessingOptions(BaseModel):
@@ -58,19 +61,45 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
     }
     create_job_record(job_data)
 
-    # Create job items
+    # Create job items (fan out for multi-scene)
+    from shared.scene_types import DEFAULT_SCENE_TYPES
+
     items_data = []
     created_items = []
     for it in body.items:
-        item_id = new_id("item")
-        items_data.append({
-            "id": item_id,
-            "job_id": job_id,
-            "tenant_id": tenant_id,
-            "filename": it.filename,
-            "status": "created",
-        })
-        created_items.append({"item_id": item_id, "filename": it.filename})
+        if it.scene_types and len(it.scene_types) != it.scene_count:
+            raise HTTPException(
+                status_code=422,
+                detail=f"scene_types length ({len(it.scene_types)}) must equal scene_count ({it.scene_count})"
+            )
+
+        for scene_idx in range(it.scene_count):
+            item_id = new_id("item")
+            scene_type = None
+            scene_prompt = it.scene_prompt
+
+            if it.scene_count > 1:
+                if it.scene_types:
+                    scene_type = it.scene_types[scene_idx]
+                else:
+                    scene_type = DEFAULT_SCENE_TYPES[scene_idx % len(DEFAULT_SCENE_TYPES)]
+
+            items_data.append({
+                "id": item_id,
+                "job_id": job_id,
+                "tenant_id": tenant_id,
+                "filename": it.filename,
+                "status": "created",
+                "scene_prompt": scene_prompt,
+                "scene_index": scene_idx if it.scene_count > 1 else None,
+                "scene_type": scene_type,
+            })
+            created_items.append({
+                "item_id": item_id,
+                "filename": it.filename,
+                "scene_index": scene_idx if it.scene_count > 1 else None,
+                "scene_type": scene_type,
+            })
 
     if items_data:
         create_job_item_records(items_data)
@@ -107,6 +136,7 @@ def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
         "brand_profile_id": job["brand_profile_id"],
         "status": job["status"],
         "correlation_id": job["correlation_id"],
+        "export_blob_path": job.get("export_blob_path"),
         "items": [
             {
                 "item_id": i["id"],
@@ -115,6 +145,9 @@ def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
                 "raw_blob_path": i.get("raw_blob_path"),
                 "output_blob_path": i.get("output_blob_path"),
                 "error_message": i.get("error_message"),
+                "scene_prompt": i.get("scene_prompt"),
+                "scene_index": i.get("scene_index"),
+                "scene_type": i.get("scene_type"),
             }
             for i in items
         ],

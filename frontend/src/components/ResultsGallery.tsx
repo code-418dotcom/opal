@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Image as ImageIcon, Download, ExternalLink, Loader, AlertCircle } from 'lucide-react';
+import { Image as ImageIcon, Download, ExternalLink, Loader, AlertCircle, Archive } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
 
@@ -122,7 +122,11 @@ export default function ResultsGallery({ jobId: initialJobId }: Props) {
 
               <div className="result-info">
                 <h4>{item.filename}</h4>
-                <p className="result-meta">ID: {item.item_id}</p>
+                <p className="result-meta">
+                  ID: {item.item_id}
+                  {item.scene_type && ` | Scene: ${item.scene_type}`}
+                  {item.scene_index != null && ` (#${item.scene_index})`}
+                </p>
 
                 <div className="result-actions">
                   <button
@@ -185,6 +189,27 @@ export default function ResultsGallery({ jobId: initialJobId }: Props) {
           <p>
             Showing {completedItems.length} of {job.items.length} completed image(s)
           </p>
+          {job.export_blob_path && (
+            <button
+              className="button-primary"
+              style={{ marginTop: '0.5rem' }}
+              onClick={async () => {
+                try {
+                  const url = await api.getExportDownloadUrl(job.job_id);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `export-${job.job_id}.zip`;
+                  link.click();
+                } catch (error) {
+                  console.error('Failed to get export URL:', error);
+                  alert('Failed to generate export download URL');
+                }
+              }}
+            >
+              <Archive size={16} />
+              Download ZIP
+            </button>
+          )}
         </div>
       )}
     </div>

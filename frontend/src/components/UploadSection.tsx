@@ -23,6 +23,7 @@ export default function UploadSection({ onJobCreated }: Props) {
     generate_scene: true,
     upscale: true,
   });
+  const [sceneCount, setSceneCount] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -73,14 +74,21 @@ export default function UploadSection({ onJobCreated }: Props) {
 
     try {
       const filenames = files.map((f) => f.file.name);
-      const job = await api.createJob(filenames, processingOptions);
+      const sceneOptions = sceneCount > 1 ? { scene_count: sceneCount } : undefined;
+      const job = await api.createJob(filenames, processingOptions, sceneOptions);
 
       setJobId(job.job_id);
       onJobCreated(job.job_id);
 
+      // Group job items by filename — upload once per unique file
+      const seenFilenames = new Set<string>();
+
       for (let i = 0; i < files.length; i++) {
         const fileItem = files[i];
-        const item = job.items[i];
+        // Find the first item for this filename
+        const item = job.items.find((it) => it.filename === fileItem.file.name && !seenFilenames.has(it.item_id));
+        if (!item) continue;
+        seenFilenames.add(item.item_id);
 
         try {
           setFiles((prev) =>
@@ -211,8 +219,33 @@ export default function UploadSection({ onJobCreated }: Props) {
             onChange={setProcessingOptions}
             disabled={isUploading}
           />
+
+          {processingOptions.generate_scene && (
+            <div className="scene-count-selector" style={{ margin: '1rem 0' }}>
+              <label htmlFor="scene-count" style={{ fontWeight: 600, marginRight: '0.5rem' }}>
+                Scenes per image:
+              </label>
+              <input
+                id="scene-count"
+                type="number"
+                min={1}
+                max={10}
+                value={sceneCount}
+                onChange={(e) => setSceneCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                className="input"
+                style={{ width: '4rem', display: 'inline-block' }}
+              />
+              {sceneCount > 1 && (
+                <span className="hint" style={{ marginLeft: '0.5rem' }}>
+                  {sceneCount} scene variations will be generated per image
+                </span>
+              )}
+            </div>
+          )}
+
           <button className="button-primary" onClick={uploadFiles}>
             Upload & Process {files.length} Image(s)
+            {sceneCount > 1 && processingOptions.generate_scene && ` (${sceneCount} scenes each)`}
           </button>
         </>
       )}

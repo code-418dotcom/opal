@@ -66,8 +66,8 @@ def upload_file(bucket: str, path: str, data: bytes, content_type: str = 'applic
     if settings.STORAGE_BACKEND == 'supabase':
         return _backend.upload_file(bucket, path, data, content_type)
     else:
-        # Azure doesn't have a direct upload method in the original implementation
-        raise NotImplementedError("Direct upload not implemented for Azure backend")
+        _backend.upload_blob(container=bucket, blob_path=path, data=data, content_type=content_type)
+        return {"path": path}
 
 
 def download_file(bucket: str, path: str) -> bytes:
@@ -75,5 +75,4 @@ def download_file(bucket: str, path: str) -> bytes:
     if settings.STORAGE_BACKEND == 'supabase':
         return _backend.download_file(bucket, path)
     else:
-        # Azure doesn't have a direct download method in the original implementation
-        raise NotImplementedError("Direct download not implemented for Azure backend")
+        return _backend.download_blob(container=bucket, blob_path=path)

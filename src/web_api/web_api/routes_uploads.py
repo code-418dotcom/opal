@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 import logging
 
-from shared.db_sqlalchemy import get_job_by_id, get_job_item, update_job_item
+from shared.db_sqlalchemy import get_job_by_id, get_job_item, update_job_item, get_job_items_by_filename
 from shared.storage_unified import (
     build_raw_blob_path,
     generate_upload_url,
@@ -49,7 +49,10 @@ def get_upload_sas(body: SasRequest, tenant_id: str = Depends(get_tenant_from_ap
     raw_path = build_raw_blob_path(tenant_id, body.job_id, body.item_id, body.filename)
     upload_url = generate_upload_url(bucket="raw", path=raw_path)
 
-    update_job_item(body.item_id, {"raw_blob_path": raw_path})
+    # Set raw_blob_path on this item AND all siblings with same filename (multi-scene)
+    siblings = get_job_items_by_filename(body.job_id, body.filename)
+    for sibling in siblings:
+        update_job_item(sibling["id"], {"raw_blob_path": raw_path})
 
     return {"upload_url": upload_url, "raw_blob_path": raw_path}
 
@@ -102,22 +105,29 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
     if not item or item["tenant_id"] != tenant_id or item["job_id"] != body.job_id:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    update_job_item(body.item_id, {"status": "uploaded"})
+    # Mark all siblings (multi-scene) as uploaded and send queue messages
+    siblings = get_job_items_by_filename(body.job_id, body.filename)
+    if not siblings:
+        siblings = [item]
 
-    # Send message to queue to trigger processing
-    LOG.info("Upload complete: job_id=%s item_id=%s tenant_id=%s", body.job_id, body.item_id, tenant_id)
-    try:
-        send_job_message({
-            "tenant_id": tenant_id,
-            "job_id": body.job_id,
-            "item_id": body.item_id,
-            "correlation_id": job["correlation_id"],
-            "processing_options": body.processing_options.model_dump(),
-        })
-        LOG.info("Queue message sent successfully for job_id=%s", body.job_id)
-    except Exception as e:
-        LOG.error("Failed to send queue message: %s", e, exc_info=True)
-        # Don't fail the request - upload is complete even if queueing fails
+    for sibling in siblings:
+        update_job_item(sibling["id"], {"status": "uploaded"})
+
+    LOG.info("Upload complete: job_id=%s item_id=%s tenant_id=%s siblings=%d",
+             body.job_id, body.item_id, tenant_id, len(siblings))
+
+    for sibling in siblings:
+        try:
+            send_job_message({
+                "tenant_id": tenant_id,
+                "job_id": body.job_id,
+                "item_id": sibling["id"],
+                "correlation_id": job["correlation_id"],
+                "processing_options": body.processing_options.model_dump(),
+            })
+            LOG.info("Queue message sent for item_id=%s", sibling["id"])
+        except Exception as e:
+            LOG.error("Failed to send queue message for item_id=%s: %s", sibling["id"], e, exc_info=True)
 
     return {"ok": True}
 

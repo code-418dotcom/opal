@@ -5,6 +5,9 @@ export interface JobItem {
   raw_blob_path?: string;
   output_blob_path?: string;
   error_message?: string;
+  scene_prompt?: string;
+  scene_index?: number;
+  scene_type?: string;
 }
 
 export interface Job {
@@ -13,13 +16,14 @@ export interface Job {
   brand_profile_id: string;
   status: 'created' | 'processing' | 'completed' | 'failed' | 'partial';
   correlation_id: string;
+  export_blob_path?: string;
   items: JobItem[];
 }
 
 export interface CreateJobResponse {
   job_id: string;
   correlation_id: string;
-  items: Array<{ item_id: string; filename: string }>;
+  items: Array<{ item_id: string; filename: string; scene_index?: number; scene_type?: string }>;
 }
 
 export interface UploadSasResponse {

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from shared.db_sqlalchemy import get_job_item
+from shared.db_sqlalchemy import get_job_item, get_job_by_id
 from shared.storage_unified import generate_download_url
 from web_api.auth import get_tenant_from_api_key
 
@@ -36,4 +36,23 @@ def get_download_url(
     # Generate download URL
     download_url = generate_download_url(bucket=bucket, path=blob_path)
 
+    return {"download_url": download_url}
+
+
+@router.get("/downloads/jobs/{job_id}/export")
+def get_export_download_url(
+    job_id: str,
+    tenant_id: str = Depends(get_tenant_from_api_key)
+):
+    """Generate a SAS download URL for a job's export ZIP."""
+    job = get_job_by_id(job_id, tenant_id)
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    export_path = job.get("export_blob_path")
+    if not export_path:
+        raise HTTPException(status_code=404, detail="Export not ready yet")
+
+    download_url = generate_download_url(bucket="exports", path=export_path)
     return {"download_url": download_url}

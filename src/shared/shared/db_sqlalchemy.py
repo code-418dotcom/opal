@@ -39,6 +39,7 @@ def create_job_record(job_data: Dict[str, Any]) -> Dict[str, Any]:
             "status": job.status.value,
             "processing_options": job.processing_options,
             "callback_url": job.callback_url,
+            "export_blob_path": job.export_blob_path,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }
@@ -57,6 +58,9 @@ def create_job_item_records(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                 status=ItemStatus(item_data.get("status", "created")),
                 raw_blob_path=item_data.get("raw_blob_path"),
                 output_blob_path=item_data.get("output_blob_path"),
+                scene_prompt=item_data.get("scene_prompt"),
+                scene_index=item_data.get("scene_index"),
+                scene_type=item_data.get("scene_type"),
                 created_at=item_data.get("created_at", datetime.utcnow()),
                 updated_at=item_data.get("updated_at", datetime.utcnow()),
             )
@@ -75,6 +79,9 @@ def create_job_item_records(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                 "status": item.status.value,
                 "raw_blob_path": item.raw_blob_path,
                 "output_blob_path": item.output_blob_path,
+                "scene_prompt": item.scene_prompt,
+                "scene_index": item.scene_index,
+                "scene_type": item.scene_type,
                 "created_at": item.created_at.isoformat() if item.created_at else None,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
@@ -102,6 +109,7 @@ def get_job_by_id(job_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
             "status": job.status.value,
             "processing_options": job.processing_options,
             "callback_url": job.callback_url,
+            "export_blob_path": job.export_blob_path,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }
@@ -125,6 +133,9 @@ def get_job_item(item_id: str) -> Optional[Dict[str, Any]]:
             "raw_blob_path": item.raw_blob_path,
             "output_blob_path": item.output_blob_path,
             "error_message": item.error_message,
+            "scene_prompt": item.scene_prompt,
+            "scene_index": item.scene_index,
+            "scene_type": item.scene_type,
             "created_at": item.created_at.isoformat() if item.created_at else None,
             "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         }
@@ -146,6 +157,9 @@ def get_job_items(job_id: str) -> List[Dict[str, Any]]:
                 "raw_blob_path": item.raw_blob_path,
                 "output_blob_path": item.output_blob_path,
                 "error_message": item.error_message,
+                "scene_prompt": item.scene_prompt,
+                "scene_index": item.scene_index,
+                "scene_type": item.scene_type,
                 "created_at": item.created_at.isoformat() if item.created_at else None,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
@@ -176,9 +190,57 @@ def update_job_item(item_id: str, updates: Dict[str, Any]) -> None:
                 item.output_blob_path = updates["output_blob_path"]
             if "error_message" in updates:
                 item.error_message = updates["error_message"]
+            if "scene_prompt" in updates:
+                item.scene_prompt = updates["scene_prompt"]
+            if "scene_index" in updates:
+                item.scene_index = updates["scene_index"]
+            if "scene_type" in updates:
+                item.scene_type = updates["scene_type"]
 
             item.updated_at = datetime.utcnow()
             session.commit()
+
+
+def update_job(job_id: str, updates: Dict[str, Any]) -> None:
+    """Update a job record."""
+    with SessionLocal() as session:
+        job = session.get(Job, job_id)
+        if job:
+            if "export_blob_path" in updates:
+                job.export_blob_path = updates["export_blob_path"]
+            if "status" in updates:
+                job.status = JobStatus(updates["status"])
+            job.updated_at = datetime.utcnow()
+            session.commit()
+
+
+def get_job_items_by_filename(job_id: str, filename: str) -> List[Dict[str, Any]]:
+    """Get all items for a job with a given filename (for multi-scene siblings)."""
+    with SessionLocal() as session:
+        items = session.query(JobItem).filter(
+            JobItem.job_id == job_id,
+            JobItem.filename == filename,
+        ).all()
+
+        return [
+            {
+                "id": item.id,
+                "item_id": item.id,
+                "job_id": item.job_id,
+                "tenant_id": item.tenant_id,
+                "filename": item.filename,
+                "status": item.status.value,
+                "raw_blob_path": item.raw_blob_path,
+                "output_blob_path": item.output_blob_path,
+                "error_message": item.error_message,
+                "scene_prompt": item.scene_prompt,
+                "scene_index": item.scene_index,
+                "scene_type": item.scene_type,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item in items
+        ]
 
 
 # ── Brand Profile CRUD ──────────────────────────────────────────────
@@ -292,6 +354,7 @@ def list_jobs(
                 "status": job.status.value,
                 "processing_options": job.processing_options,
                 "callback_url": job.callback_url,
+                "export_blob_path": job.export_blob_path,
                 "created_at": job.created_at.isoformat() if job.created_at else None,
                 "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             }
