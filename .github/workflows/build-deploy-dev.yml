@@ -25,12 +25,9 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
       web_api: ${{ steps.filter.outputs.web_api }}
       export_worker: ${{ steps.filter.outputs.export_worker }}
-      orchestrator: ${{ steps.filter.outputs.orchestrator }}
+      pipeline_worker: ${{ steps.filter.outputs.pipeline_worker }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
-      bg_removal_worker: ${{ steps.filter.outputs.bg_removal_worker }}
-      scene_worker: ${{ steps.filter.outputs.scene_worker }}
-      upscale_worker: ${{ steps.filter.outputs.upscale_worker }}
     steps:
       - uses: actions/checkout@v4
       - name: Paths filter
@@ -44,18 +41,12 @@ jobs:
               - 'src/web_api/**'
             export_worker:
               - 'src/export_worker/**'
-            orchestrator:
-              - 'src/orchestrator/**'
+            pipeline_worker:
+              - 'src/pipeline_worker/**'
             billing_service:
               - 'src/billing_service/**'
             aml_sd_stub:
               - 'src/aml_sd_stub/**'
-            bg_removal_worker:
-              - 'src/bg_removal_worker/**'
-            scene_worker:
-              - 'src/scene_worker/**'
-            upscale_worker:
-              - 'src/upscale_worker/**'
 
   build_and_deploy:
     name: Build + Deploy (dev)
@@ -87,33 +78,24 @@ jobs:
           SHARED="${{ needs.changes.outputs.shared }}"
           WEB_API="${{ needs.changes.outputs.web_api }}"
           EXPORT_WORKER="${{ needs.changes.outputs.export_worker }}"
-          ORCH="${{ needs.changes.outputs.orchestrator }}"
+          PIPELINE="${{ needs.changes.outputs.pipeline_worker }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
-          BG_REMOVAL="${{ needs.changes.outputs.bg_removal_worker }}"
-          SCENE="${{ needs.changes.outputs.scene_worker }}"
-          UPSCALE="${{ needs.changes.outputs.upscale_worker }}"
 
           # If shared changed, everything rebuilds/redeploys
           if [ "${SHARED}" = "true" ]; then
             WEB_API=true
             EXPORT_WORKER=true
-            ORCH=true
+            PIPELINE=true
             BILLING=true
             AML=true
-            BG_REMOVAL=true
-            SCENE=true
-            UPSCALE=true
           fi
 
           echo "web_api=${WEB_API}" >> "$GITHUB_OUTPUT"
           echo "export_worker=${EXPORT_WORKER}" >> "$GITHUB_OUTPUT"
-          echo "orchestrator=${ORCH}" >> "$GITHUB_OUTPUT"
+          echo "pipeline_worker=${PIPELINE}" >> "$GITHUB_OUTPUT"
           echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
-          echo "bg_removal_worker=${BG_REMOVAL}" >> "$GITHUB_OUTPUT"
-          echo "scene_worker=${SCENE}" >> "$GITHUB_OUTPUT"
-          echo "upscale_worker=${UPSCALE}" >> "$GITHUB_OUTPUT"
 
       - name: Discover infra in Azure (dev RG)
         run: |
@@ -217,8 +199,8 @@ jobs:
           if [ "${{ steps.decide.outputs.web_api }}" = "true" ]; then
             build_push "opal/web-api" "src/web_api/Dockerfile"
           fi
-          if [ "${{ steps.decide.outputs.orchestrator }}" = "true" ]; then
-            build_push "opal/orchestrator" "src/orchestrator/Dockerfile"
+          if [ "${{ steps.decide.outputs.pipeline_worker }}" = "true" ]; then
+            build_push "opal/pipeline-worker" "src/pipeline_worker/Dockerfile"
           fi
           if [ "${{ steps.decide.outputs.export_worker }}" = "true" ]; then
             build_push "opal/export-worker" "src/export_worker/Dockerfile"
@@ -228,15 +210,6 @@ jobs:
           fi
           if [ "${{ steps.decide.outputs.aml_sd_stub }}" = "true" ]; then
             build_push "opal/aml-sd-stub" "src/aml_sd_stub/Dockerfile"
-          fi
-          if [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ]; then
-            build_push "opal/bg-removal-worker" "src/bg_removal_worker/Dockerfile"
-          fi
-          if [ "${{ steps.decide.outputs.scene_worker }}" = "true" ]; then
-            build_push "opal/scene-worker" "src/scene_worker/Dockerfile"
-          fi
-          if [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ]; then
-            build_push "opal/upscale-worker" "src/upscale_worker/Dockerfile"
           fi
 
       - name: Azure Login (refresh after build)
@@ -255,11 +228,8 @@ jobs:
           APPS=(
             "opal-web-api-${ENV_NAME}"
             "opal-billing-service-${ENV_NAME}"
-            "opal-orchestrator-${ENV_NAME}"
+            "opal-pipeline-worker-${ENV_NAME}"
             "opal-export-worker-${ENV_NAME}"
-            "opal-bg-removal-worker-${ENV_NAME}"
-            "opal-scene-worker-${ENV_NAME}"
-            "opal-upscale-worker-${ENV_NAME}"
           )
 
           for APP in "${APPS[@]}"; do
@@ -342,35 +312,23 @@ jobs:
 
           WEB="opal-web-api-${ENV_NAME}"
           BILL="opal-billing-service-${ENV_NAME}"
-          ORCH="opal-orchestrator-${ENV_NAME}"
+          PIPELINE="opal-pipeline-worker-${ENV_NAME}"
           EXPORT="opal-export-worker-${ENV_NAME}"
-          BG_REMOVAL_APP="opal-bg-removal-worker-${ENV_NAME}"
-          SCENE_APP="opal-scene-worker-${ENV_NAME}"
-          UPSCALE_APP="opal-upscale-worker-${ENV_NAME}"
 
           # Deploy images — only for services where a build was triggered.
-          # Large ML-worker images (bg-removal, scene, upscale) use a 20-min timeout
-          # because pulling 2-4 GB from ACR on a cold start exceeds the 5-min default.
           [ "${{ steps.decide.outputs.web_api }}" = "true" ] && \
             deploy_image "${WEB}"  "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
 
           [ "${{ steps.decide.outputs.billing_service }}" = "true" ] && \
             deploy_image "${BILL}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
 
-          [ "${{ steps.decide.outputs.orchestrator }}" = "true" ] && \
-            deploy_image "${ORCH}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
+          # Pipeline worker has a large image (~4GB with PyTorch + ONNX models)
+          # so it gets a 300-second timeout for cold starts.
+          [ "${{ steps.decide.outputs.pipeline_worker }}" = "true" ] && \
+            deploy_image "${PIPELINE}" "${ACR_LOGIN}/opal/pipeline-worker:${IMAGE_TAG}" 300
 
           [ "${{ steps.decide.outputs.export_worker }}" = "true" ] && \
             deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
-
-          [ "${{ steps.decide.outputs.bg_removal_worker }}" = "true" ] && \
-            deploy_image "${BG_REMOVAL_APP}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" 240
-
-          [ "${{ steps.decide.outputs.scene_worker }}" = "true" ] && \
-            deploy_image "${SCENE_APP}" "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" 240
-
-          [ "${{ steps.decide.outputs.upscale_worker }}" = "true" ] && \
-            deploy_image "${UPSCALE_APP}" "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" 240
 
           echo "Deployments complete."
 

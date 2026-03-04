@@ -34,10 +34,10 @@ services:
       retries: 3
       start_period: 40s
 
-  orchestrator:
+  pipeline-worker:
     build:
       context: .
-      dockerfile: src/orchestrator/Dockerfile
+      dockerfile: src/pipeline_worker/Dockerfile
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - SUPABASE_URL=${SUPABASE_URL}

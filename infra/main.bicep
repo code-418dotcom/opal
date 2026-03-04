@@ -121,8 +121,8 @@ resource queueJobs 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
   name: '${serviceBus.name}/jobs'
   properties: {
     enablePartitioning: true
-    lockDuration: 'PT1M'
-    maxDeliveryCount: 10
+    lockDuration: 'PT5M'
+    maxDeliveryCount: 5
     deadLetteringOnMessageExpiration: true
   }
 }
