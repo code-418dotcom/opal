@@ -89,8 +89,10 @@ async def upload_direct(
         content_type=file.content_type or "application/octet-stream"
     )
 
-    # Update item status
-    update_job_item(item_id, {"raw_blob_path": raw_path, "status": "uploaded"})
+    # Set raw_blob_path on this item AND all siblings with same filename (multi-scene)
+    siblings = get_job_items_by_filename(job_id, item["filename"])
+    for sibling in siblings:
+        update_job_item(sibling["id"], {"raw_blob_path": raw_path, "status": "uploaded"})
 
     return {"ok": True, "raw_blob_path": raw_path}
 
