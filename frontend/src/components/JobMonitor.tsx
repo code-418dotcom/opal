@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react';
 import { api } from '../api';
@@ -8,51 +8,44 @@ interface Props {
   jobId: string | null;
 }
 
-export default function JobMonitor({ jobId: initialJobId }: Props) {
-  const [jobId, setJobId] = useState(initialJobId || '');
-  const [autoRefresh, setAutoRefresh] = useState(true);
+const STATUS_WEIGHT: Record<string, number> = {
+  created: 0,
+  uploaded: 15,
+  processing: 50,
+  completed: 100,
+  failed: 100,
+};
 
-  useEffect(() => {
-    if (initialJobId) {
-      setJobId(initialJobId);
-    }
-  }, [initialJobId]);
-
-  const [workerStatus, setWorkerStatus] = useState<string>('');
-
+export default function JobMonitor({ jobId }: Props) {
   const { data: job, isLoading, error, refetch } = useQuery<Job>({
     queryKey: ['job', jobId],
-    queryFn: () => api.getJob(jobId),
+    queryFn: () => api.getJob(jobId!),
     enabled: !!jobId,
-    refetchInterval: autoRefresh ? 3000 : false,
+    refetchInterval: 3000,
   });
 
-  const triggerWorker = async () => {
-    try {
-      setWorkerStatus('Triggering worker...');
-      await api.triggerWorker();
-      setWorkerStatus('✓ Worker triggered successfully');
-      setTimeout(() => refetch(), 1000);
-    } catch (error) {
-      setWorkerStatus(`✗ Worker failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  // Invalidate related queries when job completes
+  useEffect(() => {
+    if (job && (job.status === 'completed' || job.status === 'partial')) {
+      // Stop polling handled by parent auto-nav
     }
-  };
+  }, [job]);
 
   const getStatusBadge = (status: string) => {
-    const badges = {
-      created: { icon: Clock, class: 'badge-default', label: 'Created' },
-      uploaded: { icon: Clock, class: 'badge-default', label: 'Uploaded' },
-      processing: { icon: Loader, class: 'badge-processing', label: 'Processing' },
-      completed: { icon: CheckCircle, class: 'badge-success', label: 'Completed' },
-      failed: { icon: XCircle, class: 'badge-error', label: 'Failed' },
-      partial: { icon: AlertTriangle, class: 'badge-warning', label: 'Partial' },
+    const badges: Record<string, { icon: typeof Clock; cls: string; label: string }> = {
+      created: { icon: Clock, cls: 'badge-default', label: 'Queued' },
+      uploaded: { icon: Clock, cls: 'badge-default', label: 'Uploaded' },
+      processing: { icon: Loader, cls: 'badge-processing', label: 'Processing' },
+      completed: { icon: CheckCircle, cls: 'badge-success', label: 'Completed' },
+      failed: { icon: XCircle, cls: 'badge-error', label: 'Failed' },
+      partial: { icon: AlertTriangle, cls: 'badge-warning', label: 'Partial' },
     };
 
-    const badge = badges[status as keyof typeof badges] || badges.created;
+    const badge = badges[status] || badges.created;
     const Icon = badge.icon;
 
     return (
-      <span className={`badge ${badge.class}`}>
+      <span className={`badge ${badge.cls}`}>
         <Icon size={14} className={status === 'processing' ? 'spinning' : ''} />
         {badge.label}
       </span>
@@ -61,63 +54,62 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
 
   const getProgressStats = (job: Job) => {
     const total = job.items.length;
+    if (total === 0) return { total: 0, completed: 0, failed: 0, processing: 0, percentage: 0 };
+
     const completed = job.items.filter((i) => i.status === 'completed').length;
     const failed = job.items.filter((i) => i.status === 'failed').length;
     const processing = job.items.filter((i) => i.status === 'processing').length;
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    const weightedSum = job.items.reduce(
+      (sum, item) => sum + (STATUS_WEIGHT[item.status] ?? 0),
+      0
+    );
+    const percentage = Math.round(weightedSum / total);
 
     return { total, completed, failed, processing, percentage };
   };
 
+  const getProgressBarClass = (job: Job) => {
+    if (job.status === 'completed') return 'progress-fill progress-fill-success';
+    if (job.status === 'failed') return 'progress-fill progress-fill-error';
+    if (job.status === 'partial') return 'progress-fill progress-fill-warning';
+    return 'progress-fill';
+  };
+
+  if (!jobId) {
+    return (
+      <div className="job-monitor">
+        <div className="section-header">
+          <h2>Job Monitor</h2>
+          <p>Upload images to start tracking a job</p>
+        </div>
+        <div className="empty-state">
+          <Loader size={48} />
+          <h3>No active job</h3>
+          <p>Upload images from the Upload tab to create a job</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="job-monitor">
       <div className="section-header">
-        <h2>Job Monitor</h2>
-        <p>Track and monitor job processing status</p>
-      </div>
-
-      <div className="monitor-controls">
-        <div className="input-group">
-          <input
-            type="text"
-            placeholder="Enter Job ID"
-            value={jobId}
-            onChange={(e) => setJobId(e.target.value)}
-            className="input"
-          />
+        <div className="section-header-row">
+          <div>
+            <h2>Job Monitor</h2>
+            <p>Tracking job progress in real-time</p>
+          </div>
           <button
             className="button-secondary"
             onClick={() => refetch()}
-            disabled={!jobId || isLoading}
+            disabled={isLoading}
           >
             <RefreshCw size={16} className={isLoading ? 'spinning' : ''} />
             Refresh
           </button>
         </div>
-
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={autoRefresh}
-            onChange={(e) => setAutoRefresh(e.target.checked)}
-          />
-          Auto-refresh (3s)
-        </label>
-
-        <button
-          className="button-primary"
-          onClick={triggerWorker}
-          disabled={isLoading}
-        >
-          Process Queue
-        </button>
       </div>
-
-      {workerStatus && (
-        <div className={`info-box ${workerStatus.startsWith('✗') ? 'error' : 'success'}`}>
-          {workerStatus}
-        </div>
-      )}
 
       {error && (
         <div className="error-box">
@@ -126,22 +118,18 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
         </div>
       )}
 
-      {isLoading && (
+      {isLoading && !job && (
         <div className="loading-box">
           <Loader className="spinning" size={32} />
           <span>Loading job details...</span>
         </div>
       )}
 
-      {job && !isLoading && (
+      {job && (
         <div className="job-details">
           <div className="job-header">
             <div>
-              <h3>Job: {job.job_id}</h3>
-              <p className="job-meta">
-                Tenant: {job.tenant_id} • Profile: {job.brand_profile_id} •
-                Correlation: {job.correlation_id}
-              </p>
+              <h3>Job {job.job_id.slice(0, 16)}...</h3>
             </div>
             {getStatusBadge(job.status)}
           </div>
@@ -155,15 +143,17 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
             </div>
             <div className="progress-bar large">
               <div
-                className="progress-fill"
+                className={getProgressBarClass(job)}
                 style={{ width: `${getProgressStats(job).percentage}%` }}
               ></div>
             </div>
             <div className="progress-stats">
-              <span>✓ {getProgressStats(job).completed} completed</span>
-              <span>⚙ {getProgressStats(job).processing} processing</span>
-              <span>✗ {getProgressStats(job).failed} failed</span>
-              <span>Total: {getProgressStats(job).total}</span>
+              <span className="stat-completed">{getProgressStats(job).completed} completed</span>
+              <span className="stat-processing">{getProgressStats(job).processing} processing</span>
+              {getProgressStats(job).failed > 0 && (
+                <span className="stat-failed">{getProgressStats(job).failed} failed</span>
+              )}
+              <span className="stat-total">{getProgressStats(job).total} total</span>
             </div>
           </div>
 
@@ -174,8 +164,17 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
                 <div key={item.item_id} className="item-card">
                   <div className="item-header">
                     <div>
-                      <div className="item-filename">{item.filename}</div>
-                      <div className="item-id">ID: {item.item_id}</div>
+                      <div className="item-filename">
+                        {item.filename}
+                        {item.scene_type && (
+                          <span className="item-scene-tag">
+                            {item.scene_type.charAt(0).toUpperCase() + item.scene_type.slice(1)}
+                          </span>
+                        )}
+                        {item.scene_index != null && (
+                          <span className="item-scene-index">#{item.scene_index + 1}</span>
+                        )}
+                      </div>
                     </div>
                     {getStatusBadge(item.status)}
                   </div>
@@ -184,18 +183,6 @@ export default function JobMonitor({ jobId: initialJobId }: Props) {
                     <div className="item-error">
                       <AlertTriangle size={16} />
                       <span>{item.error_message}</span>
-                    </div>
-                  )}
-
-                  {item.raw_blob_path && (
-                    <div className="item-path">
-                      <strong>Input:</strong> {item.raw_blob_path}
-                    </div>
-                  )}
-
-                  {item.output_blob_path && (
-                    <div className="item-path success">
-                      <strong>Output:</strong> {item.output_blob_path}
                     </div>
                   )}
                 </div>

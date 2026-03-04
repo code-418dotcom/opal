@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Image as ImageIcon, Download, ExternalLink, Loader, AlertCircle, Archive } from 'lucide-react';
+import {
+  Image as ImageIcon,
+  Download,
+  ExternalLink,
+  Loader,
+  AlertCircle,
+  Archive,
+  X,
+} from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
 
@@ -11,7 +19,8 @@ function ResultImage({ itemId }: { itemId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    api.getDownloadUrl(itemId, 'outputs')
+    api
+      .getDownloadUrl(itemId, 'outputs')
       .then((url) => {
         if (!cancelled) setSrc(url);
       })
@@ -21,7 +30,9 @@ function ResultImage({ itemId }: { itemId: string }) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [itemId]);
 
   if (loading) {
@@ -42,12 +53,7 @@ function ResultImage({ itemId }: { itemId: string }) {
   }
 
   return (
-    <img
-      className="result-image"
-      src={src}
-      alt="Processed result"
-      onError={() => setError(true)}
-    />
+    <img className="result-image" src={src} alt="Processed result" onError={() => setError(true)} />
   );
 }
 
@@ -55,39 +61,90 @@ interface Props {
   jobId: string | null;
 }
 
-export default function ResultsGallery({ jobId: initialJobId }: Props) {
-  const [jobId, setJobId] = useState(initialJobId || '');
-
-  useEffect(() => {
-    if (initialJobId) {
-      setJobId(initialJobId);
-    }
-  }, [initialJobId]);
+export default function ResultsGallery({ jobId }: Props) {
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const { data: job, isLoading, error } = useQuery<Job>({
     queryKey: ['job-results', jobId],
-    queryFn: () => api.getJob(jobId),
+    queryFn: () => api.getJob(jobId!),
     enabled: !!jobId,
   });
 
   const completedItems = job?.items.filter((item) => item.status === 'completed') || [];
 
+  const handleDownloadItem = async (itemId: string, filename: string) => {
+    try {
+      setDownloadError(null);
+      const url = await api.getDownloadUrl(itemId, 'outputs');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+    } catch {
+      setDownloadError('Failed to generate download URL. Please try again.');
+    }
+  };
+
+  const handleViewItem = async (itemId: string) => {
+    try {
+      setDownloadError(null);
+      const url = await api.getDownloadUrl(itemId, 'outputs');
+      window.open(url, '_blank');
+    } catch {
+      setDownloadError('Failed to generate preview URL. Please try again.');
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    if (!job) return;
+    try {
+      setDownloadError(null);
+      const url = await api.getExportDownloadUrl(job.job_id);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `opal-export-${job.job_id.slice(4, 16)}.zip`;
+      link.click();
+    } catch {
+      setDownloadError('Failed to generate export download URL. Please try again.');
+    }
+  };
+
+  if (!jobId) {
+    return (
+      <div className="results-gallery">
+        <div className="section-header">
+          <h2>Results</h2>
+          <p>View and download processed images</p>
+        </div>
+        <div className="empty-state">
+          <ImageIcon size={48} />
+          <h3>No results yet</h3>
+          <p>Upload and process images to see results here</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="results-gallery">
       <div className="section-header">
-        <h2>Results Gallery</h2>
+        <h2>Results</h2>
         <p>View and download processed images</p>
       </div>
 
-      <div className="gallery-controls">
-        <input
-          type="text"
-          placeholder="Enter Job ID to view results"
-          value={jobId}
-          onChange={(e) => setJobId(e.target.value)}
-          className="input"
-        />
-      </div>
+      {downloadError && (
+        <div className="error-box" style={{ marginBottom: '1rem' }}>
+          <AlertCircle size={20} />
+          <span>{downloadError}</span>
+          <button
+            className="button-icon"
+            onClick={() => setDownloadError(null)}
+            style={{ marginLeft: 'auto' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="error-box">
@@ -107,110 +164,73 @@ export default function ResultsGallery({ jobId: initialJobId }: Props) {
         <div className="empty-state">
           <ImageIcon size={48} />
           <h3>No completed images yet</h3>
-          <p>This job has {job.items.length} item(s), but none are completed yet.</p>
-          <p className="hint">Check the Monitor tab to see processing status</p>
-        </div>
-      )}
-
-      {job && completedItems.length > 0 && (
-        <div className="results-grid">
-          {completedItems.map((item) => (
-            <div key={item.item_id} className="result-card">
-              <div className="result-preview">
-                <ResultImage itemId={item.item_id} />
-              </div>
-
-              <div className="result-info">
-                <h4>{item.filename}</h4>
-                <p className="result-meta">
-                  ID: {item.item_id}
-                  {item.scene_type && ` | Scene: ${item.scene_type}`}
-                  {item.scene_index != null && ` (#${item.scene_index})`}
-                </p>
-
-                <div className="result-actions">
-                  <button
-                    className="button-secondary button-sm"
-                    onClick={async () => {
-                      if (item.output_blob_path) {
-                        try {
-                          const url = await api.getDownloadUrl(item.item_id, 'outputs');
-                          window.open(url, '_blank');
-                        } catch (error) {
-                          console.error('Failed to get download URL:', error);
-                          alert('Failed to generate download URL');
-                        }
-                      }
-                    }}
-                  >
-                    <ExternalLink size={14} />
-                    View
-                  </button>
-                  <button
-                    className="button-secondary button-sm"
-                    onClick={async () => {
-                      if (item.output_blob_path) {
-                        try {
-                          const url = await api.getDownloadUrl(item.item_id, 'outputs');
-                          const link = document.createElement('a');
-                          link.href = url;
-                          link.download = item.filename;
-                          link.click();
-                        } catch (error) {
-                          console.error('Failed to get download URL:', error);
-                          alert('Failed to generate download URL');
-                        }
-                      }
-                    }}
-                  >
-                    <Download size={14} />
-                    Download
-                  </button>
-                </div>
-
-                <div className="result-paths">
-                  <div className="path-item">
-                    <span className="path-label">Input:</span>
-                    <span className="path-value">{item.raw_blob_path}</span>
-                  </div>
-                  <div className="path-item">
-                    <span className="path-label">Output:</span>
-                    <span className="path-value">{item.output_blob_path}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {job && completedItems.length > 0 && (
-        <div className="gallery-summary">
           <p>
-            Showing {completedItems.length} of {job.items.length} completed image(s)
+            {job.items.length} item(s) are being processed. Check back soon.
           </p>
-          {job.export_blob_path && (
-            <button
-              className="button-primary"
-              style={{ marginTop: '0.5rem' }}
-              onClick={async () => {
-                try {
-                  const url = await api.getExportDownloadUrl(job.job_id);
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.download = `export-${job.job_id}.zip`;
-                  link.click();
-                } catch (error) {
-                  console.error('Failed to get export URL:', error);
-                  alert('Failed to generate export download URL');
-                }
-              }}
-            >
-              <Archive size={16} />
-              Download ZIP
-            </button>
-          )}
         </div>
+      )}
+
+      {job && completedItems.length > 0 && (
+        <>
+          {job.export_blob_path && (
+            <div className="export-banner">
+              <div className="export-banner-info">
+                <Archive size={20} />
+                <span>
+                  All {completedItems.length} image(s) ready for download
+                </span>
+              </div>
+              <button className="button-primary button-sm" onClick={handleDownloadZip}>
+                <Archive size={16} />
+                Download ZIP
+              </button>
+            </div>
+          )}
+
+          <div className="results-grid">
+            {completedItems.map((item) => (
+              <div key={item.item_id} className="result-card">
+                <div className="result-preview">
+                  <ResultImage itemId={item.item_id} />
+                </div>
+
+                <div className="result-info">
+                  <h4>
+                    {item.filename}
+                    {item.scene_type && (
+                      <span className="result-scene-tag">
+                        {item.scene_type.charAt(0).toUpperCase() + item.scene_type.slice(1)}
+                      </span>
+                    )}
+                  </h4>
+
+                  <div className="result-actions">
+                    <button
+                      className="button-secondary button-sm"
+                      onClick={() => handleViewItem(item.item_id)}
+                    >
+                      <ExternalLink size={14} />
+                      View
+                    </button>
+                    <button
+                      className="button-secondary button-sm"
+                      onClick={() => handleDownloadItem(item.item_id, item.filename)}
+                    >
+                      <Download size={14} />
+                      Download
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="gallery-summary">
+            <p>
+              {completedItems.length} of {job.items.length} image(s) completed
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
