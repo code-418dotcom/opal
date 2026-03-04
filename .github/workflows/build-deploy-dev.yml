@@ -314,7 +314,7 @@ jobs:
           AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
 
           BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}"
-          IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}"
+          IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'fal' }}"
           FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
 
           ENV_VARS=(
