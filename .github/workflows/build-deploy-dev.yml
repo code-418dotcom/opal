@@ -246,56 +246,31 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Ensure Container Apps exist + verify RBAC
+      - name: Verify Container Apps exist
         run: |
           set -euo pipefail
 
-          # Source shared helpers
-          source .github/scripts/helpers.sh
-
-          DB_USER="opaladmin"
-          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
-          DATABASE_URL="postgresql+psycopg://${DB_USER}:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
-
-          AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
-          AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
-
-          BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}"
-          IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'none' }}"
-          FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
-
-          ENV_VARS=(
-            "ENV_NAME=${ENV_NAME}"
-            "DATABASE_URL=${DATABASE_URL}"
-            "STORAGE_ACCOUNT_NAME=${STORAGE}"
-            "SERVICEBUS_NAMESPACE=${SB}"
-            "AML_ENDPOINT_URL=${AML_ENDPOINT_URL}"
-            "AML_ENDPOINT_KEY=${AML_ENDPOINT_KEY}"
-            "BACKGROUND_REMOVAL_PROVIDER=${BACKGROUND_REMOVAL_PROVIDER}"
-            "IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER}"
-            "FAL_API_KEY=${FAL_API_KEY}"
+          # Quick sanity check — all apps must exist before we deploy images.
+          # RBAC provisioning is handled separately (provision-rbac workflow or manual).
+          APPS=(
+            "opal-web-api-${ENV_NAME}"
+            "opal-billing-service-${ENV_NAME}"
+            "opal-orchestrator-${ENV_NAME}"
+            "opal-export-worker-${ENV_NAME}"
+            "opal-bg-removal-worker-${ENV_NAME}"
+            "opal-scene-worker-${ENV_NAME}"
+            "opal-upscale-worker-${ENV_NAME}"
           )
 
-          # App name → ingress mode → port
-          declare -A APP_INGRESS=(
-            ["opal-web-api-${ENV_NAME}"]="external:8080"
-            ["opal-billing-service-${ENV_NAME}"]="external:8080"
-            ["opal-orchestrator-${ENV_NAME}"]="internal:8080"
-            ["opal-export-worker-${ENV_NAME}"]="none:0"
-            ["opal-bg-removal-worker-${ENV_NAME}"]="none:0"
-            ["opal-scene-worker-${ENV_NAME}"]="none:0"
-            ["opal-upscale-worker-${ENV_NAME}"]="none:0"
-          )
-
-          for APP in "${!APP_INGRESS[@]}"; do
-            IFS=: read -r INGRESS PORT <<< "${APP_INGRESS[$APP]}"
-            echo ""
-            echo "========== ${APP} =========="
-            ensure_app_exists "${APP}" "${INGRESS}" "${PORT}"
+          for APP in "${APPS[@]}"; do
+            STATE=$(az containerapp show -g "${RG_NAME}" -n "${APP}" \
+              --query "properties.provisioningState" -o tsv 2>/dev/null || echo "NOT_FOUND")
+            if [ "${STATE}" = "NOT_FOUND" ]; then
+              echo "ERROR: ${APP} does not exist. Run the provision-rbac workflow first."
+              exit 1
+            fi
+            echo "✓ ${APP} (${STATE})"
           done
-
-          echo ""
-          echo "All apps verified — RBAC and registry bindings confirmed."
 
       - name: Deploy images (only affected apps)
         run: |
