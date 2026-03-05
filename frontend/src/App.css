@@ -2602,7 +2602,7 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  background: #0c0a14;
+  background: #141220;
   color: #e8e4ef;
 }
 
@@ -2615,9 +2615,9 @@ body {
   width: 1000px;
   height: 1000px;
   background:
-    radial-gradient(ellipse at 40% 50%, rgba(139, 192, 191, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 60% 40%, rgba(200, 162, 200, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 60%, rgba(230, 180, 150, 0.04) 0%, transparent 50%);
+    radial-gradient(ellipse at 40% 50%, rgba(139, 192, 191, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 40%, rgba(200, 162, 200, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 60%, rgba(230, 180, 150, 0.08) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
 }
@@ -2627,10 +2627,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(12, 10, 20, 0.88);
+  background: rgba(20, 18, 32, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(232, 228, 239, 0.08);
+  border-bottom: 1px solid rgba(232, 228, 239, 0.1);
 }
 
 .landing-nav-inner {
@@ -2669,7 +2669,7 @@ body {
 .landing-nav-link {
   font-size: 0.82rem;
   font-weight: 500;
-  color: rgba(232, 228, 239, 0.5);
+  color: rgba(232, 228, 239, 0.6);
   text-decoration: none;
   transition: color 0.2s;
 }
@@ -2768,7 +2768,7 @@ body {
   gap: 0.5rem;
   padding: 0.8rem 1.75rem;
   background: linear-gradient(135deg, #8bc0bf, #a3b5d6);
-  color: #0c0a14;
+  color: #141220;
   border: none;
   border-radius: 8px;
   font-size: 0.95rem;
@@ -2832,8 +2832,8 @@ body {
   align-items: center;
   gap: 0;
   padding: 2rem 2.5rem;
-  background: rgba(232, 228, 239, 0.03);
-  border: 1px solid rgba(232, 228, 239, 0.08);
+  background: rgba(232, 228, 239, 0.05);
+  border: 1px solid rgba(232, 228, 239, 0.1);
   border-radius: 16px;
 }
 
@@ -2906,7 +2906,7 @@ body {
 
 .landing-section-sub {
   font-size: 1rem;
-  color: rgba(232, 228, 239, 0.5);
+  color: rgba(232, 228, 239, 0.6);
   max-width: 520px;
   margin: 0 auto;
   line-height: 1.6;
@@ -2935,15 +2935,15 @@ body {
 
 .landing-pain-card {
   padding: 1.75rem 1.5rem;
-  background: rgba(232, 228, 239, 0.03);
-  border: 1px solid rgba(232, 228, 239, 0.08);
+  background: rgba(232, 228, 239, 0.05);
+  border: 1px solid rgba(232, 228, 239, 0.1);
   border-radius: 12px;
 }
 
 .landing-pain-card p {
   font-size: 0.9rem;
   line-height: 1.6;
-  color: rgba(232, 228, 239, 0.55);
+  color: rgba(232, 228, 239, 0.65);
   font-style: italic;
 }
 
@@ -2970,8 +2970,8 @@ body {
 
 .landing-feature-card {
   padding: 2rem;
-  background: rgba(232, 228, 239, 0.03);
-  border: 1px solid rgba(232, 228, 239, 0.08);
+  background: rgba(232, 228, 239, 0.05);
+  border: 1px solid rgba(232, 228, 239, 0.1);
   border-radius: 12px;
   transition: all 0.25s;
 }
@@ -3023,7 +3023,7 @@ body {
 .landing-feature-card p {
   font-size: 0.875rem;
   line-height: 1.65;
-  color: rgba(232, 228, 239, 0.5);
+  color: rgba(232, 228, 239, 0.6);
 }
 
 /* Brand callout */
@@ -3038,7 +3038,7 @@ body {
   max-width: 640px;
   margin: 0 auto;
   padding: 3rem;
-  background: linear-gradient(135deg, rgba(139, 192, 191, 0.06), rgba(200, 162, 200, 0.06));
+  background: linear-gradient(135deg, rgba(139, 192, 191, 0.06), rgba(200, 162, 200, 0.1));
   border: 1px solid rgba(139, 192, 191, 0.15);
   border-radius: 16px;
   text-align: center;
@@ -3047,7 +3047,7 @@ body {
 .landing-brand-text p {
   font-size: 1rem;
   line-height: 1.7;
-  color: rgba(232, 228, 239, 0.55);
+  color: rgba(232, 228, 239, 0.65);
   margin: 1rem 0 2rem;
 }
 
@@ -3070,8 +3070,8 @@ body {
 .landing-price-card {
   position: relative;
   padding: 2.25rem 1.75rem;
-  background: rgba(232, 228, 239, 0.03);
-  border: 1px solid rgba(232, 228, 239, 0.08);
+  background: rgba(232, 228, 239, 0.05);
+  border: 1px solid rgba(232, 228, 239, 0.1);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -3085,7 +3085,7 @@ body {
 
 .landing-price-popular {
   border-color: #8bc0bf;
-  box-shadow: 0 0 0 1px rgba(139, 192, 191, 0.3), 0 8px 32px rgba(139, 192, 191, 0.08);
+  box-shadow: 0 0 0 1px rgba(139, 192, 191, 0.3), 0 8px 32px rgba(139, 192, 191, 0.12);
 }
 
 .landing-price-badge {
@@ -3095,7 +3095,7 @@ body {
   transform: translateX(-50%);
   padding: 0.2rem 0.85rem;
   background: linear-gradient(135deg, #8bc0bf, #a3b5d6);
-  color: #0c0a14;
+  color: #141220;
   border-radius: 100px;
   font-size: 0.7rem;
   font-weight: 700;
@@ -3130,7 +3130,7 @@ body {
   color: rgba(232, 228, 239, 0.35);
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(232, 228, 239, 0.08);
+  border-bottom: 1px solid rgba(232, 228, 239, 0.1);
 }
 
 .landing-price-features {
@@ -3147,7 +3147,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.82rem;
-  color: rgba(232, 228, 239, 0.5);
+  color: rgba(232, 228, 239, 0.6);
 }
 
 .landing-price-features li svg {
@@ -3176,7 +3176,7 @@ body {
 .landing-price-btn-primary {
   background: linear-gradient(135deg, #8bc0bf, #a3b5d6);
   border-color: transparent;
-  color: #0c0a14;
+  color: #141220;
 }
 
 .landing-price-btn-primary:hover {

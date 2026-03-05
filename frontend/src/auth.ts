@@ -62,7 +62,8 @@ export async function login(): Promise<void> {
 export async function logout(): Promise<void> {
   const account = getAccount();
   if (account) {
-    await msal().logoutPopup({ account });
+    // Clear local session only — avoids popup/redirect issues with Entra logout
+    await msal().clearCache();
   }
 }
 
