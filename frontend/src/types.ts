@@ -40,6 +40,7 @@ export interface BrandProfile {
   style_keywords: string[];
   color_palette: string[];
   mood?: string;
+  product_category?: string;
   default_scene_count?: number;
   default_scene_types?: string[];
   created_at: string;

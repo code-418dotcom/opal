@@ -9,8 +9,22 @@ import type { BrandProfile } from '../types';
 
 const MOODS = ['modern', 'rustic', 'luxury', 'minimal', 'playful', 'professional'] as const;
 
+const PRODUCT_CATEGORIES = [
+  'Jewelry & Accessories',
+  'Clothing & Apparel',
+  'Shoes & Footwear',
+  'Beauty & Skincare',
+  'Food & Beverages',
+  'Electronics & Gadgets',
+  'Home & Furniture',
+  'Toys & Games',
+  'Sports & Outdoor',
+  'Art & Handmade',
+] as const;
+
 interface WizardState {
   name: string;
+  product_category: string;
   mood: string;
   style_keywords: string[];
   color_palette: string[];
@@ -21,6 +35,7 @@ interface WizardState {
 
 const emptyWizard = (): WizardState => ({
   name: '',
+  product_category: '',
   mood: '',
   style_keywords: [],
   color_palette: ['#2563eb', '#10b981', '#f59e0b'],
@@ -62,6 +77,7 @@ export default function BrandProfiles() {
     setEditingId(profile.id);
     setWizard({
       name: profile.name,
+      product_category: profile.product_category || '',
       mood: profile.mood || '',
       style_keywords: profile.style_keywords || [],
       color_palette: profile.color_palette?.length ? profile.color_palette : ['#2563eb', '#10b981', '#f59e0b'],
@@ -101,6 +117,7 @@ export default function BrandProfiles() {
 
   const buildPrompt = () => {
     const parts: string[] = [];
+    if (wizard.product_category) parts.push(`suitable backdrop for ${wizard.product_category}`);
     if (wizard.mood) parts.push(wizard.mood);
     if (wizard.style_keywords.length) parts.push(wizard.style_keywords.join(', '));
     parts.push('empty surface for product placement, no objects, no clutter, photorealistic product photography backdrop');
@@ -159,6 +176,7 @@ export default function BrandProfiles() {
     try {
       const data: Partial<BrandProfile> = {
         name: wizard.name,
+        product_category: wizard.product_category || undefined,
         mood: wizard.mood || undefined,
         style_keywords: wizard.style_keywords,
         color_palette: wizard.color_palette.filter(c => c),
@@ -198,12 +216,13 @@ export default function BrandProfiles() {
 
   const canNext = () => {
     if (wizardStep === 0) return wizard.name.trim().length > 0;
-    if (wizardStep === 1) return true;
+    if (wizardStep === 1) return wizard.product_category.length > 0;
     if (wizardStep === 2) return true;
+    if (wizardStep === 3) return true;
     return true;
   };
 
-  const stepLabels = ['Name', 'Style', 'Previews', 'Review'];
+  const stepLabels = ['Name', 'Product', 'Style', 'Previews', 'Review'];
 
   if (isLoading) {
     return (
@@ -255,6 +274,10 @@ export default function BrandProfiles() {
                   </button>
                 </div>
               </div>
+
+              {profile.product_category && (
+                <span className="brand-category-badge">{profile.product_category}</span>
+              )}
 
               {profile.mood && (
                 <span className="brand-mood-badge">{profile.mood}</span>
@@ -334,6 +357,33 @@ export default function BrandProfiles() {
 
               {wizardStep === 1 && (
                 <div className="wizard-step-content">
+                  <label className="form-label">What do you sell?</label>
+                  <p className="form-hint" style={{ marginBottom: '1rem' }}>
+                    This helps generate backgrounds that suit your products.
+                  </p>
+                  <div className="category-grid">
+                    {PRODUCT_CATEGORIES.map(cat => (
+                      <button
+                        key={cat}
+                        className={`category-btn ${wizard.product_category === cat ? 'selected' : ''}`}
+                        onClick={() => setWizard(w => ({ ...w, product_category: w.product_category === cat ? '' : cat }))}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="form-label" style={{ marginTop: '1rem' }}>Or type your own</label>
+                  <input
+                    className="input"
+                    placeholder="e.g. Candles, Pet supplies, Watches..."
+                    value={PRODUCT_CATEGORIES.includes(wizard.product_category as any) ? '' : wizard.product_category}
+                    onChange={e => setWizard(w => ({ ...w, product_category: e.target.value }))}
+                  />
+                </div>
+              )}
+
+              {wizardStep === 2 && (
+                <div className="wizard-step-content">
                   <label className="form-label">Mood</label>
                   <div className="mood-grid">
                     {MOODS.map(m => (
@@ -389,7 +439,7 @@ export default function BrandProfiles() {
                 </div>
               )}
 
-              {wizardStep === 2 && (
+              {wizardStep === 3 && (
                 <div className="wizard-step-content">
                   <p className="form-hint">
                     Generate scene previews based on your style settings. Select the ones you want to save to your library.
@@ -435,13 +485,19 @@ export default function BrandProfiles() {
                 </div>
               )}
 
-              {wizardStep === 3 && (
+              {wizardStep === 4 && (
                 <div className="wizard-step-content">
                   <div className="review-section">
                     <div className="review-row">
                       <span className="review-label">Name</span>
                       <span className="review-value">{wizard.name}</span>
                     </div>
+                    {wizard.product_category && (
+                      <div className="review-row">
+                        <span className="review-label">Product</span>
+                        <span className="review-value">{wizard.product_category}</span>
+                      </div>
+                    )}
                     {wizard.mood && (
                       <div className="review-row">
                         <span className="review-label">Mood</span>
@@ -484,7 +540,7 @@ export default function BrandProfiles() {
                 </button>
               )}
               <div style={{ flex: 1 }} />
-              {wizardStep < 3 ? (
+              {wizardStep < 4 ? (
                 <button
                   className="button-primary button-sm"
                   onClick={() => setWizardStep(s => s + 1)}

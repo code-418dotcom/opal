@@ -75,6 +75,8 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
         if job_record and job_record.get("brand_profile_id") and job_record["brand_profile_id"] != "default":
             bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
             if bp:
+                if bp.get("product_category"):
+                    parts.append(f"suitable backdrop for {bp['product_category']}")
                 if bp.get("style_keywords"):
                     parts.append(", ".join(bp["style_keywords"]))
                 if bp.get("mood"):
@@ -91,6 +93,8 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
             parts = []
             if bp.get("default_scene_prompt"):
                 parts.append(bp["default_scene_prompt"])
+            if bp.get("product_category"):
+                parts.append(f"suitable backdrop for {bp['product_category']}")
             if bp.get("style_keywords"):
                 parts.append(", ".join(bp["style_keywords"]))
             if bp.get("mood"):

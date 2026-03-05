@@ -31,6 +31,7 @@ class BrandProfile(Base):
     style_keywords = Column(ARRAY(String), nullable=True)
     color_palette = Column(ARRAY(String), nullable=True)
     mood = Column(String, nullable=True)
+    product_category = Column(String(100), nullable=True)
     default_scene_count = Column(Integer, nullable=True, default=1)
     default_scene_types = Column(ARRAY(String), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

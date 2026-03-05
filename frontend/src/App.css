@@ -949,6 +949,45 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.brand-category-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+  margin-bottom: 0.5rem;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.category-btn {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.813rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.category-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.category-btn.selected {
+  border-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
 .brand-keyword-chip {
   display: inline-flex;
   align-items: center;

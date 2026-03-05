@@ -261,6 +261,7 @@ def _brand_profile_to_dict(bp: BrandProfile) -> Dict[str, Any]:
         "style_keywords": bp.style_keywords or [],
         "color_palette": bp.color_palette or [],
         "mood": bp.mood,
+        "product_category": bp.product_category,
         "default_scene_count": bp.default_scene_count or 1,
         "default_scene_types": bp.default_scene_types or [],
         "created_at": bp.created_at.isoformat() if bp.created_at else None,
@@ -298,6 +299,7 @@ def create_brand_profile(data: Dict[str, Any]) -> Dict[str, Any]:
             style_keywords=data.get("style_keywords"),
             color_palette=data.get("color_palette"),
             mood=data.get("mood"),
+            product_category=data.get("product_category"),
             default_scene_count=data.get("default_scene_count", 1),
             default_scene_types=data.get("default_scene_types"),
             created_at=datetime.utcnow(),
@@ -318,7 +320,7 @@ def update_brand_profile(profile_id: str, tenant_id: str, updates: Dict[str, Any
         ).first()
         if not bp:
             return None
-        for field in ("name", "default_scene_prompt", "style_keywords", "color_palette", "mood", "default_scene_count", "default_scene_types"):
+        for field in ("name", "default_scene_prompt", "style_keywords", "color_palette", "mood", "product_category", "default_scene_count", "default_scene_types"):
             if field in updates:
                 setattr(bp, field, updates[field])
         bp.updated_at = datetime.utcnow()
