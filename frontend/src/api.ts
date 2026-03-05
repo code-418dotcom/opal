@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate } from './types';
 
 // Detect backend type from environment variables
 const BACKEND_TYPE = (import.meta.env.VITE_BACKEND_TYPE as string) || 'supabase';
@@ -96,19 +96,26 @@ class ApiClient {
     sceneOptions?: {
       scene_count?: number;
       scene_types?: string[];
+      scene_template_ids?: string[];
+      use_saved_background?: boolean;
     },
+    brandProfileId?: string,
   ): Promise<CreateJobResponse> {
     const endpoint = this.backendType === 'azure' ? '/v1/jobs' : '/create-job';
     const body = this.backendType === 'azure'
       ? {
           tenant_id: 'default',
-          brand_profile_id: 'default',
+          brand_profile_id: brandProfileId || 'default',
           items: filenames.map(filename => ({
             filename,
             ...(sceneOptions?.scene_count && sceneOptions.scene_count > 1
               ? { scene_count: sceneOptions.scene_count }
               : {}),
             ...(sceneOptions?.scene_types ? { scene_types: sceneOptions.scene_types } : {}),
+            ...(sceneOptions?.scene_template_ids ? {
+              scene_template_ids: sceneOptions.scene_template_ids,
+              use_saved_background: sceneOptions.use_saved_background || false,
+            } : {}),
           })),
           processing_options: processingOptions || {
             remove_background: true,
@@ -284,6 +291,62 @@ class ApiClient {
     } catch {
       return { status: 'error' };
     }
+  }
+
+  // ── Brand Profiles ──────────────────────────────────────────────
+
+  async listBrandProfiles(): Promise<BrandProfile[]> {
+    return this.request<BrandProfile[]>('/v1/brand-profiles');
+  }
+
+  async createBrandProfile(data: Partial<BrandProfile>): Promise<BrandProfile> {
+    return this.request<BrandProfile>('/v1/brand-profiles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBrandProfile(id: string, data: Partial<BrandProfile>): Promise<BrandProfile> {
+    return this.request<BrandProfile>(`/v1/brand-profiles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBrandProfile(id: string): Promise<void> {
+    await this.request(`/v1/brand-profiles/${id}`, { method: 'DELETE' });
+  }
+
+  // ── Scene Templates ─────────────────────────────────────────────
+
+  async listSceneTemplates(brandProfileId?: string): Promise<SceneTemplate[]> {
+    const params = brandProfileId ? `?brand_profile_id=${brandProfileId}` : '';
+    return this.request<SceneTemplate[]>(`/v1/scene-templates${params}`);
+  }
+
+  async createSceneTemplate(data: { name: string; prompt: string; brand_profile_id?: string; scene_type?: string }): Promise<SceneTemplate> {
+    return this.request<SceneTemplate>('/v1/scene-templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSceneTemplate(id: string): Promise<void> {
+    await this.request(`/v1/scene-templates/${id}`, { method: 'DELETE' });
+  }
+
+  async generateScenePreview(prompt: string): Promise<{ preview_url: string; preview_blob_path: string }> {
+    return this.request('/v1/scene-templates/preview', {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    });
+  }
+
+  async setSceneTemplatePreview(id: string, previewBlobPath: string): Promise<SceneTemplate> {
+    return this.request<SceneTemplate>(`/v1/scene-templates/${id}/set-preview`, {
+      method: 'POST',
+      body: JSON.stringify({ preview_blob_path: previewBlobPath }),
+    });
   }
 }
 

@@ -8,6 +8,7 @@ from web_api.routes_jobs import router as jobs_router
 from web_api.routes_uploads import router as uploads_router
 from web_api.routes_downloads import router as downloads_router
 from web_api.routes_brand_profiles import router as brand_profiles_router
+from web_api.routes_scene_templates import router as scene_templates_router
 from web_api.auth import verify_api_key
 
 log = logging.getLogger("opal")
@@ -27,6 +28,7 @@ app.include_router(jobs_router, dependencies=[Depends(verify_api_key)])
 app.include_router(uploads_router, dependencies=[Depends(verify_api_key)])
 app.include_router(downloads_router, dependencies=[Depends(verify_api_key)])
 app.include_router(brand_profiles_router, dependencies=[Depends(verify_api_key)])
+app.include_router(scene_templates_router, dependencies=[Depends(verify_api_key)])
 
 
 @app.on_event("startup")

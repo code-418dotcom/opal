@@ -9,6 +9,7 @@ from shared.db_sqlalchemy import (
     update_job_status,
     list_jobs,
     get_brand_profile,
+    get_scene_template,
 )
 from shared.util import new_id, new_correlation_id
 from shared.queue_unified import send_job_message
@@ -22,6 +23,8 @@ class ItemIn(BaseModel):
     scene_prompt: str | None = None
     scene_count: int = Field(default=1, ge=1, le=10)
     scene_types: list[str] | None = None
+    scene_template_ids: list[str] | None = None
+    use_saved_background: bool = False
 
 
 class ProcessingOptions(BaseModel):
@@ -61,26 +64,71 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
     }
     create_job_record(job_data)
 
+    # Apply brand profile defaults when no explicit scene options provided
+    bp = None
+    if body.brand_profile_id != "default":
+        bp = get_brand_profile(body.brand_profile_id, tenant_id)
+
     # Create job items (fan out for multi-scene)
     from shared.scene_types import DEFAULT_SCENE_TYPES
 
     items_data = []
     created_items = []
     for it in body.items:
-        if it.scene_types and len(it.scene_types) != it.scene_count:
+        # Scene template mode: each template ID becomes a scene
+        if it.scene_template_ids:
+            templates = []
+            for tid in it.scene_template_ids:
+                tmpl = get_scene_template(tid, tenant_id)
+                if not tmpl:
+                    raise HTTPException(status_code=404, detail=f"Scene template not found: {tid}")
+                templates.append(tmpl)
+
+            for scene_idx, tmpl in enumerate(templates):
+                item_id = new_id("item")
+                saved_bg = tmpl.get("preview_blob_path") if it.use_saved_background else None
+                items_data.append({
+                    "id": item_id,
+                    "job_id": job_id,
+                    "tenant_id": tenant_id,
+                    "filename": it.filename,
+                    "status": "created",
+                    "scene_prompt": tmpl["prompt"],
+                    "scene_index": scene_idx if len(templates) > 1 else None,
+                    "scene_type": tmpl.get("scene_type"),
+                    "saved_background_path": saved_bg,
+                })
+                created_items.append({
+                    "item_id": item_id,
+                    "filename": it.filename,
+                    "scene_index": scene_idx if len(templates) > 1 else None,
+                    "scene_type": tmpl.get("scene_type"),
+                })
+            continue
+
+        # Apply brand profile defaults if no explicit scene config
+        scene_count = it.scene_count
+        scene_types = it.scene_types
+        if bp and scene_count == 1 and not scene_types:
+            if bp.get("default_scene_count") and bp["default_scene_count"] > 1:
+                scene_count = bp["default_scene_count"]
+            if bp.get("default_scene_types"):
+                scene_types = bp["default_scene_types"]
+
+        if scene_types and len(scene_types) != scene_count:
             raise HTTPException(
                 status_code=422,
-                detail=f"scene_types length ({len(it.scene_types)}) must equal scene_count ({it.scene_count})"
+                detail=f"scene_types length ({len(scene_types)}) must equal scene_count ({scene_count})"
             )
 
-        for scene_idx in range(it.scene_count):
+        for scene_idx in range(scene_count):
             item_id = new_id("item")
             scene_type = None
             scene_prompt = it.scene_prompt
 
-            if it.scene_count > 1:
-                if it.scene_types:
-                    scene_type = it.scene_types[scene_idx]
+            if scene_count > 1:
+                if scene_types:
+                    scene_type = scene_types[scene_idx]
                 else:
                     scene_type = DEFAULT_SCENE_TYPES[scene_idx % len(DEFAULT_SCENE_TYPES)]
 
@@ -91,13 +139,13 @@ def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_k
                 "filename": it.filename,
                 "status": "created",
                 "scene_prompt": scene_prompt,
-                "scene_index": scene_idx if it.scene_count > 1 else None,
+                "scene_index": scene_idx if scene_count > 1 else None,
                 "scene_type": scene_type,
             })
             created_items.append({
                 "item_id": item_id,
                 "filename": it.filename,
-                "scene_index": scene_idx if it.scene_count > 1 else None,
+                "scene_index": scene_idx if scene_count > 1 else None,
                 "scene_type": scene_type,
             })
 
@@ -148,6 +196,7 @@ def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
                 "scene_prompt": i.get("scene_prompt"),
                 "scene_index": i.get("scene_index"),
                 "scene_type": i.get("scene_type"),
+                "saved_background_path": i.get("saved_background_path"),
             }
             for i in items
         ],

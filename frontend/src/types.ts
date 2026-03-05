@@ -8,6 +8,7 @@ export interface JobItem {
   scene_prompt?: string;
   scene_index?: number;
   scene_type?: string;
+  saved_background_path?: string;
 }
 
 export interface Job {
@@ -29,4 +30,31 @@ export interface CreateJobResponse {
 export interface UploadSasResponse {
   upload_url: string;
   raw_blob_path: string;
+}
+
+export interface BrandProfile {
+  id: string;
+  tenant_id: string;
+  name: string;
+  default_scene_prompt?: string;
+  style_keywords: string[];
+  color_palette: string[];
+  mood?: string;
+  default_scene_count?: number;
+  default_scene_types?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SceneTemplate {
+  id: string;
+  tenant_id: string;
+  brand_profile_id?: string;
+  name: string;
+  prompt: string;
+  preview_blob_path?: string;
+  preview_url?: string;
+  scene_type?: string;
+  created_at: string;
+  updated_at: string;
 }

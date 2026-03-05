@@ -21,6 +21,8 @@ class CreateBrandProfileIn(BaseModel):
     style_keywords: Optional[List[str]] = None
     color_palette: Optional[List[str]] = None
     mood: Optional[str] = None
+    default_scene_count: Optional[int] = Field(None, ge=1, le=10)
+    default_scene_types: Optional[List[str]] = None
 
 
 class UpdateBrandProfileIn(BaseModel):
@@ -29,6 +31,8 @@ class UpdateBrandProfileIn(BaseModel):
     style_keywords: Optional[List[str]] = None
     color_palette: Optional[List[str]] = None
     mood: Optional[str] = None
+    default_scene_count: Optional[int] = Field(None, ge=1, le=10)
+    default_scene_types: Optional[List[str]] = None
 
 
 @router.post("/brand-profiles", status_code=201)
@@ -42,6 +46,8 @@ def create(body: CreateBrandProfileIn, tenant_id: str = Depends(get_tenant_from_
         "style_keywords": body.style_keywords,
         "color_palette": body.color_palette,
         "mood": body.mood,
+        "default_scene_count": body.default_scene_count,
+        "default_scene_types": body.default_scene_types,
     }
     result = create_brand_profile(data)
     return result

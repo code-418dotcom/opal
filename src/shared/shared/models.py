@@ -31,11 +31,30 @@ class BrandProfile(Base):
     style_keywords = Column(ARRAY(String), nullable=True)
     color_palette = Column(ARRAY(String), nullable=True)
     mood = Column(String, nullable=True)
+    default_scene_count = Column(Integer, nullable=True, default=1)
+    default_scene_types = Column(ARRAY(String), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f'<BrandProfile {self.id} name={self.name}>'
+
+
+class SceneTemplate(Base):
+    __tablename__ = 'scene_templates'
+
+    id = Column(String, primary_key=True, name='id')
+    tenant_id = Column(String, nullable=False, index=True)
+    brand_profile_id = Column(String, ForeignKey('brand_profiles.id', ondelete='SET NULL'), nullable=True, index=True)
+    name = Column(String(255), nullable=False)
+    prompt = Column(String, nullable=False)
+    preview_blob_path = Column(String, nullable=True)
+    scene_type = Column(String(50), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<SceneTemplate {self.id} name={self.name}>'
 
 
 class Job(Base):
@@ -76,6 +95,7 @@ class JobItem(Base):
     scene_prompt = Column(String, nullable=True)
     scene_index = Column(Integer, nullable=True)
     scene_type = Column(String(50), nullable=True)
+    saved_background_path = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

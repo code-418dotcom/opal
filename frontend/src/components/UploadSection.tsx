@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
-import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { api } from '../api';
 import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
+import type { BrandProfile, SceneTemplate } from '../types';
 
 interface Props {
   onJobCreated: (jobId: string) => void;
@@ -24,7 +26,31 @@ export default function UploadSection({ onJobCreated }: Props) {
     upscale: true,
   });
   const [sceneCount, setSceneCount] = useState(1);
+  const [selectedBrandId, setSelectedBrandId] = useState('');
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [useSavedBackground, setUseSavedBackground] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: brandProfiles = [] } = useQuery({
+    queryKey: ['brand-profiles'],
+    queryFn: () => api.listBrandProfiles(),
+  });
+
+  const { data: sceneTemplates = [] } = useQuery({
+    queryKey: ['scene-templates', selectedBrandId],
+    queryFn: () => api.listSceneTemplates(selectedBrandId || undefined),
+    enabled: processingOptions.generate_scene,
+  });
+
+  // Auto-populate scene count from brand profile
+  useEffect(() => {
+    if (!selectedBrandId) return;
+    const bp = brandProfiles.find(p => p.id === selectedBrandId);
+    if (bp?.default_scene_count && bp.default_scene_count > 1) {
+      setSceneCount(bp.default_scene_count);
+    }
+  }, [selectedBrandId, brandProfiles]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -75,8 +101,17 @@ export default function UploadSection({ onJobCreated }: Props) {
 
     try {
       const filenames = files.map((f) => f.file.name);
-      const sceneOptions = sceneCount > 1 ? { scene_count: sceneCount } : undefined;
-      const job = await api.createJob(filenames, processingOptions, sceneOptions);
+      const sceneOptions = sceneCount > 1 || selectedTemplateIds.length > 0 ? {
+        scene_count: sceneCount,
+        scene_template_ids: selectedTemplateIds.length > 0 ? selectedTemplateIds : undefined,
+        use_saved_background: selectedTemplateIds.length > 0 ? useSavedBackground : undefined,
+      } : undefined;
+      const job = await api.createJob(
+        filenames,
+        processingOptions,
+        sceneOptions,
+        selectedBrandId || undefined,
+      );
 
       onJobCreated(job.job_id);
 
@@ -223,6 +258,25 @@ export default function UploadSection({ onJobCreated }: Props) {
 
       {files.length > 0 && !isUploading && (
         <>
+          {brandProfiles.length > 0 && (
+            <div className="brand-selector">
+              <label className="form-label">Brand Profile</label>
+              <select
+                className="input"
+                value={selectedBrandId}
+                onChange={e => {
+                  setSelectedBrandId(e.target.value);
+                  setSelectedTemplateIds([]);
+                }}
+              >
+                <option value="">None (default)</option>
+                {brandProfiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <ProcessingOptions
             options={processingOptions}
             onChange={setProcessingOptions}
@@ -230,6 +284,7 @@ export default function UploadSection({ onJobCreated }: Props) {
           />
 
           {processingOptions.generate_scene && (
+            <>
             <div className="scene-count-section">
               <label className="scene-count-label">Scenes per image</label>
               <div className="scene-count-stepper">
@@ -255,6 +310,59 @@ export default function UploadSection({ onJobCreated }: Props) {
                 </span>
               )}
             </div>
+
+            {sceneTemplates.length > 0 && (
+              <div className="template-picker">
+                <button
+                  className="template-picker-toggle"
+                  onClick={() => setShowTemplatePicker(!showTemplatePicker)}
+                >
+                  <ImageIcon size={16} />
+                  <span>Choose from Library ({selectedTemplateIds.length} selected)</span>
+                  {showTemplatePicker ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+
+                {showTemplatePicker && (
+                  <div className="template-picker-grid">
+                    {sceneTemplates.map(tmpl => {
+                      const isSelected = selectedTemplateIds.includes(tmpl.id);
+                      return (
+                        <div
+                          key={tmpl.id}
+                          className={`template-picker-card ${isSelected ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedTemplateIds(prev =>
+                              isSelected ? prev.filter(id => id !== tmpl.id) : [...prev, tmpl.id]
+                            );
+                          }}
+                        >
+                          {tmpl.preview_url ? (
+                            <img src={tmpl.preview_url} alt={tmpl.name} className="template-picker-img" />
+                          ) : (
+                            <div className="template-picker-placeholder"><ImageIcon size={16} /></div>
+                          )}
+                          <span className="template-picker-name">{tmpl.name}</span>
+                          {isSelected && <CheckCircle size={14} className="template-picker-check" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedTemplateIds.length > 0 && (
+                  <div className="template-picker-option">
+                    <span>Use exact background</span>
+                    <div
+                      className={`toggle-switch ${useSavedBackground ? 'toggle-on' : ''}`}
+                      onClick={() => setUseSavedBackground(!useSavedBackground)}
+                    >
+                      <div className="toggle-thumb" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
           )}
 
           <button className="button-primary" onClick={uploadFiles}>

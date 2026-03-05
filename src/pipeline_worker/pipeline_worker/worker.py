@@ -148,6 +148,15 @@ def process_message(data: dict) -> None:
     raw_bytes = download_blob(raw_sas)
     LOG.info('Downloaded raw image: %d bytes', len(raw_bytes))
 
+    # Download saved background if "use exact background" mode
+    saved_background_bytes = None
+    saved_bg_path = data.get('saved_background_path')
+    if saved_bg_path:
+        LOG.info('Downloading saved background: %s', saved_bg_path)
+        bg_sas = generate_read_sas(container='outputs', blob_path=saved_bg_path)
+        saved_background_bytes = download_blob(bg_sas)
+        LOG.info('Downloaded saved background: %d bytes', len(saved_background_bytes))
+
     # Execute full pipeline in-memory
     result = execute_pipeline(
         raw_bytes=raw_bytes,
@@ -159,6 +168,7 @@ def process_message(data: dict) -> None:
         img_gen_provider=img_gen_provider,
         upscale_provider=upscale_provider,
         upscale_enabled=settings.UPSCALE_ENABLED,
+        saved_background_bytes=saved_background_bytes,
     )
 
     # Upload final output (single blob write)

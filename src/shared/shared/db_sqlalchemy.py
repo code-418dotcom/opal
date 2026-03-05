@@ -5,7 +5,7 @@ For Azure deployment - replaces db_supabase.py functionality.
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from .db import SessionLocal
-from .models import Job, JobItem, JobStatus, ItemStatus, BrandProfile
+from .models import Job, JobItem, JobStatus, ItemStatus, BrandProfile, SceneTemplate
 from datetime import datetime
 import logging
 
@@ -61,6 +61,7 @@ def create_job_item_records(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                 scene_prompt=item_data.get("scene_prompt"),
                 scene_index=item_data.get("scene_index"),
                 scene_type=item_data.get("scene_type"),
+                saved_background_path=item_data.get("saved_background_path"),
                 created_at=item_data.get("created_at", datetime.utcnow()),
                 updated_at=item_data.get("updated_at", datetime.utcnow()),
             )
@@ -82,6 +83,7 @@ def create_job_item_records(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                 "scene_prompt": item.scene_prompt,
                 "scene_index": item.scene_index,
                 "scene_type": item.scene_type,
+                "saved_background_path": item.saved_background_path,
                 "created_at": item.created_at.isoformat() if item.created_at else None,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
@@ -136,6 +138,7 @@ def get_job_item(item_id: str) -> Optional[Dict[str, Any]]:
             "scene_prompt": item.scene_prompt,
             "scene_index": item.scene_index,
             "scene_type": item.scene_type,
+            "saved_background_path": item.saved_background_path,
             "created_at": item.created_at.isoformat() if item.created_at else None,
             "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         }
@@ -160,6 +163,7 @@ def get_job_items(job_id: str) -> List[Dict[str, Any]]:
                 "scene_prompt": item.scene_prompt,
                 "scene_index": item.scene_index,
                 "scene_type": item.scene_type,
+                "saved_background_path": item.saved_background_path,
                 "created_at": item.created_at.isoformat() if item.created_at else None,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
@@ -196,6 +200,8 @@ def update_job_item(item_id: str, updates: Dict[str, Any]) -> None:
                 item.scene_index = updates["scene_index"]
             if "scene_type" in updates:
                 item.scene_type = updates["scene_type"]
+            if "saved_background_path" in updates:
+                item.saved_background_path = updates["saved_background_path"]
 
             item.updated_at = datetime.utcnow()
             session.commit()
@@ -236,6 +242,7 @@ def get_job_items_by_filename(job_id: str, filename: str) -> List[Dict[str, Any]
                 "scene_prompt": item.scene_prompt,
                 "scene_index": item.scene_index,
                 "scene_type": item.scene_type,
+                "saved_background_path": item.saved_background_path,
                 "created_at": item.created_at.isoformat() if item.created_at else None,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
             }
@@ -254,6 +261,8 @@ def _brand_profile_to_dict(bp: BrandProfile) -> Dict[str, Any]:
         "style_keywords": bp.style_keywords or [],
         "color_palette": bp.color_palette or [],
         "mood": bp.mood,
+        "default_scene_count": bp.default_scene_count or 1,
+        "default_scene_types": bp.default_scene_types or [],
         "created_at": bp.created_at.isoformat() if bp.created_at else None,
         "updated_at": bp.updated_at.isoformat() if bp.updated_at else None,
     }
@@ -289,6 +298,8 @@ def create_brand_profile(data: Dict[str, Any]) -> Dict[str, Any]:
             style_keywords=data.get("style_keywords"),
             color_palette=data.get("color_palette"),
             mood=data.get("mood"),
+            default_scene_count=data.get("default_scene_count", 1),
+            default_scene_types=data.get("default_scene_types"),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
@@ -307,7 +318,7 @@ def update_brand_profile(profile_id: str, tenant_id: str, updates: Dict[str, Any
         ).first()
         if not bp:
             return None
-        for field in ("name", "default_scene_prompt", "style_keywords", "color_palette", "mood"):
+        for field in ("name", "default_scene_prompt", "style_keywords", "color_palette", "mood", "default_scene_count", "default_scene_types"):
             if field in updates:
                 setattr(bp, field, updates[field])
         bp.updated_at = datetime.utcnow()
@@ -326,6 +337,94 @@ def delete_brand_profile(profile_id: str, tenant_id: str) -> bool:
         if not bp:
             return False
         session.delete(bp)
+        session.commit()
+        return True
+
+
+# ── Scene Template CRUD ────────────────────────────────────────────
+
+def _scene_template_to_dict(st: SceneTemplate) -> Dict[str, Any]:
+    return {
+        "id": st.id,
+        "tenant_id": st.tenant_id,
+        "brand_profile_id": st.brand_profile_id,
+        "name": st.name,
+        "prompt": st.prompt,
+        "preview_blob_path": st.preview_blob_path,
+        "scene_type": st.scene_type,
+        "created_at": st.created_at.isoformat() if st.created_at else None,
+        "updated_at": st.updated_at.isoformat() if st.updated_at else None,
+    }
+
+
+def list_scene_templates(tenant_id: str, brand_profile_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List scene templates for a tenant, optionally filtered by brand profile."""
+    with SessionLocal() as session:
+        q = session.query(SceneTemplate).filter(SceneTemplate.tenant_id == tenant_id)
+        if brand_profile_id:
+            q = q.filter(SceneTemplate.brand_profile_id == brand_profile_id)
+        q = q.order_by(SceneTemplate.created_at.desc())
+        return [_scene_template_to_dict(st) for st in q.all()]
+
+
+def get_scene_template(template_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
+    """Get a scene template by ID, scoped to tenant."""
+    with SessionLocal() as session:
+        st = session.query(SceneTemplate).filter(
+            SceneTemplate.id == template_id,
+            SceneTemplate.tenant_id == tenant_id,
+        ).first()
+        return _scene_template_to_dict(st) if st else None
+
+
+def create_scene_template(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new scene template."""
+    with SessionLocal() as session:
+        st = SceneTemplate(
+            id=data["id"],
+            tenant_id=data["tenant_id"],
+            brand_profile_id=data.get("brand_profile_id"),
+            name=data["name"],
+            prompt=data["prompt"],
+            preview_blob_path=data.get("preview_blob_path"),
+            scene_type=data.get("scene_type"),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(st)
+        session.commit()
+        session.refresh(st)
+        return _scene_template_to_dict(st)
+
+
+def update_scene_template(template_id: str, tenant_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update a scene template. Returns updated dict or None if not found."""
+    with SessionLocal() as session:
+        st = session.query(SceneTemplate).filter(
+            SceneTemplate.id == template_id,
+            SceneTemplate.tenant_id == tenant_id,
+        ).first()
+        if not st:
+            return None
+        for field in ("name", "prompt", "preview_blob_path", "scene_type", "brand_profile_id"):
+            if field in updates:
+                setattr(st, field, updates[field])
+        st.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(st)
+        return _scene_template_to_dict(st)
+
+
+def delete_scene_template(template_id: str, tenant_id: str) -> bool:
+    """Delete a scene template. Returns True if deleted."""
+    with SessionLocal() as session:
+        st = session.query(SceneTemplate).filter(
+            SceneTemplate.id == template_id,
+            SceneTemplate.tenant_id == tenant_id,
+        ).first()
+        if not st:
+            return False
+        session.delete(st)
         session.commit()
         return True
 

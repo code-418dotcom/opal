@@ -70,6 +70,7 @@ def execute_pipeline(
     img_gen_provider=None,
     upscale_provider=None,
     upscale_enabled: bool = True,
+    saved_background_bytes: Optional[bytes] = None,
 ) -> PipelineResult:
     """
     Execute the full image processing pipeline in-memory.
@@ -88,13 +89,17 @@ def execute_pipeline(
         LOG.info("Step 1/3: Background removal — skipped")
 
     # Step 2: Scene generation + compositing
-    if generate_scene and img_gen_provider:
-        LOG.info("Step 2/3: Scene generation (%s)", img_gen_provider.name)
-        prompt = scene_prompt or (
-            "modern minimalist living room, bright natural lighting, "
-            "wooden floor, white walls, plants, photorealistic, high quality"
-        )
-        scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt)
+    if generate_scene and (img_gen_provider or saved_background_bytes):
+        if saved_background_bytes:
+            LOG.info("Step 2/3: Using saved background image (%d bytes)", len(saved_background_bytes))
+            scene_bytes = saved_background_bytes
+        else:
+            LOG.info("Step 2/3: Scene generation (%s)", img_gen_provider.name)
+            prompt = scene_prompt or (
+                "modern minimalist living room, bright natural lighting, "
+                "wooden floor, white walls, plants, photorealistic, high quality"
+            )
+            scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt)
         current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes)
     else:
         LOG.info("Step 2/3: Scene generation — skipped")

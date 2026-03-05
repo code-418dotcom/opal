@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { Upload, Activity, Image as ImageIcon } from 'lucide-react';
+import { Upload, Activity, Image as ImageIcon, Palette, BookImage } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import ResultsGallery from './components/ResultsGallery';
+import BrandProfiles from './components/BrandProfiles';
+import SceneLibrary from './components/SceneLibrary';
 import { api } from './api';
 import './App.css';
 
@@ -16,7 +18,7 @@ const queryClient = new QueryClient({
   },
 });
 
-type Tab = 'upload' | 'monitor' | 'results';
+type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
@@ -35,6 +37,8 @@ function AppContent() {
     { id: 'upload' as Tab, label: 'Upload', icon: Upload },
     { id: 'monitor' as Tab, label: 'Monitor', icon: Activity },
     { id: 'results' as Tab, label: 'Results', icon: ImageIcon },
+    { id: 'brands' as Tab, label: 'Brands', icon: Palette },
+    { id: 'library' as Tab, label: 'Library', icon: BookImage },
   ];
 
   const { data: health } = useQuery({
@@ -117,12 +121,14 @@ function AppContent() {
           {activeTab === 'results' && (
             <ResultsGallery jobId={currentJobId} />
           )}
+          {activeTab === 'brands' && <BrandProfiles />}
+          {activeTab === 'library' && <SceneLibrary />}
         </div>
       </main>
 
       <footer className="footer">
         <div className="container">
-          <p>OPAL Platform v0.3 | AI-Powered Image Processing</p>
+          <p>OPAL Platform v0.4 | AI-Powered Image Processing</p>
         </div>
       </footer>
     </div>

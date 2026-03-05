@@ -120,13 +120,16 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
 
     for sibling in siblings:
         try:
-            send_job_message({
+            msg = {
                 "tenant_id": tenant_id,
                 "job_id": body.job_id,
                 "item_id": sibling["id"],
                 "correlation_id": job["correlation_id"],
                 "processing_options": body.processing_options.model_dump(),
-            })
+            }
+            if sibling.get("saved_background_path"):
+                msg["saved_background_path"] = sibling["saved_background_path"]
+            send_job_message(msg)
             LOG.info("Queue message sent for item_id=%s", sibling["id"])
         except Exception as e:
             LOG.error("Failed to send queue message for item_id=%s: %s", sibling["id"], e, exc_info=True)
