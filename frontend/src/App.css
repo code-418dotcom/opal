@@ -2558,6 +2558,46 @@ body {
   color: var(--color-text-secondary);
 }
 
+/* Token inline edit */
+.token-display {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.token-display:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.token-edit-icon {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.token-display:hover .token-edit-icon {
+  opacity: 0.5;
+}
+
+.token-edit-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.token-edit-input {
+  width: 80px;
+  padding: 0.2rem 0.4rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
 /* System Panel */
 .system-grid {
   display: grid;

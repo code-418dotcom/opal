@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from shared.db_sqlalchemy import (
     list_admin_settings, get_admin_setting, upsert_admin_setting, delete_admin_setting,
-    list_users, set_user_admin, get_user_by_id,
+    list_users, set_user_admin, set_user_token_balance, get_user_by_id,
 )
 from web_api.auth import get_current_user
 
@@ -144,6 +144,24 @@ async def update_user_admin(
         raise HTTPException(status_code=404, detail="User not found")
     action = "granted" if body.is_admin else "revoked"
     LOG.info("Admin access %s for user %s by %s", action, user_id, admin["user_id"])
+    return result
+
+
+class SetTokenBalanceIn(BaseModel):
+    token_balance: int = Field(..., ge=0)
+
+
+@router.put("/users/{user_id}/tokens")
+async def update_user_tokens(
+    user_id: str,
+    body: SetTokenBalanceIn,
+    admin: dict = Depends(require_admin),
+):
+    """Set absolute token balance for a user."""
+    result = set_user_token_balance(user_id, body.token_balance)
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    LOG.info("Token balance set to %d for user %s by %s", body.token_balance, user_id, admin["user_id"])
     return result
 
 

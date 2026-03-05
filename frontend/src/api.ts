@@ -354,7 +354,7 @@ class ApiClient {
 
   // ── Billing ────────────────────────────────────────────────────────
 
-  async getBalance(): Promise<{ token_balance: number }> {
+  async getBalance(): Promise<{ token_balance: number; is_admin: boolean }> {
     return this.request('/v1/billing/balance');
   }
 
@@ -492,6 +492,13 @@ class ApiClient {
     return this.request(`/v1/admin/users/${userId}/admin`, {
       method: 'PUT',
       body: JSON.stringify({ is_admin: isAdmin }),
+    });
+  }
+
+  async setUserTokens(userId: string, tokenBalance: number): Promise<AdminUser> {
+    return this.request(`/v1/admin/users/${userId}/tokens`, {
+      method: 'PUT',
+      body: JSON.stringify({ token_balance: tokenBalance }),
     });
   }
 }

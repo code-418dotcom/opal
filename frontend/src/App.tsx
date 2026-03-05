@@ -25,7 +25,7 @@ const queryClient = new QueryClient({
 
 type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library' | 'integrations' | 'billing' | 'admin';
 
-function AppContent() {
+function AppContent({ isAdmin }: { isAdmin: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
     return localStorage.getItem('currentJobId');
@@ -38,7 +38,7 @@ function AppContent() {
     setActiveTab('monitor');
   };
 
-  const tabs = [
+  const allTabs = [
     { id: 'upload' as Tab, label: 'Upload', icon: Upload },
     { id: 'monitor' as Tab, label: 'Monitor', icon: Activity },
     { id: 'results' as Tab, label: 'Results', icon: ImageIcon },
@@ -46,8 +46,10 @@ function AppContent() {
     { id: 'library' as Tab, label: 'Library', icon: BookImage },
     { id: 'integrations' as Tab, label: 'Integrations', icon: Store },
     { id: 'billing' as Tab, label: 'Billing', icon: CreditCard },
-    { id: 'admin' as Tab, label: 'Admin', icon: Settings },
+    { id: 'admin' as Tab, label: 'Admin', icon: Settings, adminOnly: true },
   ];
+
+  const tabs = allTabs.filter(t => !('adminOnly' in t) || isAdmin);
 
   const { data: health } = useQuery({
     queryKey: ['health'],
@@ -151,6 +153,8 @@ function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout
     refetchInterval: 30000,
   });
 
+  const isAdmin = balance?.is_admin ?? false;
+
   return (
     <>
       <div className="auth-bar">
@@ -170,7 +174,7 @@ function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout
           </div>
         </div>
       </div>
-      <AppContent />
+      <AppContent isAdmin={isAdmin} />
     </>
   );
 }

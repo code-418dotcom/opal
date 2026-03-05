@@ -33,7 +33,8 @@ def get_packages():
 def get_balance(user: dict = Depends(get_current_user)):
     u = get_user_by_id(user["user_id"])
     balance = u["token_balance"] if u else 0
-    return {"token_balance": balance}
+    is_admin = u.get("is_admin", False) if u else user.get("is_admin", False)
+    return {"token_balance": balance, "is_admin": is_admin}
 
 
 class PurchaseIn(BaseModel):

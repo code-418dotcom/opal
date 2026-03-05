@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff, X, Check, Loader2 } from 'lucide-react';
+import { Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff, X, Check, Loader2, Coins } from 'lucide-react';
 import { api } from '../api';
 import type { AdminSetting, AdminUser } from '../types';
 
@@ -289,6 +289,9 @@ function SettingsPanel() {
 function UsersPanel() {
   const queryClient = useQueryClient();
   const [toggling, setToggling] = useState<string | null>(null);
+  const [editingTokens, setEditingTokens] = useState<string | null>(null);
+  const [tokenValue, setTokenValue] = useState('');
+  const [savingTokens, setSavingTokens] = useState(false);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -304,6 +307,26 @@ function UsersPanel() {
       alert(err instanceof Error ? err.message : 'Failed');
     } finally {
       setToggling(null);
+    }
+  };
+
+  const handleEditTokens = (user: AdminUser) => {
+    setEditingTokens(user.id);
+    setTokenValue(String(user.token_balance));
+  };
+
+  const handleSaveTokens = async (userId: string) => {
+    const val = parseInt(tokenValue, 10);
+    if (isNaN(val) || val < 0) return;
+    setSavingTokens(true);
+    try {
+      await api.setUserTokens(userId, val);
+      setEditingTokens(null);
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSavingTokens(false);
     }
   };
 
@@ -329,7 +352,39 @@ function UsersPanel() {
             <tr key={user.id}>
               <td className="user-email">{user.email}</td>
               <td>{user.display_name || '—'}</td>
-              <td>{user.token_balance}</td>
+              <td>
+                {editingTokens === user.id ? (
+                  <div className="token-edit-inline">
+                    <input
+                      type="number"
+                      min="0"
+                      value={tokenValue}
+                      onChange={e => setTokenValue(e.target.value)}
+                      className="token-edit-input"
+                      autoFocus
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSaveTokens(user.id);
+                        if (e.key === 'Escape') setEditingTokens(null);
+                      }}
+                    />
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleSaveTokens(user.id)}
+                      disabled={savingTokens}
+                    >
+                      {savingTokens ? <Loader2 size={12} className="spin" /> : <Check size={12} />}
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditingTokens(null)}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="token-display" onClick={() => handleEditTokens(user)} title="Click to edit">
+                    {user.token_balance}
+                    <Coins size={12} className="token-edit-icon" />
+                  </span>
+                )}
+              </td>
               <td>
                 {user.is_admin ? (
                   <span className="admin-badge admin-yes"><Shield size={12} /> Admin</span>

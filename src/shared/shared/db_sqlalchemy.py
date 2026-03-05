@@ -970,3 +970,16 @@ def set_user_admin(user_id: str, is_admin: bool) -> Optional[Dict[str, Any]]:
         session.commit()
         session.refresh(u)
         return _user_to_dict(u)
+
+
+def set_user_token_balance(user_id: str, balance: int) -> Optional[Dict[str, Any]]:
+    """Set absolute token balance for a user (admin only)."""
+    with SessionLocal() as session:
+        u = session.get(User, user_id)
+        if not u:
+            return None
+        u.token_balance = balance
+        u.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(u)
+        return _user_to_dict(u)
