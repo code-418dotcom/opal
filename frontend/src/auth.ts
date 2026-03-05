@@ -14,8 +14,13 @@ const msalConfig = {
   },
 };
 
-// Lazy-init MSAL — creating with empty clientId throws
+// Eager-init MSAL when auth is configured — required so the popup window
+// can call handleRedirectPromise() to process the #code= response and close.
 let _msalInstance: PublicClientApplication | null = null;
+
+if (ENTRA_CLIENT_ID && ENTRA_AUTHORITY) {
+  _msalInstance = new PublicClientApplication(msalConfig);
+}
 
 function msal(): PublicClientApplication {
   if (!_msalInstance) {
