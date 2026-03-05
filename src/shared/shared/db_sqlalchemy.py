@@ -285,6 +285,13 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         return _user_to_dict(u) if u else None
 
 
+def user_count() -> int:
+    """Return total number of users."""
+    from sqlalchemy import func
+    with SessionLocal() as session:
+        return session.query(func.count(User.id)).scalar() or 0
+
+
 def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
     """Create user record. Called on first login (JIT provisioning)."""
     with SessionLocal() as session:
@@ -295,6 +302,7 @@ def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
             tenant_id=data["tenant_id"],
             display_name=data.get("display_name"),
             token_balance=data.get("token_balance", 0),
+            is_admin=data.get("is_admin", False),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )

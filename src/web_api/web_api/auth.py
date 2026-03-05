@@ -6,7 +6,7 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 import jwt
 
 from shared.config import settings
-from shared.db_sqlalchemy import get_user_by_entra_subject, create_user
+from shared.db_sqlalchemy import get_user_by_entra_subject, create_user, user_count
 from shared.util import new_id
 
 LOG = logging.getLogger(__name__)
@@ -93,6 +93,8 @@ async def _resolve_jwt_user(token: str) -> dict:
     # JIT user provisioning — create on first login
     user = get_user_by_entra_subject(subject)
     if not user:
+        # First user ever gets admin automatically
+        is_first = user_count() == 0
         user = create_user({
             "id": new_id("user"),
             "entra_subject_id": subject,
@@ -100,8 +102,9 @@ async def _resolve_jwt_user(token: str) -> dict:
             "tenant_id": f"tenant_{subject[:8]}",
             "display_name": payload.get("name", ""),
             "token_balance": 50,
+            "is_admin": is_first,
         })
-        LOG.info("JIT-provisioned user: %s (%s)", user["id"], email)
+        LOG.info("JIT-provisioned user: %s (%s)%s", user["id"], email, " [ADMIN]" if is_first else "")
 
     return {
         "user_id": user["id"],
