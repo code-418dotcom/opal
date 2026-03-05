@@ -77,6 +77,18 @@ class Settings(BaseSettings):
     # API Security
     API_KEYS: str = Field(default='', env='API_KEYS')
 
+    # Entra External ID (Auth)
+    ENTRA_TENANT_ID: str = Field(default='', env='ENTRA_TENANT_ID')
+    ENTRA_CLIENT_ID: str = Field(default='', env='ENTRA_CLIENT_ID')
+    ENTRA_ISSUER: str = Field(default='', env='ENTRA_ISSUER')
+
+    # Mollie (Billing)
+    MOLLIE_API_KEY: str = Field(default='', env='MOLLIE_API_KEY')
+    MOLLIE_WEBHOOK_SECRET: str = Field(default='', env='MOLLIE_WEBHOOK_SECRET')
+
+    # Public URL (for webhook callbacks)
+    PUBLIC_BASE_URL: str = Field(default='http://localhost:8000', env='PUBLIC_BASE_URL')
+
 
 settings = Settings()
 

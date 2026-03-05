@@ -10,10 +10,11 @@ from shared.db_sqlalchemy import (
     list_jobs,
     get_brand_profile,
     get_scene_template,
+    debit_tokens,
 )
 from shared.util import new_id, new_correlation_id
 from shared.queue_unified import send_job_message
-from web_api.auth import get_tenant_from_api_key
+from web_api.auth import get_tenant_from_api_key, get_current_user
 
 router = APIRouter(prefix="/v1", tags=["jobs"])
 
@@ -42,12 +43,34 @@ class CreateJobIn(BaseModel):
 
 
 @router.post("/jobs")
-def create_job(body: CreateJobIn, tenant_id: str = Depends(get_tenant_from_api_key)):
+def create_job(
+    body: CreateJobIn,
+    tenant_id: str = Depends(get_tenant_from_api_key),
+    user: dict = Depends(get_current_user),
+):
     # Validate brand profile exists (skip for backward-compat "default")
     if body.brand_profile_id != "default":
         bp = get_brand_profile(body.brand_profile_id, tenant_id)
         if not bp:
             raise HTTPException(status_code=404, detail="Brand profile not found")
+
+    # Token deduction (skip for API key users who have unlimited balance)
+    if user["token_balance"] != 999999:
+        total_items = sum(
+            len(it.scene_template_ids) if it.scene_template_ids else it.scene_count
+            for it in body.items
+        )
+        cost = max(total_items, 1)  # 1 token per output image
+        new_balance = debit_tokens(
+            user_id=user["user_id"],
+            amount=cost,
+            description=f"Job: {cost} image(s)",
+        )
+        if new_balance is None:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient token balance. This job costs {cost} token(s).",
+            )
 
     job_id = new_id("job")
     corr = new_correlation_id()

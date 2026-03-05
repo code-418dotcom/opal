@@ -5,7 +5,10 @@ For Azure deployment - replaces db_supabase.py functionality.
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from .db import SessionLocal
-from .models import Job, JobItem, JobStatus, ItemStatus, BrandProfile, SceneTemplate
+from .models import (
+    Job, JobItem, JobStatus, ItemStatus, BrandProfile, SceneTemplate, User,
+    TokenTransaction, TokenTxType, TokenPackage, Payment, PaymentStatus,
+)
 from datetime import datetime
 import logging
 
@@ -250,6 +253,72 @@ def get_job_items_by_filename(job_id: str, filename: str) -> List[Dict[str, Any]
         ]
 
 
+# ── User CRUD ─────────────────────────────────────────────────────────
+
+def _user_to_dict(u: User) -> Dict[str, Any]:
+    return {
+        "id": u.id,
+        "entra_subject_id": u.entra_subject_id,
+        "email": u.email,
+        "tenant_id": u.tenant_id,
+        "display_name": u.display_name,
+        "token_balance": u.token_balance,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+        "updated_at": u.updated_at.isoformat() if u.updated_at else None,
+    }
+
+
+def get_user_by_entra_subject(subject_id: str) -> Optional[Dict[str, Any]]:
+    """Find user by Entra subject ID (from JWT 'sub' claim)."""
+    with SessionLocal() as session:
+        u = session.query(User).filter(User.entra_subject_id == subject_id).first()
+        return _user_to_dict(u) if u else None
+
+
+def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get user by primary key."""
+    with SessionLocal() as session:
+        u = session.get(User, user_id)
+        return _user_to_dict(u) if u else None
+
+
+def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create user record. Called on first login (JIT provisioning)."""
+    with SessionLocal() as session:
+        u = User(
+            id=data["id"],
+            entra_subject_id=data.get("entra_subject_id"),
+            email=data["email"],
+            tenant_id=data["tenant_id"],
+            display_name=data.get("display_name"),
+            token_balance=data.get("token_balance", 0),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(u)
+        session.commit()
+        session.refresh(u)
+        return _user_to_dict(u)
+
+
+def update_user_token_balance(user_id: str, delta: int) -> Optional[int]:
+    """Atomically adjust token_balance. Returns new balance or None if insufficient."""
+    from sqlalchemy import text
+    with SessionLocal() as session:
+        result = session.execute(
+            text(
+                "UPDATE users SET token_balance = token_balance + :delta, "
+                "updated_at = now() "
+                "WHERE id = :user_id AND token_balance + :delta >= 0 "
+                "RETURNING token_balance"
+            ),
+            {"user_id": user_id, "delta": delta},
+        )
+        row = result.fetchone()
+        session.commit()
+        return row[0] if row else None
+
+
 # ── Brand Profile CRUD ──────────────────────────────────────────────
 
 def _brand_profile_to_dict(bp: BrandProfile) -> Dict[str, Any]:
@@ -460,4 +529,189 @@ def list_jobs(
                 "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             }
             for job in q.all()
+        ]
+
+
+# ── Billing CRUD ─────────────────────────────────────────────────────
+
+def list_token_packages(active_only: bool = True) -> List[Dict[str, Any]]:
+    """List available token packages."""
+    with SessionLocal() as session:
+        q = session.query(TokenPackage)
+        if active_only:
+            q = q.filter(TokenPackage.active == True)
+        q = q.order_by(TokenPackage.price_cents.asc())
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "tokens": p.tokens,
+                "price_cents": p.price_cents,
+                "currency": p.currency,
+                "active": p.active,
+            }
+            for p in q.all()
+        ]
+
+
+def get_token_package(package_id: str) -> Optional[Dict[str, Any]]:
+    """Get a token package by ID."""
+    with SessionLocal() as session:
+        p = session.query(TokenPackage).filter(TokenPackage.id == package_id).first()
+        if not p:
+            return None
+        return {
+            "id": p.id,
+            "name": p.name,
+            "tokens": p.tokens,
+            "price_cents": p.price_cents,
+            "currency": p.currency,
+            "active": p.active,
+        }
+
+
+def create_payment(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new payment record."""
+    with SessionLocal() as session:
+        payment = Payment(
+            id=data["id"],
+            user_id=data["user_id"],
+            package_id=data["package_id"],
+            mollie_payment_id=data.get("mollie_payment_id"),
+            amount_cents=data["amount_cents"],
+            currency=data.get("currency", "EUR"),
+            status=PaymentStatus.pending,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(payment)
+        session.commit()
+        session.refresh(payment)
+        return {
+            "id": payment.id,
+            "user_id": payment.user_id,
+            "package_id": payment.package_id,
+            "mollie_payment_id": payment.mollie_payment_id,
+            "amount_cents": payment.amount_cents,
+            "currency": payment.currency,
+            "status": payment.status.value,
+        }
+
+
+def update_payment_status(payment_id: str, status: str, mollie_payment_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Update a payment's status and optionally its Mollie ID."""
+    with SessionLocal() as session:
+        payment = session.query(Payment).filter(Payment.id == payment_id).first()
+        if not payment:
+            return None
+        payment.status = PaymentStatus(status)
+        if mollie_payment_id:
+            payment.mollie_payment_id = mollie_payment_id
+        payment.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(payment)
+        return {
+            "id": payment.id,
+            "user_id": payment.user_id,
+            "status": payment.status.value,
+            "mollie_payment_id": payment.mollie_payment_id,
+        }
+
+
+def get_payment_by_mollie_id(mollie_id: str) -> Optional[Dict[str, Any]]:
+    """Look up a payment by Mollie payment ID."""
+    with SessionLocal() as session:
+        payment = session.query(Payment).filter(Payment.mollie_payment_id == mollie_id).first()
+        if not payment:
+            return None
+        return {
+            "id": payment.id,
+            "user_id": payment.user_id,
+            "package_id": payment.package_id,
+            "mollie_payment_id": payment.mollie_payment_id,
+            "amount_cents": payment.amount_cents,
+            "currency": payment.currency,
+            "status": payment.status.value,
+        }
+
+
+def credit_tokens(user_id: str, amount: int, tx_type: str, description: str, reference_id: Optional[str] = None) -> int:
+    """Credit tokens to a user and log the transaction. Returns new balance."""
+    with SessionLocal() as session:
+        # Update balance
+        result = session.execute(
+            text(
+                "UPDATE users SET token_balance = token_balance + :amount, updated_at = now() "
+                "WHERE id = :user_id RETURNING token_balance"
+            ),
+            {"user_id": user_id, "amount": amount},
+        )
+        row = result.fetchone()
+        if not row:
+            raise ValueError(f"User {user_id} not found")
+        new_balance = row[0]
+        # Log transaction
+        tx = TokenTransaction(
+            id=f"tx_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{user_id[:8]}",
+            user_id=user_id,
+            amount=amount,
+            type=TokenTxType(tx_type),
+            description=description,
+            reference_id=reference_id,
+            created_at=datetime.utcnow(),
+        )
+        session.add(tx)
+        session.commit()
+        return new_balance
+
+
+def debit_tokens(user_id: str, amount: int, description: str, reference_id: Optional[str] = None) -> Optional[int]:
+    """Debit tokens from a user atomically. Returns new balance or None if insufficient."""
+    with SessionLocal() as session:
+        result = session.execute(
+            text(
+                "UPDATE users SET token_balance = token_balance - :amount, updated_at = now() "
+                "WHERE id = :user_id AND token_balance >= :amount RETURNING token_balance"
+            ),
+            {"user_id": user_id, "amount": amount},
+        )
+        row = result.fetchone()
+        if not row:
+            return None  # insufficient balance or user not found
+        new_balance = row[0]
+        tx = TokenTransaction(
+            id=f"tx_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{user_id[:8]}",
+            user_id=user_id,
+            amount=-amount,
+            type=TokenTxType.usage,
+            description=description,
+            reference_id=reference_id,
+            created_at=datetime.utcnow(),
+        )
+        session.add(tx)
+        session.commit()
+        return new_balance
+
+
+def list_token_transactions(user_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """List token transactions for a user, newest first."""
+    with SessionLocal() as session:
+        txs = (
+            session.query(TokenTransaction)
+            .filter(TokenTransaction.user_id == user_id)
+            .order_by(TokenTransaction.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": tx.id,
+                "amount": tx.amount,
+                "type": tx.type.value,
+                "description": tx.description,
+                "reference_id": tx.reference_id,
+                "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            }
+            for tx in txs
         ]

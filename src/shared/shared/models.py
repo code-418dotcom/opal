@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -19,6 +19,75 @@ class JobStatus(str, enum.Enum):
     completed = 'completed'
     failed = 'failed'
     partial = 'partial'
+
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(String, primary_key=True)
+    entra_subject_id = Column(String, unique=True, nullable=True)
+    email = Column(String, nullable=False)
+    tenant_id = Column(String, nullable=False, index=True)
+    display_name = Column(String, nullable=True)
+    token_balance = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<User {self.id} email={self.email}>'
+
+
+class TokenTxType(str, enum.Enum):
+    purchase = 'purchase'
+    usage = 'usage'
+    refund = 'refund'
+    bonus = 'bonus'
+
+
+class PaymentStatus(str, enum.Enum):
+    pending = 'pending'
+    paid = 'paid'
+    failed = 'failed'
+    expired = 'expired'
+    refunded = 'refunded'
+
+
+class TokenTransaction(Base):
+    __tablename__ = 'token_transactions'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    amount = Column(Integer, nullable=False)
+    type = Column(SQLEnum(TokenTxType), nullable=False)
+    description = Column(String, nullable=True)
+    reference_id = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class TokenPackage(Base):
+    __tablename__ = 'token_packages'
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    tokens = Column(Integer, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    currency = Column(String, nullable=False, default='EUR')
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class Payment(Base):
+    __tablename__ = 'payments'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    package_id = Column(String, ForeignKey('token_packages.id'), nullable=False)
+    mollie_payment_id = Column(String, unique=True, nullable=True)
+    amount_cents = Column(Integer, nullable=False)
+    currency = Column(String, nullable=False, default='EUR')
+    status = Column(SQLEnum(PaymentStatus), nullable=False, default=PaymentStatus.pending)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class BrandProfile(Base):

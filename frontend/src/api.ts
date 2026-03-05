@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction } from './types';
 
 // Detect backend type from environment variables
 const BACKEND_TYPE = (import.meta.env.VITE_BACKEND_TYPE as string) || 'supabase';
@@ -47,11 +47,16 @@ class ApiClient {
   private baseUrl: string;
   private apiKey: string;
   private backendType: string;
+  private accessToken: string | null = null;
 
   constructor() {
     this.baseUrl = BASE_URL;
     this.apiKey = API_KEY;
     this.backendType = BACKEND_TYPE;
+  }
+
+  setAccessToken(token: string | null) {
+    this.accessToken = token;
   }
 
   private async request<T>(
@@ -60,12 +65,17 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
-    // Build headers based on backend type
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-API-Key': this.apiKey,
       ...options.headers as Record<string, string>,
     };
+
+    // Prefer Bearer token (Entra auth), fall back to API key
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    } else if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey;
+    }
 
     // Add Supabase-specific headers if using Supabase backend
     if (this.backendType === 'supabase' && SUPABASE_ANON_KEY) {
@@ -105,7 +115,6 @@ class ApiClient {
     const endpoint = this.backendType === 'azure' ? '/v1/jobs' : '/create-job';
     const body = this.backendType === 'azure'
       ? {
-          tenant_id: 'default',
           brand_profile_id: brandProfileId || 'default',
           items: filenames.map(filename => ({
             filename,
@@ -143,7 +152,7 @@ class ApiClient {
 
   async getJob(jobId: string): Promise<Job> {
     const endpoint = this.backendType === 'azure'
-      ? `/v1/jobs/${jobId}?tenant_id=default`
+      ? `/v1/jobs/${jobId}`
       : `/get-job/${jobId}`;
     return this.request<Job>(endpoint);
   }
@@ -274,7 +283,7 @@ class ApiClient {
   async getDownloadUrl(itemId: string, bucket: string = 'outputs'): Promise<string> {
     if (this.backendType === 'azure') {
       const response = await this.request<{ download_url: string }>(
-        `/v1/downloads/${itemId}?tenant_id=default`
+        `/v1/downloads/${itemId}`
       );
       return response.download_url;
     } else {
@@ -348,6 +357,31 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ preview_blob_path: previewBlobPath }),
     });
+  }
+
+  // ── Billing ────────────────────────────────────────────────────────
+
+  async getBalance(): Promise<{ token_balance: number }> {
+    return this.request('/v1/billing/balance');
+  }
+
+  async listPackages(): Promise<TokenPackage[]> {
+    const resp = await this.request<{ packages: TokenPackage[] }>('/v1/billing/packages');
+    return resp.packages;
+  }
+
+  async purchaseTokens(packageId: string, redirectUrl: string): Promise<{ payment_url: string; payment_id: string }> {
+    return this.request('/v1/billing/purchase', {
+      method: 'POST',
+      body: JSON.stringify({ package_id: packageId, redirect_url: redirectUrl }),
+    });
+  }
+
+  async listTransactions(limit = 50, offset = 0): Promise<TokenTransaction[]> {
+    const resp = await this.request<{ transactions: TokenTransaction[] }>(
+      `/v1/billing/transactions?limit=${limit}&offset=${offset}`
+    );
+    return resp.transactions;
   }
 }
 

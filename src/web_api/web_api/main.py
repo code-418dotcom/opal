@@ -9,11 +9,12 @@ from web_api.routes_uploads import router as uploads_router
 from web_api.routes_downloads import router as downloads_router
 from web_api.routes_brand_profiles import router as brand_profiles_router
 from web_api.routes_scene_templates import router as scene_templates_router
-from web_api.auth import verify_api_key
+from web_api.routes_billing import router as billing_router
+from web_api.auth import get_current_user
 
 log = logging.getLogger("opal")
 
-app = FastAPI(title="Opal Web API", version="0.1.0")
+app = FastAPI(title="Opal Web API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,21 +25,9 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
-app.include_router(jobs_router, dependencies=[Depends(verify_api_key)])
-app.include_router(uploads_router, dependencies=[Depends(verify_api_key)])
-app.include_router(downloads_router, dependencies=[Depends(verify_api_key)])
-app.include_router(brand_profiles_router, dependencies=[Depends(verify_api_key)])
-app.include_router(scene_templates_router, dependencies=[Depends(verify_api_key)])
-
-
-@app.on_event("startup")
-def _startup_db_init() -> None:
-    """
-    Verify Supabase connection on startup.
-    """
-    try:
-        from shared.db_supabase import get_supabase_client
-        client = get_supabase_client()
-        log.info("Supabase client initialized successfully")
-    except Exception:
-        log.exception("Supabase init failed (non-fatal). App will start in degraded mode.")
+app.include_router(jobs_router, dependencies=[Depends(get_current_user)])
+app.include_router(uploads_router, dependencies=[Depends(get_current_user)])
+app.include_router(downloads_router, dependencies=[Depends(get_current_user)])
+app.include_router(brand_profiles_router, dependencies=[Depends(get_current_user)])
+app.include_router(scene_templates_router, dependencies=[Depends(get_current_user)])
+app.include_router(billing_router, dependencies=[Depends(get_current_user)])

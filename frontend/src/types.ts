@@ -59,3 +59,21 @@ export interface SceneTemplate {
   created_at: string;
   updated_at: string;
 }
+
+export interface TokenPackage {
+  id: string;
+  name: string;
+  tokens: number;
+  price_cents: number;
+  currency: string;
+  active: boolean;
+}
+
+export interface TokenTransaction {
+  id: string;
+  amount: number;
+  type: 'purchase' | 'usage' | 'refund' | 'bonus';
+  description?: string;
+  reference_id?: string;
+  created_at: string;
+}
