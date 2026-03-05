@@ -26,7 +26,8 @@ def _get_jwks_client():
         # under <domain>.ciamlogin.com — safest to use the tenant ID form.
         jwks_uri = f"{settings.ENTRA_ISSUER}/discovery/v2.0/keys"
         if settings.ENTRA_TENANT_ID:
-            base = f"https://{settings.ENTRA_TENANT_ID}.ciamlogin.com/{settings.ENTRA_TENANT_ID}"
+            tid = settings.ENTRA_TENANT_ID.strip()
+            base = f"https://{tid}.ciamlogin.com/{tid}"
             jwks_uri = f"{base}/discovery/v2.0/keys"
         _jwks_client = jwt.PyJWKClient(jwks_uri, cache_keys=True)
     return _jwks_client
@@ -98,7 +99,7 @@ async def _resolve_jwt_user(token: str) -> dict:
             "email": email,
             "tenant_id": f"tenant_{subject[:8]}",
             "display_name": payload.get("name", ""),
-            "token_balance": 0,
+            "token_balance": 50,
         })
         LOG.info("JIT-provisioned user: %s (%s)", user["id"], email)
 
