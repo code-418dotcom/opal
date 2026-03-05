@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff, X, Check, Loader2 } from 'lucide-react';
 import { api } from '../api';
-import type { AdminSetting, AdminUser, SystemInfo } from '../types';
+import type { AdminSetting, AdminUser } from '../types';
 
 type AdminTab = 'settings' | 'users' | 'system';
 
