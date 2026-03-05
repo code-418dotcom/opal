@@ -28,4 +28,9 @@ RUN mkdir -p /app/models && \
     curl -L -o /app/models/RealESRGAN_x2plus.pth \
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth
 
+# Pre-bake u2net ONNX model for rembg (176MB, avoids cold-start download)
+RUN mkdir -p /root/.u2net && \
+    curl -L -o /root/.u2net/u2net.onnx \
+    https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx
+
 CMD ["python", "-m", "pipeline_worker.worker"]

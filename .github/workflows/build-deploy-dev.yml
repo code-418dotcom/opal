@@ -287,6 +287,24 @@ jobs:
           IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'fal' }}"
           FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
 
+          # Auth
+          ENTRA_TENANT_ID="${{ secrets.ENTRA_TENANT_ID }}"
+          ENTRA_CLIENT_ID="${{ secrets.ENTRA_CLIENT_ID }}"
+          ENTRA_ISSUER="${{ secrets.ENTRA_ISSUER }}"
+          API_KEYS="${{ secrets.API_KEYS }}"
+
+          # Billing
+          MOLLIE_API_KEY="${{ secrets.MOLLIE_API_KEY }}"
+          PUBLIC_BASE_URL="${{ secrets.PUBLIC_BASE_URL }}"
+
+          # Integrations
+          SHOPIFY_API_KEY="${{ secrets.SHOPIFY_API_KEY }}"
+          SHOPIFY_API_SECRET="${{ secrets.SHOPIFY_API_SECRET }}"
+          ENCRYPTION_KEY="${{ secrets.ENCRYPTION_KEY }}"
+
+          # CORS
+          CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS }}"
+
           ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
             "DATABASE_URL=${DATABASE_URL}"
@@ -297,6 +315,16 @@ jobs:
             "BACKGROUND_REMOVAL_PROVIDER=${BACKGROUND_REMOVAL_PROVIDER}"
             "IMAGE_GEN_PROVIDER=${IMAGE_GEN_PROVIDER}"
             "FAL_API_KEY=${FAL_API_KEY}"
+            "ENTRA_TENANT_ID=${ENTRA_TENANT_ID}"
+            "ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID}"
+            "ENTRA_ISSUER=${ENTRA_ISSUER}"
+            "API_KEYS=${API_KEYS}"
+            "MOLLIE_API_KEY=${MOLLIE_API_KEY}"
+            "PUBLIC_BASE_URL=${PUBLIC_BASE_URL}"
+            "SHOPIFY_API_KEY=${SHOPIFY_API_KEY}"
+            "SHOPIFY_API_SECRET=${SHOPIFY_API_SECRET}"
+            "ENCRYPTION_KEY=${ENCRYPTION_KEY}"
+            "CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}"
           )
 
           deploy_image () {

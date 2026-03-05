@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { Upload, Activity, Image as ImageIcon, Palette, BookImage, CreditCard, LogOut, Coins } from 'lucide-react';
+import { Upload, Activity, Image as ImageIcon, Palette, BookImage, CreditCard, LogOut, Coins, Store, Settings } from 'lucide-react';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import ResultsGallery from './components/ResultsGallery';
 import BrandProfiles from './components/BrandProfiles';
 import SceneLibrary from './components/SceneLibrary';
 import BillingPage from './components/BillingPage';
+import IntegrationsPage from './components/IntegrationsPage';
+import AdminPage from './components/AdminPage';
 import LoginPage from './components/LoginPage';
 import { api } from './api';
 import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, logout } from './auth';
@@ -21,7 +23,7 @@ const queryClient = new QueryClient({
   },
 });
 
-type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library' | 'billing';
+type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library' | 'integrations' | 'billing' | 'admin';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
@@ -42,7 +44,9 @@ function AppContent() {
     { id: 'results' as Tab, label: 'Results', icon: ImageIcon },
     { id: 'brands' as Tab, label: 'Brands', icon: Palette },
     { id: 'library' as Tab, label: 'Library', icon: BookImage },
+    { id: 'integrations' as Tab, label: 'Integrations', icon: Store },
     { id: 'billing' as Tab, label: 'Billing', icon: CreditCard },
+    { id: 'admin' as Tab, label: 'Admin', icon: Settings },
   ];
 
   const { data: health } = useQuery({
@@ -125,7 +129,9 @@ function AppContent() {
           )}
           {activeTab === 'brands' && <BrandProfiles />}
           {activeTab === 'library' && <SceneLibrary />}
+          {activeTab === 'integrations' && <IntegrationsPage />}
           {activeTab === 'billing' && <BillingPage />}
+          {activeTab === 'admin' && <AdminPage />}
         </div>
       </main>
 

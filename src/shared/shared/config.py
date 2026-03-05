@@ -89,6 +89,14 @@ class Settings(BaseSettings):
     # Public URL (for webhook callbacks)
     PUBLIC_BASE_URL: str = Field(default='http://localhost:8000', env='PUBLIC_BASE_URL')
 
+    # Shopify Integration
+    SHOPIFY_API_KEY: str = Field(default='', env='SHOPIFY_API_KEY')
+    SHOPIFY_API_SECRET: str = Field(default='', env='SHOPIFY_API_SECRET')
+    SHOPIFY_SCOPES: str = Field(default='read_products,write_products', env='SHOPIFY_SCOPES')
+
+    # Encryption key for OAuth tokens at rest (Fernet, base64-encoded 32 bytes)
+    ENCRYPTION_KEY: str = Field(default='', env='ENCRYPTION_KEY')
+
 
 settings = Settings()
 

@@ -21,10 +21,14 @@ _jwks_client = None
 def _get_jwks_client():
     global _jwks_client
     if _jwks_client is None and settings.ENTRA_ISSUER:
-        _jwks_client = jwt.PyJWKClient(
-            f"{settings.ENTRA_ISSUER}/discovery/v2.0/keys",
-            cache_keys=True,
-        )
+        # Derive JWKS URI from OIDC discovery rather than hardcoding.
+        # External ID issuers use <tenant-id>.ciamlogin.com but JWKS lives
+        # under <domain>.ciamlogin.com — safest to use the tenant ID form.
+        jwks_uri = f"{settings.ENTRA_ISSUER}/discovery/v2.0/keys"
+        if settings.ENTRA_TENANT_ID:
+            base = f"https://{settings.ENTRA_TENANT_ID}.ciamlogin.com/{settings.ENTRA_TENANT_ID}"
+            jwks_uri = f"{base}/discovery/v2.0/keys"
+        _jwks_client = jwt.PyJWKClient(jwks_uri, cache_keys=True)
     return _jwks_client
 
 
@@ -103,6 +107,7 @@ async def _resolve_jwt_user(token: str) -> dict:
         "tenant_id": user["tenant_id"],
         "email": user["email"],
         "token_balance": user["token_balance"],
+        "is_admin": user.get("is_admin", False),
     }
 
 

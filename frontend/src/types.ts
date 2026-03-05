@@ -77,3 +77,87 @@ export interface TokenTransaction {
   reference_id?: string;
   created_at: string;
 }
+
+export interface Integration {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  provider: 'shopify' | 'woocommerce' | 'etsy';
+  store_url: string;
+  scopes?: string;
+  status: 'active' | 'disconnected' | 'expired';
+  provider_metadata?: {
+    shop_name?: string;
+    shop_email?: string;
+    shop_domain?: string;
+    shop_plan?: string;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShopifyProduct {
+  id: number;
+  title: string;
+  status: string;
+  images: ShopifyImage[];
+  variants?: Array<{ id: number; title: string; price: string }>;
+}
+
+export interface ShopifyImage {
+  id: number;
+  product_id: number;
+  src: string;
+  width: number;
+  height: number;
+  position: number;
+}
+
+export interface IntegrationCosts {
+  process_image: number;
+  push_back: number;
+}
+
+export interface PushBackItem {
+  item_id: string;
+  shopify_product_id: number;
+  shopify_image_id?: number;
+  mode: 'replace' | 'add';
+}
+
+export interface AdminSetting {
+  key: string;
+  value: string;
+  category: string;
+  is_secret: boolean;
+  description?: string;
+  updated_by?: string;
+  updated_at?: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  tenant_id: string;
+  display_name?: string;
+  token_balance: number;
+  is_admin: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemInfo {
+  env_name: string;
+  storage_backend: string;
+  queue_backend: string;
+  image_gen_provider: string;
+  upscale_provider: string;
+  upscale_enabled: boolean;
+  bg_removal_provider: string;
+  has_entra_config: boolean;
+  has_mollie_config: boolean;
+  has_shopify_config: boolean;
+  has_fal_config: boolean;
+  has_encryption_key: boolean;
+  public_base_url: string;
+}

@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 
-from shared.config import settings
+from shared.settings_service import get_setting
 from shared.db_sqlalchemy import (
     list_token_packages,
     get_token_package,
@@ -47,10 +47,10 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
     payment_id = new_id("pay")
 
     # Create Mollie payment
-    if not settings.MOLLIE_API_KEY:
+    if not get_setting('MOLLIE_API_KEY'):
         raise HTTPException(status_code=503, detail="Payment provider not configured")
 
-    webhook_url = f"{settings.PUBLIC_BASE_URL}/v1/mollie/webhook"
+    webhook_url = f"{get_setting('PUBLIC_BASE_URL')}/v1/mollie/webhook"
     mollie = create_mollie_payment(
         amount_cents=pkg["price_cents"],
         currency=pkg["currency"],

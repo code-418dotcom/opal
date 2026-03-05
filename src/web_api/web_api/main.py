@@ -10,6 +10,8 @@ from web_api.routes_downloads import router as downloads_router
 from web_api.routes_brand_profiles import router as brand_profiles_router
 from web_api.routes_scene_templates import router as scene_templates_router
 from web_api.routes_billing import router as billing_router
+from web_api.routes_integrations import router as integrations_router, gdpr_router
+from web_api.routes_admin import router as admin_router
 from web_api.auth import get_current_user
 
 log = logging.getLogger("opal")
@@ -31,3 +33,6 @@ app.include_router(downloads_router, dependencies=[Depends(get_current_user)])
 app.include_router(brand_profiles_router, dependencies=[Depends(get_current_user)])
 app.include_router(scene_templates_router, dependencies=[Depends(get_current_user)])
 app.include_router(billing_router, dependencies=[Depends(get_current_user)])
+app.include_router(integrations_router, dependencies=[Depends(get_current_user)])
+app.include_router(admin_router)  # Admin routes have their own require_admin dependency
+app.include_router(gdpr_router)  # GDPR webhooks are unauthenticated (HMAC-verified)

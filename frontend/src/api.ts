@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo } from './types';
 
 // Detect backend type from environment variables
 const BACKEND_TYPE = (import.meta.env.VITE_BACKEND_TYPE as string) || 'supabase';
@@ -382,6 +382,124 @@ class ApiClient {
       `/v1/billing/transactions?limit=${limit}&offset=${offset}`
     );
     return resp.transactions;
+  }
+
+  // ── Integrations ──────────────────────────────────────────────────
+
+  async listIntegrations(provider?: string): Promise<Integration[]> {
+    const params = provider ? `?provider=${provider}` : '';
+    const resp = await this.request<{ integrations: Integration[] }>(
+      `/v1/integrations${params}`
+    );
+    return resp.integrations;
+  }
+
+  async connectShopify(shop: string): Promise<{ auth_url: string }> {
+    return this.request('/v1/integrations/shopify/connect', {
+      method: 'POST',
+      body: JSON.stringify({ shop }),
+    });
+  }
+
+  async disconnectIntegration(integrationId: string): Promise<void> {
+    await this.request(`/v1/integrations/${integrationId}`, { method: 'DELETE' });
+  }
+
+  async getIntegrationCosts(provider: string): Promise<IntegrationCosts> {
+    return this.request(`/v1/integrations/costs?provider=${provider}`);
+  }
+
+  async listShopifyProducts(
+    integrationId: string,
+    limit = 50,
+    pageInfo?: string
+  ): Promise<{ products: ShopifyProduct[]; next_page_info: string | null }> {
+    const params = pageInfo ? `?limit=${limit}&page_info=${pageInfo}` : `?limit=${limit}`;
+    return this.request(`/v1/integrations/${integrationId}/products${params}`);
+  }
+
+  async listShopifyProductImages(
+    integrationId: string,
+    productId: number
+  ): Promise<{ images: Array<{ id: number; src: string; width: number; height: number; position: number }> }> {
+    return this.request(`/v1/integrations/${integrationId}/products/${productId}/images`);
+  }
+
+  async processShopifyImages(
+    integrationId: string,
+    productId: number,
+    imageIds?: number[],
+    brandProfileId = 'default',
+    processingOptions?: { remove_background: boolean; generate_scene: boolean; upscale: boolean }
+  ): Promise<{ job_id: string; correlation_id: string; items: Array<{ item_id: string; filename: string; shopify_image_id: number; shopify_product_id: number }> }> {
+    return this.request(`/v1/integrations/${integrationId}/process`, {
+      method: 'POST',
+      body: JSON.stringify({
+        product_id: productId,
+        image_ids: imageIds || null,
+        brand_profile_id: brandProfileId,
+        processing_options: processingOptions || {
+          remove_background: true,
+          generate_scene: true,
+          upscale: true,
+        },
+      }),
+    });
+  }
+
+  async pushBackToShopify(
+    integrationId: string,
+    jobId: string,
+    items: PushBackItem[]
+  ): Promise<{ results: Array<{ item_id: string; status: string; shopify_image_id?: number; error?: string }> }> {
+    return this.request(`/v1/integrations/${integrationId}/push-back`, {
+      method: 'POST',
+      body: JSON.stringify({ job_id: jobId, items }),
+    });
+  }
+
+  // ── Admin ─────────────────────────────────────────────────────────
+
+  async getSystemInfo(): Promise<SystemInfo> {
+    return this.request('/v1/admin/system');
+  }
+
+  async listAdminSettings(category?: string): Promise<AdminSetting[]> {
+    const params = category ? `?category=${category}` : '';
+    const resp = await this.request<{ settings: AdminSetting[] }>(`/v1/admin/settings${params}`);
+    return resp.settings;
+  }
+
+  async updateAdminSetting(key: string, value: string): Promise<AdminSetting> {
+    return this.request(`/v1/admin/settings/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  async createAdminSetting(data: { key: string; value?: string; category?: string; is_secret?: boolean; description?: string }): Promise<AdminSetting> {
+    return this.request('/v1/admin/settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminSetting(key: string): Promise<void> {
+    await this.request(`/v1/admin/settings/${key}`, { method: 'DELETE' });
+  }
+
+  async listAdminUsers(limit = 100, offset = 0): Promise<AdminUser[]> {
+    const resp = await this.request<{ users: AdminUser[] }>(
+      `/v1/admin/users?limit=${limit}&offset=${offset}`
+    );
+    return resp.users;
+  }
+
+  async setUserAdmin(userId: string, isAdmin: boolean): Promise<AdminUser> {
+    return this.request(`/v1/admin/users/${userId}/admin`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_admin: isAdmin }),
+    });
   }
 }
 

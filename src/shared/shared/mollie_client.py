@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 import httpx
 
-from shared.config import settings
+from shared.settings_service import get_setting
 
 LOG = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ MOLLIE_BASE = "https://api.mollie.com/v2"
 
 def _headers() -> dict:
     return {
-        "Authorization": f"Bearer {settings.MOLLIE_API_KEY}",
+        "Authorization": f"Bearer {get_setting('MOLLIE_API_KEY')}",
         "Content-Type": "application/json",
     }
 

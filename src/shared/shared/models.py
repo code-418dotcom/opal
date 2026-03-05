@@ -30,11 +30,25 @@ class User(Base):
     tenant_id = Column(String, nullable=False, index=True)
     display_name = Column(String, nullable=True)
     token_balance = Column(Integer, nullable=False, default=0)
+    is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f'<User {self.id} email={self.email}>'
+
+
+class AdminSetting(Base):
+    __tablename__ = 'admin_settings'
+
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=False, default='')
+    category = Column(String, nullable=False, default='general')
+    is_secret = Column(Boolean, nullable=False, default=False)
+    description = Column(String, nullable=True)
+    updated_by = Column(String, ForeignKey('users.id'), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class TokenTxType(str, enum.Enum):
@@ -149,6 +163,48 @@ class Job(Base):
 
     def __repr__(self):
         return f'<Job {self.id} status={self.status}>'
+
+
+class IntegrationProvider(str, enum.Enum):
+    shopify = 'shopify'
+    woocommerce = 'woocommerce'
+    etsy = 'etsy'
+
+
+class IntegrationStatus(str, enum.Enum):
+    active = 'active'
+    disconnected = 'disconnected'
+    expired = 'expired'
+
+
+class Integration(Base):
+    __tablename__ = 'integrations'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    tenant_id = Column(String, nullable=False, index=True)
+    provider = Column(SQLEnum(IntegrationProvider), nullable=False)
+    store_url = Column(String, nullable=False)
+    access_token_encrypted = Column(String, nullable=False)
+    scopes = Column(String, nullable=True)
+    status = Column(SQLEnum(IntegrationStatus), nullable=False, default=IntegrationStatus.active)
+    provider_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Integration {self.id} provider={self.provider} store={self.store_url}>'
+
+
+class IntegrationCost(Base):
+    __tablename__ = 'integration_costs'
+
+    id = Column(String, primary_key=True)
+    provider = Column(SQLEnum(IntegrationProvider), nullable=False)
+    action = Column(String, nullable=False)
+    token_cost = Column(Integer, nullable=False, default=1)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class JobItem(Base):

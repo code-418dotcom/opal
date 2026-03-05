@@ -182,9 +182,10 @@ def main():
     start_health_server(8080)
 
     try:
+        from shared.settings_service import get_setting
         provider_name = settings.IMAGE_GEN_PROVIDER
         api_key_attr = f'{provider_name.upper().replace(".", "_")}_API_KEY'
-        api_key = getattr(settings, api_key_attr, '')
+        api_key = get_setting(api_key_attr)
         if api_key:
             img_gen_provider = get_image_gen_provider(provider_name, api_key=api_key)
             LOG.info('Image generation provider: %s', img_gen_provider.name)

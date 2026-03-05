@@ -8,6 +8,8 @@ from .db import SessionLocal
 from .models import (
     Job, JobItem, JobStatus, ItemStatus, BrandProfile, SceneTemplate, User,
     TokenTransaction, TokenTxType, TokenPackage, Payment, PaymentStatus,
+    Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
+    AdminSetting,
 )
 from datetime import datetime
 import logging
@@ -263,6 +265,7 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
         "tenant_id": u.tenant_id,
         "display_name": u.display_name,
         "token_balance": u.token_balance,
+        "is_admin": u.is_admin,
         "created_at": u.created_at.isoformat() if u.created_at else None,
         "updated_at": u.updated_at.isoformat() if u.updated_at else None,
     }
@@ -715,3 +718,255 @@ def list_token_transactions(user_id: str, limit: int = 50, offset: int = 0) -> L
             }
             for tx in txs
         ]
+
+
+# ── Integration CRUD ─────────────────────────────────────────────────
+
+def _integration_to_dict(i: Integration) -> Dict[str, Any]:
+    return {
+        "id": i.id,
+        "user_id": i.user_id,
+        "tenant_id": i.tenant_id,
+        "provider": i.provider.value,
+        "store_url": i.store_url,
+        "scopes": i.scopes,
+        "status": i.status.value,
+        "provider_metadata": i.provider_metadata,
+        "created_at": i.created_at.isoformat() if i.created_at else None,
+        "updated_at": i.updated_at.isoformat() if i.updated_at else None,
+    }
+
+
+def create_integration(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create or update an integration (upsert by user+provider+store)."""
+    with SessionLocal() as session:
+        existing = session.query(Integration).filter(
+            Integration.user_id == data["user_id"],
+            Integration.provider == IntegrationProvider(data["provider"]),
+            Integration.store_url == data["store_url"],
+        ).first()
+        if existing:
+            existing.access_token_encrypted = data["access_token_encrypted"]
+            existing.scopes = data.get("scopes")
+            existing.status = IntegrationStatus.active
+            existing.provider_metadata = data.get("provider_metadata")
+            existing.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(existing)
+            return _integration_to_dict(existing)
+
+        integ = Integration(
+            id=data["id"],
+            user_id=data["user_id"],
+            tenant_id=data["tenant_id"],
+            provider=IntegrationProvider(data["provider"]),
+            store_url=data["store_url"],
+            access_token_encrypted=data["access_token_encrypted"],
+            scopes=data.get("scopes"),
+            status=IntegrationStatus.active,
+            provider_metadata=data.get("provider_metadata"),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(integ)
+        session.commit()
+        session.refresh(integ)
+        return _integration_to_dict(integ)
+
+
+def get_integration(integration_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Get an integration by ID, scoped to user."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(
+            Integration.id == integration_id,
+            Integration.user_id == user_id,
+        ).first()
+        return _integration_to_dict(i) if i else None
+
+
+def get_integration_by_store(user_id: str, provider: str, store_url: str) -> Optional[Dict[str, Any]]:
+    """Get integration by user + provider + store URL."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(
+            Integration.user_id == user_id,
+            Integration.provider == IntegrationProvider(provider),
+            Integration.store_url == store_url,
+        ).first()
+        return _integration_to_dict(i) if i else None
+
+
+def list_integrations(user_id: str, provider: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List integrations for a user, optionally filtered by provider."""
+    with SessionLocal() as session:
+        q = session.query(Integration).filter(Integration.user_id == user_id)
+        if provider:
+            q = q.filter(Integration.provider == IntegrationProvider(provider))
+        q = q.order_by(Integration.created_at.desc())
+        return [_integration_to_dict(i) for i in q.all()]
+
+
+def update_integration_status(integration_id: str, user_id: str, status: str) -> Optional[Dict[str, Any]]:
+    """Update integration status (active/disconnected/expired)."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(
+            Integration.id == integration_id,
+            Integration.user_id == user_id,
+        ).first()
+        if not i:
+            return None
+        i.status = IntegrationStatus(status)
+        i.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(i)
+        return _integration_to_dict(i)
+
+
+def delete_integration(integration_id: str, user_id: str) -> bool:
+    """Delete an integration. Returns True if deleted."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(
+            Integration.id == integration_id,
+            Integration.user_id == user_id,
+        ).first()
+        if not i:
+            return False
+        session.delete(i)
+        session.commit()
+        return True
+
+
+def get_integration_with_token(integration_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Get integration including encrypted token (for internal use only)."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(
+            Integration.id == integration_id,
+            Integration.user_id == user_id,
+        ).first()
+        if not i:
+            return None
+        d = _integration_to_dict(i)
+        d["access_token_encrypted"] = i.access_token_encrypted
+        return d
+
+
+def get_integration_cost(provider: str, action: str) -> int:
+    """Get token cost for a provider action. Returns 0 if not found."""
+    with SessionLocal() as session:
+        cost = session.query(IntegrationCost).filter(
+            IntegrationCost.provider == IntegrationProvider(provider),
+            IntegrationCost.action == action,
+            IntegrationCost.active == True,
+        ).first()
+        return cost.token_cost if cost else 0
+
+
+# ── Admin Settings CRUD ──────────────────────────────────────────────
+
+def _admin_setting_to_dict(s: AdminSetting, unmask: bool = False) -> Dict[str, Any]:
+    value = s.value
+    if s.is_secret and not unmask and value:
+        value = value[:4] + "****" if len(value) > 4 else "****"
+    return {
+        "key": s.key,
+        "value": value,
+        "category": s.category,
+        "is_secret": s.is_secret,
+        "description": s.description,
+        "updated_by": s.updated_by,
+        "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+    }
+
+
+def list_admin_settings(category: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List all admin settings, masking secret values."""
+    with SessionLocal() as session:
+        q = session.query(AdminSetting)
+        if category:
+            q = q.filter(AdminSetting.category == category)
+        q = q.order_by(AdminSetting.category, AdminSetting.key)
+        return [_admin_setting_to_dict(s) for s in q.all()]
+
+
+def get_admin_setting(key: str, unmask: bool = False) -> Optional[Dict[str, Any]]:
+    """Get a single admin setting."""
+    with SessionLocal() as session:
+        s = session.get(AdminSetting, key)
+        return _admin_setting_to_dict(s, unmask=unmask) if s else None
+
+
+def get_admin_setting_value(key: str) -> Optional[str]:
+    """Get raw unmasked value of an admin setting. For internal use."""
+    with SessionLocal() as session:
+        s = session.get(AdminSetting, key)
+        return s.value if s and s.value else None
+
+
+def upsert_admin_setting(key: str, value: str, user_id: str, category: Optional[str] = None,
+                          is_secret: Optional[bool] = None, description: Optional[str] = None) -> Dict[str, Any]:
+    """Create or update an admin setting."""
+    with SessionLocal() as session:
+        s = session.get(AdminSetting, key)
+        if s:
+            s.value = value
+            s.updated_by = user_id
+            if category is not None:
+                s.category = category
+            if is_secret is not None:
+                s.is_secret = is_secret
+            if description is not None:
+                s.description = description
+            s.updated_at = datetime.utcnow()
+        else:
+            s = AdminSetting(
+                key=key,
+                value=value,
+                category=category or 'general',
+                is_secret=is_secret if is_secret is not None else False,
+                description=description,
+                updated_by=user_id,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+            session.add(s)
+        session.commit()
+        session.refresh(s)
+        return _admin_setting_to_dict(s)
+
+
+def delete_admin_setting(key: str) -> bool:
+    """Delete an admin setting. Returns True if deleted."""
+    with SessionLocal() as session:
+        s = session.get(AdminSetting, key)
+        if not s:
+            return False
+        session.delete(s)
+        session.commit()
+        return True
+
+
+# ── Admin User Management ────────────────────────────────────────────
+
+def list_users(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    """List all users (admin only)."""
+    with SessionLocal() as session:
+        users = (
+            session.query(User)
+            .order_by(User.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [_user_to_dict(u) for u in users]
+
+
+def set_user_admin(user_id: str, is_admin: bool) -> Optional[Dict[str, Any]]:
+    """Set admin flag on a user."""
+    with SessionLocal() as session:
+        u = session.get(User, user_id)
+        if not u:
+            return None
+        u.is_admin = is_admin
+        u.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(u)
+        return _user_to_dict(u)

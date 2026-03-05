@@ -112,9 +112,10 @@ def generate_preview(body: PreviewRequest, tenant_id: str = Depends(get_tenant_f
     except ImportError:
         raise HTTPException(status_code=503, detail="Image generation not available")
 
+    from shared.settings_service import get_setting
     provider_name = settings.IMAGE_GEN_PROVIDER
     api_key_attr = f'{provider_name.upper().replace(".", "_")}_API_KEY'
-    api_key = getattr(settings, api_key_attr, '')
+    api_key = get_setting(api_key_attr)
     if not api_key:
         raise HTTPException(status_code=503, detail=f"No API key configured for {provider_name}")
 
