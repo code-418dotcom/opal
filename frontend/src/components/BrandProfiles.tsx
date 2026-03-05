@@ -103,7 +103,7 @@ export default function BrandProfiles() {
     const parts: string[] = [];
     if (wizard.mood) parts.push(wizard.mood);
     if (wizard.style_keywords.length) parts.push(wizard.style_keywords.join(', '));
-    parts.push('product photography scene, photorealistic, high quality');
+    parts.push('empty surface for product placement, no objects, no clutter, photorealistic product photography backdrop');
     return parts.join(', ');
   };
 
@@ -114,10 +114,10 @@ export default function BrandProfiles() {
     const results: WizardState['previews'] = [];
 
     const variations = [
-      prompt,
-      `${prompt}, bright natural lighting`,
-      `${prompt}, studio lighting, clean background`,
-      `${prompt}, lifestyle setting, warm tones`,
+      `${prompt}, clean white seamless studio backdrop, soft diffused lighting`,
+      `${prompt}, soft natural window light, blurred interior background`,
+      `${prompt}, dark moody backdrop, dramatic directional lighting`,
+      `${prompt}, outdoor golden hour, blurred bokeh background`,
     ];
 
     try {

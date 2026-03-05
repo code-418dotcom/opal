@@ -96,8 +96,8 @@ def execute_pipeline(
         else:
             LOG.info("Step 2/3: Scene generation (%s)", img_gen_provider.name)
             prompt = scene_prompt or (
-                "modern minimalist living room, bright natural lighting, "
-                "wooden floor, white walls, plants, photorealistic, high quality"
+                "empty clean surface for product placement, soft neutral background, "
+                "diffused studio lighting, no objects, no clutter, photorealistic product photography backdrop"
             )
             scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt)
         current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes)

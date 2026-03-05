@@ -79,7 +79,7 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
                     parts.append(", ".join(bp["style_keywords"]))
                 if bp.get("mood"):
                     parts.append(bp["mood"])
-        parts.append("photorealistic, high quality")
+        parts.append("photorealistic, empty surface for product placement, no objects, no clutter")
         prompt = ", ".join(parts)
         LOG.info("Scene type prompt for item=%s type=%s", item_id, item_scene_type)
         return prompt
@@ -95,7 +95,7 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
                 parts.append(", ".join(bp["style_keywords"]))
             if bp.get("mood"):
                 parts.append(bp["mood"])
-            parts.append("photorealistic, high quality")
+            parts.append("photorealistic, empty surface for product placement, no objects, no clutter")
             prompt = ", ".join(parts)
             LOG.info("Brand prompt for job=%s", job_id)
             return prompt
