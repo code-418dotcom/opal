@@ -26,16 +26,19 @@ echo "Storage: ${STORAGE} (${STORAGE_ID})"
 echo "SB:      ${SB} (${SB_ID})"
 echo ""
 
-# All 7 Container Apps
+# Active Container Apps (v0.4 — unified pipeline worker replaces old per-step workers)
 APPS=(
   "opal-web-api-${ENV_NAME}"
   "opal-billing-service-${ENV_NAME}"
-  "opal-orchestrator-${ENV_NAME}"
+  "opal-pipeline-worker-${ENV_NAME}"
   "opal-export-worker-${ENV_NAME}"
-  "opal-bg-removal-worker-${ENV_NAME}"
-  "opal-scene-worker-${ENV_NAME}"
-  "opal-upscale-worker-${ENV_NAME}"
 )
+
+# Legacy workers (deactivated — kept for rollback)
+# "opal-orchestrator-${ENV_NAME}"
+# "opal-bg-removal-worker-${ENV_NAME}"
+# "opal-scene-worker-${ENV_NAME}"
+# "opal-upscale-worker-${ENV_NAME}"
 
 # Role → scope pairs for each app
 ROLES=(

@@ -10,10 +10,9 @@ on:
         type: choice
         options:
           - web-api
-          - orchestrator
+          - pipeline-worker
           - export-worker
           - billing-service
-          - aml-sd-stub
           - all
       image_tag:
         description: "Image tag to deploy (default = Git SHA)"
@@ -124,16 +123,12 @@ jobs:
             update_one "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
           fi
 
-          if [ "${TARGET}" = "orchestrator" ] || [ "${TARGET}" = "all" ]; then
-            update_one "opal-orchestrator-${ENV_NAME}" "${ACR_LOGIN}/opal/orchestrator:${IMAGE_TAG}"
+          if [ "${TARGET}" = "pipeline-worker" ] || [ "${TARGET}" = "all" ]; then
+            update_one "opal-pipeline-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/pipeline-worker:${IMAGE_TAG}"
           fi
 
           if [ "${TARGET}" = "export-worker" ] || [ "${TARGET}" = "all" ]; then
             update_one "opal-export-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
-          fi
-
-          if [ "${TARGET}" = "aml-sd-stub" ] || [ "${TARGET}" = "all" ]; then
-            update_one "opal-aml-sd-stub-${ENV_NAME}" "${ACR_LOGIN}/opal/aml-sd-stub:${IMAGE_TAG}"
           fi
 
       - name: Print Web API URL (if web-api deployed)

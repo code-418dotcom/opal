@@ -77,7 +77,9 @@ def ensure_test_image(path: Path) -> Path:
 
 def step_health(client: httpx.Client):
     log("Checking API health...")
-    r = client.get("/healthz")
+    # healthz is mounted at root, not under /v1
+    base = str(client.base_url).replace("/v1", "")
+    r = httpx.get(f"{base}/healthz", timeout=10)
     if r.status_code != 200:
         fail(f"Health check returned {r.status_code}: {r.text}")
     log(f"  OK – {r.json()}")
