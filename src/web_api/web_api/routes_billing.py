@@ -19,18 +19,21 @@ LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/billing", tags=["billing"])
 
+# Public router — no auth dependency (mounted separately in main.py)
+public_router = APIRouter(prefix="/v1/billing", tags=["billing"])
+
+
+@public_router.get("/packages")
+def get_packages():
+    """List available token packages (public endpoint, no auth)."""
+    return {"packages": list_token_packages(active_only=True)}
+
 
 @router.get("/balance")
 def get_balance(user: dict = Depends(get_current_user)):
     u = get_user_by_id(user["user_id"])
     balance = u["token_balance"] if u else 0
     return {"token_balance": balance}
-
-
-@router.get("/packages")
-def get_packages():
-    """List available token packages (public endpoint)."""
-    return {"packages": list_token_packages(active_only=True)}
 
 
 class PurchaseIn(BaseModel):

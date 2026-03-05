@@ -9,7 +9,7 @@ from web_api.routes_uploads import router as uploads_router
 from web_api.routes_downloads import router as downloads_router
 from web_api.routes_brand_profiles import router as brand_profiles_router
 from web_api.routes_scene_templates import router as scene_templates_router
-from web_api.routes_billing import router as billing_router
+from web_api.routes_billing import router as billing_router, public_router as billing_public_router
 from web_api.routes_integrations import router as integrations_router, gdpr_router
 from web_api.routes_admin import router as admin_router
 from web_api.auth import get_current_user
@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(billing_public_router)  # Public endpoints (no auth)
 app.include_router(jobs_router, dependencies=[Depends(get_current_user)])
 app.include_router(uploads_router, dependencies=[Depends(get_current_user)])
 app.include_router(downloads_router, dependencies=[Depends(get_current_user)])
