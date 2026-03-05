@@ -14,24 +14,33 @@ const msalConfig = {
   },
 };
 
-export const msalInstance = new PublicClientApplication(msalConfig);
+// Lazy-init MSAL — creating with empty clientId throws
+let _msalInstance: PublicClientApplication | null = null;
+
+function msal(): PublicClientApplication {
+  if (!_msalInstance) {
+    _msalInstance = new PublicClientApplication(msalConfig);
+  }
+  return _msalInstance;
+}
 
 export const isAuthConfigured = (): boolean =>
   Boolean(ENTRA_CLIENT_ID && ENTRA_AUTHORITY);
 
 export async function initializeMsal(): Promise<void> {
   if (!isAuthConfigured()) return;
-  await msalInstance.initialize();
-  await msalInstance.handleRedirectPromise();
+  await msal().initialize();
+  await msal().handleRedirectPromise();
 }
 
 export function getAccount(): AccountInfo | null {
-  const accounts = msalInstance.getAllAccounts();
+  if (!isAuthConfigured()) return null;
+  const accounts = msal().getAllAccounts();
   return accounts.length > 0 ? accounts[0] : null;
 }
 
 export async function login(): Promise<void> {
-  await msalInstance.loginPopup({
+  await msal().loginPopup({
     scopes: [`api://${ENTRA_CLIENT_ID}/access`],
   });
 }
@@ -39,7 +48,7 @@ export async function login(): Promise<void> {
 export async function logout(): Promise<void> {
   const account = getAccount();
   if (account) {
-    await msalInstance.logoutPopup({ account });
+    await msal().logoutPopup({ account });
   }
 }
 
@@ -50,14 +59,14 @@ export async function getAccessToken(): Promise<string | null> {
   if (!account) return null;
 
   try {
-    const response = await msalInstance.acquireTokenSilent({
+    const response = await msal().acquireTokenSilent({
       scopes: [`api://${ENTRA_CLIENT_ID}/access`],
       account,
     });
     return response.accessToken;
   } catch (e) {
     if (e instanceof InteractionRequiredAuthError) {
-      const response = await msalInstance.acquireTokenPopup({
+      const response = await msal().acquireTokenPopup({
         scopes: [`api://${ENTRA_CLIENT_ID}/access`],
       });
       return response.accessToken;

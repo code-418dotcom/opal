@@ -9,24 +9,17 @@ const API_KEY = import.meta.env.VITE_API_KEY as string;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// Validate configuration based on backend type
+// Validate configuration based on backend type (warn, don't throw — landing page must render)
 if (BACKEND_TYPE === 'azure') {
   if (!API_URL || !API_KEY) {
-    throw new Error(
-      'Azure backend requires VITE_API_URL and VITE_API_KEY in your .env.local file.'
-    );
+    console.warn('Azure backend: VITE_API_URL and/or VITE_API_KEY not set. API calls will fail.');
   }
 } else if (BACKEND_TYPE === 'supabase') {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !API_KEY) {
-    throw new Error(
-      'Supabase backend requires VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, ' +
-      'and VITE_API_KEY in your .env.local file.'
-    );
+    console.warn('Supabase backend: missing required env vars. API calls will fail.');
   }
 } else {
-  throw new Error(
-    `Unknown backend type: ${BACKEND_TYPE}. Set VITE_BACKEND_TYPE to 'azure' or 'supabase'.`
-  );
+  console.warn(`Unknown backend type: ${BACKEND_TYPE}. Defaulting to azure.`);
 }
 
 // Determine the base URL based on backend type
