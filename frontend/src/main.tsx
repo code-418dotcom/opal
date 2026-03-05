@@ -2,15 +2,22 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import { bootMsal } from './auth.ts'
+import { bootMsal, isAuthConfigured } from './auth.ts'
 
-// Start MSAL initialization immediately (non-blocking).
-// In popup windows, handleRedirectPromise() processes the #code= hash
-// and communicates back to the parent window.
-bootMsal()
+// MSAL v5 popup flow: the popup window receives a #code=...&state=... hash.
+// The state contains interactionType:"popup". The redirect bridge broadcasts
+// the response to the parent via BroadcastChannel and closes the popup.
+const isMsalPopup = isAuthConfigured() && window.location.hash.includes('code=') && window.location.hash.includes('state=')
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+if (isMsalPopup) {
+  import('@azure/msal-browser/redirect-bridge').then(({ broadcastResponseToMainFrame }) => {
+    broadcastResponseToMainFrame().catch(() => {})
+  })
+} else {
+  bootMsal()
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
