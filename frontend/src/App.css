@@ -2596,28 +2596,28 @@ body {
 .status-ok { color: var(--color-success); }
 .status-missing { color: var(--color-warning); }
 
-/* ── Landing Page — Opal gemstone palette ─────────── */
+/* ── Landing Page — Light opal theme ─────────── */
 
 .landing {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  background: #141220;
-  color: #e8e4ef;
+  background: #faf9f7;
+  color: #3a3541;
 }
 
-/* Ambient glow — opal iridescence */
+/* Ambient glow — soft opal iridescence on light bg */
 .landing-glow {
   position: fixed;
   top: -30%;
   left: 50%;
   transform: translateX(-50%);
-  width: 1000px;
-  height: 1000px;
+  width: 1200px;
+  height: 1200px;
   background:
-    radial-gradient(ellipse at 40% 50%, rgba(139, 192, 191, 0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 60% 40%, rgba(200, 162, 200, 0.1) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 60%, rgba(230, 180, 150, 0.08) 0%, transparent 50%);
+    radial-gradient(ellipse at 30% 50%, rgba(139, 192, 191, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 40%, rgba(200, 162, 200, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 60%, rgba(230, 180, 150, 0.10) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
 }
@@ -2627,10 +2627,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(20, 18, 32, 0.88);
+  background: rgba(250, 249, 247, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(232, 228, 239, 0.1);
+  border-bottom: 1px solid rgba(58, 53, 65, 0.08);
 }
 
 .landing-nav-inner {
@@ -2648,13 +2648,13 @@ body {
   gap: 0.6rem;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #e8e4ef;
+  color: #2a2530;
   letter-spacing: 0.06em;
 }
 
 .landing-nav-diamond {
   font-size: 1.4rem;
-  background: linear-gradient(135deg, #8bc0bf, #c8a2c8, #e6b496);
+  background: linear-gradient(135deg, #5a9e9d, #a57ba5, #d4936e);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -2669,13 +2669,13 @@ body {
 .landing-nav-link {
   font-size: 0.82rem;
   font-weight: 500;
-  color: rgba(232, 228, 239, 0.6);
+  color: rgba(58, 53, 65, 0.55);
   text-decoration: none;
   transition: color 0.2s;
 }
 
 .landing-nav-link:hover {
-  color: #e8e4ef;
+  color: #2a2530;
 }
 
 .landing-nav-cta {
@@ -2684,8 +2684,8 @@ body {
   gap: 0.4rem;
   padding: 0.5rem 1.1rem;
   background: transparent;
-  color: #e8e4ef;
-  border: 1px solid rgba(232, 228, 239, 0.15);
+  color: #2a2530;
+  border: 1px solid rgba(58, 53, 65, 0.15);
   border-radius: 6px;
   font-size: 0.82rem;
   font-weight: 500;
@@ -2694,20 +2694,20 @@ body {
 }
 
 .landing-nav-cta:hover {
-  background: rgba(232, 228, 239, 0.06);
-  border-color: rgba(232, 228, 239, 0.25);
+  background: rgba(58, 53, 65, 0.04);
+  border-color: rgba(58, 53, 65, 0.25);
 }
 
 /* Badge */
 .landing-badge {
   display: inline-block;
   padding: 0.3rem 0.9rem;
-  background: rgba(139, 192, 191, 0.1);
-  border: 1px solid rgba(139, 192, 191, 0.2);
+  background: rgba(90, 158, 157, 0.08);
+  border: 1px solid rgba(90, 158, 157, 0.18);
   border-radius: 100px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #8bc0bf;
+  color: #4a8a89;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -2716,7 +2716,7 @@ body {
 .landing-hero {
   position: relative;
   z-index: 1;
-  padding: 6rem 1.5rem 3rem;
+  padding: 5rem 1.5rem 3rem;
   text-align: center;
 }
 
@@ -2730,12 +2730,12 @@ body {
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.025em;
-  color: #f0ecf5;
+  color: #1e1a24;
   margin: 1.25rem 0 1.5rem;
 }
 
 .landing-h1-accent {
-  background: linear-gradient(135deg, #8bc0bf, #c8a2c8, #e6b496);
+  background: linear-gradient(135deg, #5a9e9d, #a57ba5, #d4936e);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -2744,14 +2744,14 @@ body {
 .landing-hero-sub {
   font-size: 1.1rem;
   line-height: 1.7;
-  color: rgba(232, 228, 239, 0.6);
+  color: rgba(58, 53, 65, 0.6);
   max-width: 540px;
   margin: 0 auto 2.5rem;
 }
 
 .landing-hero-sub em {
   font-style: italic;
-  color: rgba(232, 228, 239, 0.85);
+  color: rgba(58, 53, 65, 0.85);
 }
 
 .landing-hero-actions {
@@ -2767,8 +2767,8 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.8rem 1.75rem;
-  background: linear-gradient(135deg, #8bc0bf, #a3b5d6);
-  color: #141220;
+  background: linear-gradient(135deg, #5a9e9d, #7a96bd);
+  color: #fff;
   border: none;
   border-radius: 8px;
   font-size: 0.95rem;
@@ -2779,8 +2779,8 @@ body {
 
 .landing-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(139, 192, 191, 0.25);
-  filter: brightness(1.1);
+  box-shadow: 0 6px 24px rgba(90, 158, 157, 0.3);
+  filter: brightness(1.08);
 }
 
 .landing-btn-lg {
@@ -2794,8 +2794,8 @@ body {
   gap: 0.4rem;
   padding: 0.8rem 1.5rem;
   background: transparent;
-  color: rgba(232, 228, 239, 0.6);
-  border: 1px solid rgba(232, 228, 239, 0.12);
+  color: rgba(58, 53, 65, 0.6);
+  border: 1px solid rgba(58, 53, 65, 0.15);
   border-radius: 8px;
   font-size: 0.95rem;
   font-weight: 500;
@@ -2805,15 +2805,31 @@ body {
 }
 
 .landing-btn-ghost:hover {
-  color: #e8e4ef;
-  border-color: rgba(232, 228, 239, 0.25);
-  background: rgba(232, 228, 239, 0.04);
+  color: #2a2530;
+  border-color: rgba(58, 53, 65, 0.3);
+  background: rgba(58, 53, 65, 0.03);
 }
 
 .landing-hero-note {
   margin-top: 1.25rem;
   font-size: 0.8rem;
-  color: rgba(232, 228, 239, 0.35);
+  color: rgba(58, 53, 65, 0.4);
+}
+
+/* Hero image showcase */
+.landing-hero-image {
+  margin: 3rem auto 0;
+  max-width: 860px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(58, 53, 65, 0.1), 0 1px 3px rgba(58, 53, 65, 0.06);
+  border: 1px solid rgba(58, 53, 65, 0.08);
+}
+
+.landing-hero-image img {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 /* Pipeline / How it works */
@@ -2821,7 +2837,7 @@ body {
   position: relative;
   z-index: 1;
   padding: 5rem 1.5rem;
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
 }
 
 .landing-pipeline-inner {
@@ -2832,9 +2848,10 @@ body {
   align-items: center;
   gap: 0;
   padding: 2rem 2.5rem;
-  background: rgba(232, 228, 239, 0.05);
-  border: 1px solid rgba(232, 228, 239, 0.1);
+  background: #fff;
+  border: 1px solid rgba(58, 53, 65, 0.08);
   border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(58, 53, 65, 0.04);
 }
 
 .landing-pipeline-step {
@@ -2851,8 +2868,8 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: rgba(139, 192, 191, 0.12);
-  color: #8bc0bf;
+  background: rgba(90, 158, 157, 0.1);
+  color: #4a8a89;
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
@@ -2868,17 +2885,17 @@ body {
 .landing-pipeline-label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #e8e4ef;
+  color: #2a2530;
   white-space: nowrap;
 }
 
 .landing-pipeline-desc {
   font-size: 0.75rem;
-  color: rgba(232, 228, 239, 0.4);
+  color: rgba(58, 53, 65, 0.45);
 }
 
 .landing-pipeline-arrow {
-  color: rgba(232, 228, 239, 0.15);
+  color: rgba(58, 53, 65, 0.2);
   font-size: 1.1rem;
   text-align: center;
 }
@@ -2899,14 +2916,14 @@ body {
   font-size: clamp(1.75rem, 3.5vw, 2.5rem);
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #f0ecf5;
+  color: #1e1a24;
   margin: 1rem 0 0.75rem;
   line-height: 1.2;
 }
 
 .landing-section-sub {
   font-size: 1rem;
-  color: rgba(232, 228, 239, 0.6);
+  color: rgba(58, 53, 65, 0.6);
   max-width: 520px;
   margin: 0 auto;
   line-height: 1.6;
@@ -2917,7 +2934,7 @@ body {
   position: relative;
   z-index: 1;
   padding: 5rem 1.5rem;
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
 }
 
 .landing-pain-inner {
@@ -2935,23 +2952,75 @@ body {
 
 .landing-pain-card {
   padding: 1.75rem 1.5rem;
-  background: rgba(232, 228, 239, 0.05);
-  border: 1px solid rgba(232, 228, 239, 0.1);
+  background: #fff;
+  border: 1px solid rgba(58, 53, 65, 0.08);
   border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(58, 53, 65, 0.04);
 }
 
 .landing-pain-card p {
   font-size: 0.9rem;
   line-height: 1.6;
-  color: rgba(232, 228, 239, 0.65);
+  color: rgba(58, 53, 65, 0.6);
   font-style: italic;
 }
 
 .landing-pain-cta {
   font-size: 1.05rem;
   font-weight: 600;
-  color: #e8e4ef;
+  color: #2a2530;
   margin-top: 0.5rem;
+}
+
+/* Before / After showcase */
+.landing-showcase {
+  position: relative;
+  z-index: 1;
+  padding: 5rem 1.5rem;
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
+}
+
+.landing-showcase-inner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.landing-showcase-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.landing-showcase-card {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(58, 53, 65, 0.08);
+  box-shadow: 0 4px 20px rgba(58, 53, 65, 0.06);
+  background: #fff;
+}
+
+.landing-showcase-card img {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  display: block;
+}
+
+.landing-showcase-label {
+  padding: 1rem 1.25rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.landing-showcase-card:first-child .landing-showcase-label {
+  color: rgba(58, 53, 65, 0.45);
+}
+
+.landing-showcase-card:last-child .landing-showcase-label {
+  color: #4a8a89;
 }
 
 /* Features */
@@ -2959,7 +3028,7 @@ body {
   position: relative;
   z-index: 1;
   padding: 5rem 0;
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
 }
 
 .landing-features-grid {
@@ -2970,16 +3039,17 @@ body {
 
 .landing-feature-card {
   padding: 2rem;
-  background: rgba(232, 228, 239, 0.05);
-  border: 1px solid rgba(232, 228, 239, 0.1);
+  background: #fff;
+  border: 1px solid rgba(58, 53, 65, 0.08);
   border-radius: 12px;
   transition: all 0.25s;
+  box-shadow: 0 1px 4px rgba(58, 53, 65, 0.04);
 }
 
 .landing-feature-card:hover {
-  border-color: rgba(139, 192, 191, 0.25);
+  border-color: rgba(90, 158, 157, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(58, 53, 65, 0.08);
 }
 
 .landing-feature-icon {
@@ -2988,42 +3058,42 @@ body {
   justify-content: center;
   width: 44px;
   height: 44px;
-  background: rgba(139, 192, 191, 0.1);
-  border: 1px solid rgba(139, 192, 191, 0.15);
+  background: rgba(90, 158, 157, 0.08);
+  border: 1px solid rgba(90, 158, 157, 0.15);
   border-radius: 10px;
-  color: #8bc0bf;
+  color: #4a8a89;
   margin-bottom: 1.25rem;
 }
 
 .landing-feature-card:nth-child(2) .landing-feature-icon {
-  background: rgba(200, 162, 200, 0.1);
-  border-color: rgba(200, 162, 200, 0.15);
-  color: #c8a2c8;
+  background: rgba(165, 123, 165, 0.08);
+  border-color: rgba(165, 123, 165, 0.15);
+  color: #9a6b9a;
 }
 
 .landing-feature-card:nth-child(3) .landing-feature-icon {
-  background: rgba(230, 180, 150, 0.1);
-  border-color: rgba(230, 180, 150, 0.15);
-  color: #e6b496;
+  background: rgba(212, 147, 110, 0.08);
+  border-color: rgba(212, 147, 110, 0.15);
+  color: #c0804e;
 }
 
 .landing-feature-card:nth-child(4) .landing-feature-icon {
-  background: rgba(163, 181, 214, 0.1);
-  border-color: rgba(163, 181, 214, 0.15);
-  color: #a3b5d6;
+  background: rgba(122, 150, 189, 0.08);
+  border-color: rgba(122, 150, 189, 0.15);
+  color: #6a86aa;
 }
 
 .landing-feature-card h3 {
   font-size: 1.05rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #f0ecf5;
+  color: #1e1a24;
 }
 
 .landing-feature-card p {
   font-size: 0.875rem;
   line-height: 1.65;
-  color: rgba(232, 228, 239, 0.6);
+  color: rgba(58, 53, 65, 0.6);
 }
 
 /* Brand callout */
@@ -3031,15 +3101,15 @@ body {
   position: relative;
   z-index: 1;
   padding: 5rem 1.5rem;
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
 }
 
 .landing-brand-inner {
   max-width: 640px;
   margin: 0 auto;
   padding: 3rem;
-  background: linear-gradient(135deg, rgba(139, 192, 191, 0.06), rgba(200, 162, 200, 0.1));
-  border: 1px solid rgba(139, 192, 191, 0.15);
+  background: linear-gradient(135deg, rgba(90, 158, 157, 0.06), rgba(165, 123, 165, 0.08));
+  border: 1px solid rgba(90, 158, 157, 0.12);
   border-radius: 16px;
   text-align: center;
 }
@@ -3047,7 +3117,7 @@ body {
 .landing-brand-text p {
   font-size: 1rem;
   line-height: 1.7;
-  color: rgba(232, 228, 239, 0.65);
+  color: rgba(58, 53, 65, 0.6);
   margin: 1rem 0 2rem;
 }
 
@@ -3056,7 +3126,7 @@ body {
   position: relative;
   z-index: 1;
   padding: 5rem 0;
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
 }
 
 .landing-pricing-grid {
@@ -3070,22 +3140,23 @@ body {
 .landing-price-card {
   position: relative;
   padding: 2.25rem 1.75rem;
-  background: rgba(232, 228, 239, 0.05);
-  border: 1px solid rgba(232, 228, 239, 0.1);
+  background: #fff;
+  border: 1px solid rgba(58, 53, 65, 0.08);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   transition: all 0.25s;
+  box-shadow: 0 1px 4px rgba(58, 53, 65, 0.04);
 }
 
 .landing-price-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(58, 53, 65, 0.08);
 }
 
 .landing-price-popular {
-  border-color: #8bc0bf;
-  box-shadow: 0 0 0 1px rgba(139, 192, 191, 0.3), 0 8px 32px rgba(139, 192, 191, 0.12);
+  border-color: #5a9e9d;
+  box-shadow: 0 0 0 1px rgba(90, 158, 157, 0.2), 0 8px 32px rgba(90, 158, 157, 0.1);
 }
 
 .landing-price-badge {
@@ -3094,8 +3165,8 @@ body {
   left: 50%;
   transform: translateX(-50%);
   padding: 0.2rem 0.85rem;
-  background: linear-gradient(135deg, #8bc0bf, #a3b5d6);
-  color: #141220;
+  background: linear-gradient(135deg, #5a9e9d, #7a96bd);
+  color: #fff;
   border-radius: 100px;
   font-size: 0.7rem;
   font-weight: 700;
@@ -3107,30 +3178,30 @@ body {
 .landing-price-name {
   font-size: 1rem;
   font-weight: 700;
-  color: #f0ecf5;
+  color: #1e1a24;
   margin-bottom: 0.75rem;
 }
 
 .landing-price-amount {
   font-size: 2rem;
   font-weight: 800;
-  color: #f0ecf5;
+  color: #1e1a24;
   letter-spacing: -0.02em;
   line-height: 1;
 }
 
 .landing-price-tokens {
   font-size: 0.85rem;
-  color: rgba(232, 228, 239, 0.45);
+  color: rgba(58, 53, 65, 0.45);
   margin: 0.4rem 0 0.25rem;
 }
 
 .landing-price-per {
   font-size: 0.75rem;
-  color: rgba(232, 228, 239, 0.35);
+  color: rgba(58, 53, 65, 0.4);
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(232, 228, 239, 0.1);
+  border-bottom: 1px solid rgba(58, 53, 65, 0.08);
 }
 
 .landing-price-features {
@@ -3147,20 +3218,20 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.82rem;
-  color: rgba(232, 228, 239, 0.6);
+  color: rgba(58, 53, 65, 0.6);
 }
 
 .landing-price-features li svg {
-  color: #8bc0bf;
+  color: #4a8a89;
   flex-shrink: 0;
 }
 
 .landing-price-btn {
   width: 100%;
   padding: 0.7rem 1rem;
-  background: rgba(232, 228, 239, 0.06);
-  color: #e8e4ef;
-  border: 1px solid rgba(232, 228, 239, 0.12);
+  background: rgba(58, 53, 65, 0.04);
+  color: #2a2530;
+  border: 1px solid rgba(58, 53, 65, 0.12);
   border-radius: 8px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -3169,18 +3240,18 @@ body {
 }
 
 .landing-price-btn:hover {
-  background: rgba(232, 228, 239, 0.1);
-  border-color: rgba(232, 228, 239, 0.2);
+  background: rgba(58, 53, 65, 0.08);
+  border-color: rgba(58, 53, 65, 0.2);
 }
 
 .landing-price-btn-primary {
-  background: linear-gradient(135deg, #8bc0bf, #a3b5d6);
+  background: linear-gradient(135deg, #5a9e9d, #7a96bd);
   border-color: transparent;
-  color: #141220;
+  color: #fff;
 }
 
 .landing-price-btn-primary:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
   border-color: transparent;
 }
 
@@ -3190,8 +3261,8 @@ body {
   z-index: 1;
   padding: 6rem 1.5rem;
   text-align: center;
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
-  background: linear-gradient(180deg, transparent, rgba(139, 192, 191, 0.03));
+  border-top: 1px solid rgba(58, 53, 65, 0.06);
+  background: linear-gradient(180deg, transparent, rgba(90, 158, 157, 0.04));
 }
 
 .landing-cta-inner {
@@ -3205,8 +3276,9 @@ body {
 
 /* Footer */
 .landing-footer {
-  border-top: 1px solid rgba(232, 228, 239, 0.06);
+  border-top: 1px solid rgba(58, 53, 65, 0.08);
   padding: 2rem 1.5rem;
+  background: #f5f4f2;
 }
 
 .landing-footer-inner {
@@ -3223,13 +3295,13 @@ body {
   gap: 0.5rem;
   font-weight: 700;
   font-size: 0.95rem;
-  color: #e8e4ef;
+  color: #2a2530;
   letter-spacing: 0.03em;
 }
 
 .landing-footer-text {
   font-size: 0.8rem;
-  color: rgba(232, 228, 239, 0.35);
+  color: rgba(58, 53, 65, 0.4);
 }
 
 /* Responsive */
@@ -3293,5 +3365,13 @@ body {
 
   .landing-brand-inner {
     padding: 2rem 1.5rem;
+  }
+
+  .landing-showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-showcase-card img {
+    height: 200px;
   }
 }

@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Eraser, Image, Maximize, ArrowRight, Check, Store } from 'lucide-react';
 
+// Stock images from Unsplash (free license)
+const HERO_IMG = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=860&h=480&fit=crop&q=80';
+const BEFORE_IMG = 'https://images.unsplash.com/photo-1523293182086-7651a899d37f?w=440&h=260&fit=crop&q=80';
+const AFTER_IMG = 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=440&h=260&fit=crop&q=80';
+
 interface TokenPackage {
   id: string;
   name: string;
@@ -105,6 +110,15 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             </a>
           </div>
           <p className="landing-hero-note">No credit card needed. Start with free tokens.</p>
+
+          {/* Hero product image */}
+          <div className="landing-hero-image">
+            <img
+              src={HERO_IMG}
+              alt="Product photography — skincare bottles styled on a marble surface"
+              loading="eager"
+            />
+          </div>
         </div>
       </section>
 
@@ -148,6 +162,29 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 <div className="landing-pipeline-label">Download or push to store</div>
                 <div className="landing-pipeline-desc">Listing-ready in seconds</div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Before / After showcase */}
+      <section className="landing-showcase">
+        <div className="landing-showcase-inner">
+          <div className="landing-section-header">
+            <h2 className="landing-h2">See the difference</h2>
+            <p className="landing-section-sub">
+              Same product, completely different impression. Opal turns
+              everyday photos into images that sell.
+            </p>
+          </div>
+          <div className="landing-showcase-grid">
+            <div className="landing-showcase-card">
+              <img src={BEFORE_IMG} alt="Before — product on cluttered background" loading="lazy" />
+              <div className="landing-showcase-label">Before</div>
+            </div>
+            <div className="landing-showcase-card">
+              <img src={AFTER_IMG} alt="After — product styled on clean surface with soft lighting" loading="lazy" />
+              <div className="landing-showcase-label">After Opal</div>
             </div>
           </div>
         </div>
