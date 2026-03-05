@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eraser, Image, Maximize, ArrowRight, Check, Store } from 'lucide-react';
+import { Eraser, Image, Maximize, ArrowRight, Check, Store, Sparkles } from 'lucide-react';
 
 // Stock images from Unsplash (free license)
 const HERO_IMG = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=860&h=480&fit=crop&q=80';
@@ -65,8 +65,19 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
   return (
     <div className="landing">
-      {/* Ambient background — opal shimmer */}
+      {/* Multi-layer opal background */}
       <div className="landing-glow" />
+      <div className="landing-glow-2" />
+      <div className="landing-sparkles" aria-hidden="true">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <span key={i} className="sparkle" style={{
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 5}s`,
+            animationDuration: `${2 + Math.random() * 3}s`,
+          }} />
+        ))}
+      </div>
 
       {/* Navigation */}
       <nav className="landing-nav">
@@ -89,7 +100,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       {/* Hero */}
       <section className="landing-hero">
         <div className="landing-hero-inner">
-          <div className="landing-badge">For Shopify, Etsy &amp; WooCommerce sellers</div>
+          <div className="landing-badge">
+            <Sparkles size={12} />
+            For Shopify, Etsy &amp; WooCommerce sellers
+          </div>
           <h1 className="landing-h1">
             Your products deserve
             <span className="landing-h1-accent"> better photos</span>
@@ -111,8 +125,9 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           </div>
           <p className="landing-hero-note">No credit card needed. Start with free tokens.</p>
 
-          {/* Hero product image */}
+          {/* Hero product image with opal frame */}
           <div className="landing-hero-image">
+            <div className="landing-hero-image-glow" />
             <img
               src={HERO_IMG}
               alt="Product photography — skincare bottles styled on a marble surface"
@@ -182,7 +197,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               <img src={BEFORE_IMG} alt="Before — product on cluttered background" loading="lazy" />
               <div className="landing-showcase-label">Before</div>
             </div>
-            <div className="landing-showcase-card">
+            <div className="landing-showcase-card landing-showcase-after">
               <img src={AFTER_IMG} alt="After — product styled on clean surface with soft lighting" loading="lazy" />
               <div className="landing-showcase-label">After Opal</div>
             </div>
@@ -196,13 +211,13 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           <h2 className="landing-h2">Sound familiar?</h2>
           <div className="landing-pain-grid">
             <div className="landing-pain-card">
-              <p>"I spent my whole weekend editing product photos and they still look amateur."</p>
+              <p>&ldquo;I spent my whole weekend editing product photos and they still look amateur.&rdquo;</p>
             </div>
             <div className="landing-pain-card">
-              <p>"A photographer quoted me 500 euros for 10 products. I have 200 products."</p>
+              <p>&ldquo;A photographer quoted me 500 euros for 10 products. I have 200 products.&rdquo;</p>
             </div>
             <div className="landing-pain-card">
-              <p>"My products are great, but my listings make them look cheap."</p>
+              <p>&ldquo;My products are great, but my listings make them look cheap.&rdquo;</p>
             </div>
           </div>
           <p className="landing-pain-cta">
@@ -215,7 +230,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       <section className="landing-features" id="features">
         <div className="landing-section-inner">
           <div className="landing-section-header">
-            <div className="landing-badge">What Opal does</div>
+            <div className="landing-badge">
+              <Sparkles size={12} />
+              What Opal does
+            </div>
             <h2 className="landing-h2">One tool instead of five</h2>
             <p className="landing-section-sub">
               Background removal, scene creation, image sharpening, and store
@@ -259,7 +277,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         <section className="landing-pricing" id="pricing">
           <div className="landing-section-inner">
             <div className="landing-section-header">
-              <div className="landing-badge">Pricing</div>
+              <div className="landing-badge">
+                <Sparkles size={12} />
+                Pricing
+              </div>
               <h2 className="landing-h2">Pay for what you use</h2>
               <p className="landing-section-sub">
                 Buy tokens, spend them whenever. No subscriptions, no monthly bills
@@ -308,7 +329,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       {/* Final CTA */}
       <section className="landing-cta">
         <div className="landing-cta-inner">
-          <h2 className="landing-h2">Your store deserves images that shine</h2>
+          <h2 className="landing-h2">Your store deserves images that <span className="landing-h1-accent">shine</span></h2>
           <p className="landing-section-sub">
             Sign up in seconds, get free tokens to try it out. If your
             product photos don't look better, we'll be surprised.
