@@ -83,6 +83,7 @@ class ApiClient {
       throw new Error(error.error || error.detail || `HTTP ${response.status}: ${response.statusText}`);
     }
 
+    if (response.status === 204) return undefined as T;
     return response.json();
   }
 

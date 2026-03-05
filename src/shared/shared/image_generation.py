@@ -33,25 +33,32 @@ class FalProvider(ImageGenerationProvider):
         self.base_url = "https://fal.run/fal-ai"
         LOG.info("FAL.AI provider initialized")
     
+    NEGATIVE_PROMPT = (
+        "objects, products, items, people, hands, text, letters, watermark, "
+        "jewelry, accessories, clothing, food, bottles, cups, plants, flowers, "
+        "decorations, ornaments, clutter, busy, crowded"
+    )
+
     def generate(self, prompt: str, image_url: Optional[str] = None, **kwargs) -> bytes:
-        """Generate with FLUX-schnell (fast, high quality)"""
-        LOG.info(f"Generating with FAL.AI FLUX: {prompt[:50]}...")
-        
-        # Use FLUX-schnell for fast generation
-        endpoint = f"{self.base_url}/flux/schnell"
-        
+        """Generate with FLUX.1 [dev] via flux-lora endpoint (supports negative prompt)."""
+        LOG.info(f"Generating with FAL.AI FLUX-dev: {prompt[:50]}...")
+
+        endpoint = f"{self.base_url}/flux-lora"
+
         payload = {
             "prompt": prompt,
+            "negative_prompt": self.NEGATIVE_PROMPT,
             "image_size": "landscape_16_9",
-            "num_inference_steps": 4,  # Fast mode
+            "num_inference_steps": 28,
+            "guidance_scale": 3.5,
             "num_images": 1,
             "enable_safety_checker": False
         }
-        
+
         # Add image conditioning if provided
         if image_url:
             payload["image_url"] = image_url
-            payload["strength"] = 0.8  # Control influence
+            payload["strength"] = 0.8
         
         headers = {
             "Authorization": f"Key {self.api_key}",
@@ -71,7 +78,7 @@ class FalProvider(ImageGenerationProvider):
             img_response = client.get(image_url)
             img_response.raise_for_status()
             
-            LOG.info("FAL.AI generation successful")
+            LOG.info("FAL.AI FLUX-dev generation successful")
             return img_response.content
     
     @property

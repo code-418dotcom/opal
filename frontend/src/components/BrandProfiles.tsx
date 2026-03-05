@@ -115,12 +115,28 @@ export default function BrandProfiles() {
     });
   };
 
+  const CATEGORY_SURFACES: Record<string, string> = {
+    'Jewelry & Accessories': 'velvet fabric surface or polished stone slab',
+    'Clothing & Apparel': 'plain linen or cotton fabric draped flat',
+    'Shoes & Footwear': 'smooth concrete or plain wooden floor',
+    'Beauty & Skincare': 'smooth marble or ceramic tile surface',
+    'Food & Beverages': 'natural wood board or plain ceramic plate surface',
+    'Electronics & Gadgets': 'matte dark desk surface or brushed metal',
+    'Home & Furniture': 'plain hardwood floor or neutral carpet',
+    'Toys & Games': 'plain light-colored tabletop',
+    'Sports & Outdoor': 'grass turf or plain concrete surface',
+    'Art & Handmade': 'raw linen canvas or natural wood table',
+  };
+
   const buildPrompt = () => {
     const parts: string[] = [];
-    if (wizard.product_category) parts.push(`suitable backdrop for ${wizard.product_category}`);
+    if (wizard.product_category) {
+      const surface = CATEGORY_SURFACES[wizard.product_category] || 'plain flat surface';
+      parts.push(surface);
+    }
     if (wizard.mood) parts.push(wizard.mood);
     if (wizard.style_keywords.length) parts.push(wizard.style_keywords.join(', '));
-    parts.push('empty surface for product placement, no objects, no clutter, photorealistic product photography backdrop');
+    parts.push('completely bare scene, nothing on the surface, shallow depth of field');
     return parts.join(', ');
   };
 
@@ -131,10 +147,10 @@ export default function BrandProfiles() {
     const results: WizardState['previews'] = [];
 
     const variations = [
-      `${prompt}, clean white seamless studio backdrop, soft diffused lighting`,
-      `${prompt}, soft natural window light, blurred interior background`,
-      `${prompt}, dark moody backdrop, dramatic directional lighting`,
-      `${prompt}, outdoor golden hour, blurred bokeh background`,
+      `${prompt}, solid white seamless backdrop, single soft even light`,
+      `${prompt}, blurred warm-toned room far in background, single side light`,
+      `${prompt}, solid dark backdrop, single warm accent light, subtle surface reflection`,
+      `${prompt}, blurred green foliage far in background, warm golden hour sunlight`,
     ];
 
     try {

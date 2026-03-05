@@ -218,7 +218,7 @@ class TestPipelineSequencing:
             bg_provider=bg, img_gen_provider=scene, upscale_provider=upscale,
         )
         call_args = scene.generate.call_args[0][0]
-        assert "product placement" in call_args
+        assert "bare scene" in call_args
 
 
 # ---------------------------------------------------------------------------

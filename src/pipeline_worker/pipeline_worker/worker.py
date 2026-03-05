@@ -63,6 +63,20 @@ def start_health_server(port=8080):
     LOG.info('Health server started on port %d', port)
 
 
+CATEGORY_SURFACES = {
+    "Jewelry & Accessories": "velvet fabric surface or polished stone slab",
+    "Clothing & Apparel": "plain linen or cotton fabric draped flat",
+    "Shoes & Footwear": "smooth concrete or plain wooden floor",
+    "Beauty & Skincare": "smooth marble or ceramic tile surface",
+    "Food & Beverages": "natural wood board or plain ceramic plate surface",
+    "Electronics & Gadgets": "matte dark desk surface or brushed metal",
+    "Home & Furniture": "plain hardwood floor or neutral carpet",
+    "Toys & Games": "plain light-colored tabletop",
+    "Sports & Outdoor": "grass turf or plain concrete surface",
+    "Art & Handmade": "raw linen canvas or natural wood table",
+}
+
+
 def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id, item_id):
     """Build scene prompt: item.scene_prompt -> scene_type lookup -> brand profile -> default."""
     if item_scene_prompt:
@@ -76,12 +90,13 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
             bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
             if bp:
                 if bp.get("product_category"):
-                    parts.append(f"suitable backdrop for {bp['product_category']}")
+                    surface = CATEGORY_SURFACES.get(bp["product_category"], "plain flat surface")
+                    parts.append(surface)
                 if bp.get("style_keywords"):
                     parts.append(", ".join(bp["style_keywords"]))
                 if bp.get("mood"):
                     parts.append(bp["mood"])
-        parts.append("photorealistic, empty surface for product placement, no objects, no clutter")
+        parts.append("completely bare scene, nothing on the surface, shallow depth of field")
         prompt = ", ".join(parts)
         LOG.info("Scene type prompt for item=%s type=%s", item_id, item_scene_type)
         return prompt
@@ -94,12 +109,13 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
             if bp.get("default_scene_prompt"):
                 parts.append(bp["default_scene_prompt"])
             if bp.get("product_category"):
-                parts.append(f"suitable backdrop for {bp['product_category']}")
+                surface = CATEGORY_SURFACES.get(bp["product_category"], "plain flat surface")
+                parts.append(surface)
             if bp.get("style_keywords"):
                 parts.append(", ".join(bp["style_keywords"]))
             if bp.get("mood"):
                 parts.append(bp["mood"])
-            parts.append("photorealistic, empty surface for product placement, no objects, no clutter")
+            parts.append("completely bare scene, nothing on the surface, shallow depth of field")
             prompt = ", ".join(parts)
             LOG.info("Brand prompt for job=%s", job_id)
             return prompt

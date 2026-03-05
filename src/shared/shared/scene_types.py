@@ -3,14 +3,14 @@ Pre-defined scene type prompts for multi-scene generation.
 """
 
 SCENE_PROMPTS: dict[str, str] = {
-    "studio": "Empty product photography studio, clean white seamless backdrop, soft diffused lighting, subtle floor shadow, no objects, no products, blank surface ready for product placement",
-    "lifestyle": "Empty modern living room surface, blurred cozy home interior background, warm natural window light, clean uncluttered tabletop, no objects in foreground, product photography backdrop",
-    "outdoor": "Empty natural stone surface outdoors, soft golden hour sunlight, blurred green foliage bokeh background, no objects, clean foreground for product placement",
-    "minimal": "Empty minimalist backdrop, single soft accent color gradient, clean flat surface, dramatic directional lighting, no objects, gallery-style product photography background",
-    "luxury": "Empty polished marble surface, dark moody backdrop with soft warm lighting, gold-tinted reflections, no objects, premium product photography background",
-    "kitchen": "Empty clean kitchen countertop, bright morning light from window, blurred kitchen interior background, no food no utensils, uncluttered surface for product placement",
-    "office": "Empty clean desk surface, blurred modern office background, soft neutral lighting, no objects no clutter, professional product photography backdrop",
-    "nature": "Empty wooden surface with natural texture, blurred green plants and earth tones in background, soft diffused light, no objects, organic product photography backdrop",
+    "studio": "plain white seamless paper backdrop, single flat surface, soft even studio lighting, shallow depth of field, completely bare scene, nothing on the surface",
+    "lifestyle": "plain wooden tabletop, blurred warm-toned room far in background, single soft light source from the side, shallow depth of field, completely bare surface, nothing on the table",
+    "outdoor": "single flat stone slab, blurred green foliage far in background, warm golden hour sunlight, shallow depth of field, completely bare surface, nothing on the stone",
+    "minimal": "solid soft grey gradient backdrop, single flat matte surface, one directional light with soft shadow, completely bare scene, nothing on the surface",
+    "luxury": "polished dark marble slab, solid dark backdrop, single warm accent light, subtle reflection on surface, completely bare scene, nothing on the marble",
+    "kitchen": "plain light countertop surface, blurred bright window far in background, single natural light source, shallow depth of field, completely bare counter, nothing on the surface",
+    "office": "plain light wooden desk surface, solid soft blurred background, single overhead light, shallow depth of field, completely bare desk, nothing on the surface",
+    "nature": "single rough wooden plank, blurred earthy green tones far in background, soft diffused daylight, shallow depth of field, completely bare surface, nothing on the wood",
 }
 
 DEFAULT_SCENE_TYPES: list[str] = [
