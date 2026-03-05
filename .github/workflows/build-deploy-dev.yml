@@ -6,6 +6,7 @@ on:
     branches: [ "main" ]
     paths:
       - "src/**"
+      - "migrations/**"
 
 permissions:
   id-token: write
