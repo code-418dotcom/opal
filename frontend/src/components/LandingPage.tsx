@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Layers, ZoomIn, ShoppingBag, ArrowRight, Check } from 'lucide-react';
+import { Eraser, Image, Maximize, ArrowRight, Check, Store } from 'lucide-react';
 
 interface TokenPackage {
   id: string;
@@ -37,30 +37,30 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
   const features = [
     {
-      icon: Sparkles,
-      title: 'Background Removal',
-      description: 'AI-powered background removal that handles complex edges, transparency, and fine details like hair and jewelry.',
+      icon: Eraser,
+      title: 'Clean backgrounds',
+      description: 'Drop your product photo in, and we strip away the messy background. Kitchen table, wrinkled bedsheet, whatever — gone. You get a clean cutout, ready for anything.',
     },
     {
-      icon: Layers,
-      title: 'Scene Generation',
-      description: 'Generate photorealistic product scenes with AI. Match your brand aesthetic with custom prompts and style presets.',
+      icon: Image,
+      title: 'Lifestyle scenes',
+      description: 'No studio? No problem. Pick a style and Opal places your product in a realistic setting — marble countertop, wooden table, morning light. Looks like you hired a photographer.',
     },
     {
-      icon: ZoomIn,
-      title: 'Smart Upscaling',
-      description: 'Enhance resolution up to 4x without artifacts. Real-ESRGAN powered upscaling preserves texture and sharpness.',
+      icon: Maximize,
+      title: 'Sharper images',
+      description: 'Blurry phone photo? We make it crisp. Opal sharpens and upscales your images so they look great on any screen, from a phone to a desktop.',
     },
     {
-      icon: ShoppingBag,
-      title: 'Shopify Integration',
-      description: 'Connect your store, select products, process images, and push results back — all without leaving the platform.',
+      icon: Store,
+      title: 'Works with your store',
+      description: 'Connect your Shopify, WooCommerce, or Etsy store. Pull in your product images, polish them, and push them right back. No downloading, no re-uploading.',
     },
   ];
 
   return (
     <div className="landing">
-      {/* Ambient background */}
+      {/* Ambient background — opal shimmer */}
       <div className="landing-glow" />
 
       {/* Navigation */}
@@ -70,9 +70,13 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             <span className="landing-nav-diamond">&#9670;</span>
             OPAL
           </div>
+          <div className="landing-nav-links">
+            <a href="#how" className="landing-nav-link">How it works</a>
+            <a href="#features" className="landing-nav-link">Features</a>
+            <a href="#pricing" className="landing-nav-link">Pricing</a>
+          </div>
           <button className="landing-nav-cta" onClick={onGetStarted}>
-            Get started
-            <ArrowRight size={15} />
+            Sign in
           </button>
         </div>
       </nav>
@@ -80,58 +84,93 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       {/* Hero */}
       <section className="landing-hero">
         <div className="landing-hero-inner">
-          <div className="landing-badge">AI-Powered Image Processing</div>
+          <div className="landing-badge">For Shopify, Etsy &amp; WooCommerce sellers</div>
           <h1 className="landing-h1">
-            Product photos that
-            <span className="landing-h1-accent"> sell</span>
+            Your products deserve
+            <span className="landing-h1-accent"> better photos</span>
           </h1>
           <p className="landing-hero-sub">
-            Transform raw product images into professional e-commerce photography.
-            Background removal, AI-generated scenes, and intelligent upscaling — processed
-            in seconds, not hours.
+            You know that feeling when you see a competitor's listing and
+            their photos just look <em>professional</em>? That's what Opal does
+            for yours. Drop in a photo, get back something you're proud to put
+            in your store.
           </p>
           <div className="landing-hero-actions">
             <button className="landing-btn-primary" onClick={onGetStarted}>
-              Start for free
+              Try it free
               <ArrowRight size={16} />
             </button>
-            <a href="#features" className="landing-btn-ghost">
+            <a href="#how" className="landing-btn-ghost">
               See how it works
             </a>
           </div>
-          <div className="landing-hero-proof">
-            <div className="landing-proof-avatars">
-              <div className="landing-proof-dot" style={{ background: '#6366f1' }} />
-              <div className="landing-proof-dot" style={{ background: '#8b5cf6' }} />
-              <div className="landing-proof-dot" style={{ background: '#a78bfa' }} />
+          <p className="landing-hero-note">No credit card needed. Start with free tokens.</p>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="landing-pipeline" id="how">
+        <div className="landing-section-inner">
+          <div className="landing-section-header">
+            <h2 className="landing-h2">Four steps from meh to beautiful</h2>
+            <p className="landing-section-sub">
+              The whole thing takes seconds. Seriously.
+            </p>
+          </div>
+          <div className="landing-pipeline-inner">
+            <div className="landing-pipeline-step">
+              <div className="landing-pipeline-num">1</div>
+              <div className="landing-pipeline-detail">
+                <div className="landing-pipeline-label">Upload your photo</div>
+                <div className="landing-pipeline-desc">Even a phone photo works</div>
+              </div>
             </div>
-            <span>Trusted by e-commerce sellers across Europe</span>
+            <div className="landing-pipeline-arrow">&#8594;</div>
+            <div className="landing-pipeline-step">
+              <div className="landing-pipeline-num">2</div>
+              <div className="landing-pipeline-detail">
+                <div className="landing-pipeline-label">Remove the background</div>
+                <div className="landing-pipeline-desc">Messy kitchen table? Gone</div>
+              </div>
+            </div>
+            <div className="landing-pipeline-arrow">&#8594;</div>
+            <div className="landing-pipeline-step">
+              <div className="landing-pipeline-num">3</div>
+              <div className="landing-pipeline-detail">
+                <div className="landing-pipeline-label">Pick a scene</div>
+                <div className="landing-pipeline-desc">Marble, wood, studio light</div>
+              </div>
+            </div>
+            <div className="landing-pipeline-arrow">&#8594;</div>
+            <div className="landing-pipeline-step">
+              <div className="landing-pipeline-num">4</div>
+              <div className="landing-pipeline-detail">
+                <div className="landing-pipeline-label">Download or push to store</div>
+                <div className="landing-pipeline-desc">Listing-ready in seconds</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Pipeline visual */}
-      <section className="landing-pipeline">
-        <div className="landing-pipeline-inner">
-          <div className="landing-pipeline-step">
-            <div className="landing-pipeline-num">01</div>
-            <div className="landing-pipeline-label">Upload</div>
+      {/* Pain point bridge */}
+      <section className="landing-pain">
+        <div className="landing-pain-inner">
+          <h2 className="landing-h2">Sound familiar?</h2>
+          <div className="landing-pain-grid">
+            <div className="landing-pain-card">
+              <p>"I spent my whole weekend editing product photos and they still look amateur."</p>
+            </div>
+            <div className="landing-pain-card">
+              <p>"A photographer quoted me 500 euros for 10 products. I have 200 products."</p>
+            </div>
+            <div className="landing-pain-card">
+              <p>"My products are great, but my listings make them look cheap."</p>
+            </div>
           </div>
-          <div className="landing-pipeline-arrow">&#8594;</div>
-          <div className="landing-pipeline-step">
-            <div className="landing-pipeline-num">02</div>
-            <div className="landing-pipeline-label">Remove BG</div>
-          </div>
-          <div className="landing-pipeline-arrow">&#8594;</div>
-          <div className="landing-pipeline-step">
-            <div className="landing-pipeline-num">03</div>
-            <div className="landing-pipeline-label">Generate Scene</div>
-          </div>
-          <div className="landing-pipeline-arrow">&#8594;</div>
-          <div className="landing-pipeline-step">
-            <div className="landing-pipeline-num">04</div>
-            <div className="landing-pipeline-label">Upscale & Export</div>
-          </div>
+          <p className="landing-pain-cta">
+            Opal handles the photography part so you can focus on running your business.
+          </p>
         </div>
       </section>
 
@@ -139,11 +178,11 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       <section className="landing-features" id="features">
         <div className="landing-section-inner">
           <div className="landing-section-header">
-            <div className="landing-badge">Features</div>
-            <h2 className="landing-h2">Everything your product images need</h2>
+            <div className="landing-badge">What Opal does</div>
+            <h2 className="landing-h2">One tool instead of five</h2>
             <p className="landing-section-sub">
-              A complete pipeline from raw photo to store-ready imagery.
-              Each step is optional — use what you need.
+              Background removal, scene creation, image sharpening, and store
+              integration. Pick what you need — skip what you don't.
             </p>
           </div>
           <div className="landing-features-grid">
@@ -160,16 +199,34 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </section>
 
+      {/* Brand consistency callout */}
+      <section className="landing-brand-callout">
+        <div className="landing-brand-inner">
+          <div className="landing-brand-text">
+            <h2 className="landing-h2">Your brand, everywhere</h2>
+            <p>
+              Set up a brand profile once — your colors, your mood, your style — and
+              Opal applies it to every image. Whether you have 10 products or 10,000,
+              they'll all look like they belong together.
+            </p>
+            <button className="landing-btn-primary" onClick={onGetStarted}>
+              Create your brand profile
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       {packages.length > 0 && (
         <section className="landing-pricing" id="pricing">
           <div className="landing-section-inner">
             <div className="landing-section-header">
               <div className="landing-badge">Pricing</div>
-              <h2 className="landing-h2">Simple, token-based pricing</h2>
+              <h2 className="landing-h2">Pay for what you use</h2>
               <p className="landing-section-sub">
-                Buy tokens, use them when you need them. No subscriptions, no monthly commitments.
-                Each image processing step costs 1 token.
+                Buy tokens, spend them whenever. No subscriptions, no monthly bills
+                sneaking up on you. Each image step costs one token.
               </p>
             </div>
             <div className="landing-pricing-grid">
@@ -191,10 +248,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                       {formatPrice(Math.round(pricePerToken * 100), pkg.currency)} per token
                     </div>
                     <ul className="landing-price-features">
-                      <li><Check size={14} /> All processing steps included</li>
+                      <li><Check size={14} /> Every feature included</li>
                       <li><Check size={14} /> Tokens never expire</li>
-                      <li><Check size={14} /> Shopify integration</li>
-                      {i >= 1 && <li><Check size={14} /> Brand profiles &amp; scene templates</li>}
+                      <li><Check size={14} /> Store integrations</li>
+                      {i >= 1 && <li><Check size={14} /> Brand profiles &amp; scene library</li>}
                       {i >= 2 && <li><Check size={14} /> Priority processing</li>}
                     </ul>
                     <button
@@ -214,12 +271,13 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       {/* Final CTA */}
       <section className="landing-cta">
         <div className="landing-cta-inner">
-          <h2 className="landing-h2">Ready to upgrade your product images?</h2>
+          <h2 className="landing-h2">Your store deserves images that shine</h2>
           <p className="landing-section-sub">
-            Sign up in seconds. No credit card required to get started.
+            Sign up in seconds, get free tokens to try it out. If your
+            product photos don't look better, we'll be surprised.
           </p>
           <button className="landing-btn-primary landing-btn-lg" onClick={onGetStarted}>
-            Create your free account
+            Try Opal free
             <ArrowRight size={18} />
           </button>
         </div>
@@ -233,7 +291,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             OPAL
           </div>
           <div className="landing-footer-text">
-            AI-Powered Product Image Processing for E-commerce
+            Studio-quality product photos, without the studio
           </div>
         </div>
       </footer>
