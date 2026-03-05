@@ -10,8 +10,9 @@ import BillingPage from './components/BillingPage';
 import IntegrationsPage from './components/IntegrationsPage';
 import AdminPage from './components/AdminPage';
 import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
 import { api } from './api';
-import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, logout } from './auth';
+import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, login, logout } from './auth';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -231,6 +232,23 @@ function App() {
     setUserEmail('');
   }, []);
 
+  const handleGetStarted = useCallback(async () => {
+    if (!authEnabled) {
+      // No auth configured — go straight to app
+      setIsAuthenticated(true);
+      return;
+    }
+    try {
+      await login();
+      await handleLoginSuccess();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      if (!msg.includes('user_cancelled')) {
+        console.error('Login failed:', msg);
+      }
+    }
+  }, [authEnabled, handleLoginSuccess]);
+
   if (!msalReady) {
     return (
       <div className="app">
@@ -248,7 +266,7 @@ function App() {
       {isAuthenticated ? (
         <AuthenticatedApp userEmail={userEmail} onLogout={handleLogout} />
       ) : (
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
+        <LandingPage onGetStarted={handleGetStarted} />
       )}
     </QueryClientProvider>
   );
