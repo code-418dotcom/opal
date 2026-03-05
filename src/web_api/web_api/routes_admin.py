@@ -1,4 +1,4 @@
-"""Admin routes for settings management, user management, and system info."""
+"""Admin routes — settings management, user management, and system info."""
 import logging
 from typing import Optional
 
