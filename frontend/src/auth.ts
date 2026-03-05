@@ -14,13 +14,8 @@ const msalConfig = {
   },
 };
 
-// Eager-init MSAL when auth is configured — required so the popup window
-// can call handleRedirectPromise() to process the #code= response and close.
 let _msalInstance: PublicClientApplication | null = null;
-
-if (ENTRA_CLIENT_ID && ENTRA_AUTHORITY) {
-  _msalInstance = new PublicClientApplication(msalConfig);
-}
+let _initPromise: Promise<void> | null = null;
 
 function msal(): PublicClientApplication {
   if (!_msalInstance) {
@@ -32,10 +27,23 @@ function msal(): PublicClientApplication {
 export const isAuthConfigured = (): boolean =>
   Boolean(ENTRA_CLIENT_ID && ENTRA_AUTHORITY);
 
+/**
+ * Must be called ASAP on page load — before React mounts.
+ * In the popup window, this processes the #code= hash and closes the popup.
+ * Returns a promise that resolves when MSAL is ready.
+ */
+export function bootMsal(): Promise<void> {
+  if (!isAuthConfigured()) return Promise.resolve();
+  if (!_initPromise) {
+    _initPromise = msal().initialize().then(() => {
+      return msal().handleRedirectPromise();
+    }).then(() => {});
+  }
+  return _initPromise;
+}
+
 export async function initializeMsal(): Promise<void> {
-  if (!isAuthConfigured()) return;
-  await msal().initialize();
-  await msal().handleRedirectPromise();
+  return bootMsal();
 }
 
 export function getAccount(): AccountInfo | null {
@@ -45,6 +53,7 @@ export function getAccount(): AccountInfo | null {
 }
 
 export async function login(): Promise<void> {
+  await bootMsal();
   await msal().loginPopup({
     scopes: [`api://${ENTRA_CLIENT_ID}/access`],
   });
