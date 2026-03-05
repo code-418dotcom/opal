@@ -4,7 +4,7 @@ import {
   Plus, X, Trash2, Loader, Sparkles, AlertCircle, RefreshCw, Image as ImageIcon,
 } from 'lucide-react';
 import { api } from '../api';
-import type { SceneTemplate, BrandProfile } from '../types';
+import type { SceneTemplate } from '../types';
 
 export default function SceneLibrary() {
   const queryClient = useQueryClient();

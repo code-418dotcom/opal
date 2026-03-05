@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { api } from '../api';
 import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
-import type { BrandProfile, SceneTemplate } from '../types';
 
 interface Props {
   onJobCreated: (jobId: string) => void;
