@@ -80,13 +80,14 @@ async def _resolve_jwt_user(token: str) -> dict:
         signing_key = jwks.get_signing_key_from_jwt(token)
         # Accept both raw client ID and Application ID URI as audience
         # (MSAL requests scope api://{clientId}/access → aud = api://{clientId})
-        valid_audiences = [settings.ENTRA_CLIENT_ID, f"api://{settings.ENTRA_CLIENT_ID}"]
+        client_id = settings.ENTRA_CLIENT_ID.strip() if settings.ENTRA_CLIENT_ID else ""
+        valid_audiences = [client_id, f"api://{client_id}"]
         payload = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
             audience=valid_audiences,
-            issuer=settings.ENTRA_ISSUER,
+            issuer=settings.ENTRA_ISSUER.strip() if settings.ENTRA_ISSUER else "",
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
