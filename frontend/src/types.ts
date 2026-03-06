@@ -161,3 +161,63 @@ export interface SystemInfo {
   has_encryption_key: boolean;
   public_base_url: string;
 }
+
+export interface PlatformStats {
+  total_users: number;
+  total_jobs: number;
+  total_tokens_in_circulation: number;
+  total_tokens_spent: number;
+  total_revenue_cents: number;
+  jobs_by_status: Record<string, number>;
+}
+
+export interface AdminJob {
+  id: string;
+  job_id: string;
+  tenant_id: string;
+  brand_profile_id: string;
+  status: string;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminIntegration {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  provider: string;
+  store_url: string;
+  status: string;
+  created_at: string;
+}
+
+export interface AdminTokenPackage {
+  id: string;
+  name: string;
+  tokens: number;
+  price_cents: number;
+  currency: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface AdminTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  type: string;
+  description: string;
+  created_at: string;
+}
+
+export interface AdminPayment {
+  id: string;
+  user_id: string;
+  package_id: string;
+  mollie_payment_id: string;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  created_at: string;
+}

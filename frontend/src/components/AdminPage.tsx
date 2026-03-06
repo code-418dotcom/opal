@@ -1,18 +1,55 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff, X, Check, Loader2, Coins } from 'lucide-react';
+import {
+  Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff,
+  X, Check, Loader2, Coins, BarChart3, Briefcase, CreditCard, Activity, Link,
+  Package, Edit2,
+} from 'lucide-react';
 import { api } from '../api';
-import type { AdminSetting, AdminUser } from '../types';
+import type {
+  AdminSetting, AdminUser, AdminJob, AdminTokenPackage, AdminTransaction,
+  AdminPayment, AdminIntegration, PlatformStats,
+} from '../types';
 
-type AdminTab = 'settings' | 'users' | 'system';
+type AdminTab = 'dashboard' | 'users' | 'jobs' | 'packages' | 'activity' | 'integrations' | 'settings' | 'system';
+
+const truncateId = (id: string) => id.length > 12 ? id.slice(0, 12) + '...' : id;
+const formatMoney = (cents: number) => `\u20AC${(cents / 100).toFixed(2)}`;
+const formatDate = (d: string) => new Date(d).toLocaleDateString();
+
+const statusColor = (status: string): React.CSSProperties => {
+  const s = status.toLowerCase();
+  if (['completed', 'active', 'paid', 'connected', 'succeeded'].includes(s))
+    return { background: '#16a34a22', color: '#22c55e', border: '1px solid #22c55e44' };
+  if (['processing', 'pending', 'open'].includes(s))
+    return { background: '#eab30822', color: '#eab308', border: '1px solid #eab30844' };
+  if (['failed', 'error', 'disconnected', 'canceled', 'expired'].includes(s))
+    return { background: '#ef444422', color: '#ef4444', border: '1px solid #ef444444' };
+  return { background: '#64748b22', color: '#94a3b8', border: '1px solid #64748b44' };
+};
+
+const badgeStyle = (status: string): React.CSSProperties => ({
+  ...statusColor(status),
+  padding: '2px 8px',
+  borderRadius: '9999px',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  display: 'inline-block',
+  textTransform: 'capitalize',
+});
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('settings');
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
 
-  const tabs = [
-    { id: 'settings' as AdminTab, label: 'Settings', icon: Settings },
-    { id: 'users' as AdminTab, label: 'Users', icon: Users },
-    { id: 'system' as AdminTab, label: 'System', icon: Server },
+  const tabs: { id: AdminTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase },
+    { id: 'packages', label: 'Packages', icon: Package },
+    { id: 'activity', label: 'Activity', icon: Activity },
+    { id: 'integrations', label: 'Integrations', icon: Link },
+    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'system', label: 'System', icon: Server },
   ];
 
   return (
@@ -30,9 +67,85 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {activeTab === 'settings' && <SettingsPanel />}
+      {activeTab === 'dashboard' && <DashboardPanel />}
       {activeTab === 'users' && <UsersPanel />}
+      {activeTab === 'jobs' && <JobsPanel />}
+      {activeTab === 'packages' && <PackagesPanel />}
+      {activeTab === 'activity' && <ActivityPanel />}
+      {activeTab === 'integrations' && <IntegrationsPanel />}
+      {activeTab === 'settings' && <SettingsPanel />}
       {activeTab === 'system' && <SystemPanel />}
+    </div>
+  );
+}
+
+// ── Dashboard Panel ──────────────────────────────────────────────
+
+function DashboardPanel() {
+  const { data: stats, isLoading } = useQuery<PlatformStats>({
+    queryKey: ['admin-stats'],
+    queryFn: () => api.getPlatformStats(),
+  });
+
+  if (isLoading) {
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading stats...</div>;
+  }
+
+  if (!stats) return null;
+
+  const cards = [
+    { label: 'Total Users', value: stats.total_users, icon: Users, color: '#6366f1' },
+    { label: 'Total Jobs', value: stats.total_jobs, icon: Briefcase, color: '#06b6d4' },
+    { label: 'Tokens in Circulation', value: stats.total_tokens_in_circulation, icon: Coins, color: '#eab308' },
+    { label: 'Tokens Spent', value: stats.total_tokens_spent, icon: Coins, color: '#f97316' },
+    { label: 'Revenue', value: formatMoney(stats.total_revenue_cents), icon: CreditCard, color: '#22c55e' },
+  ];
+
+  return (
+    <div className="admin-dashboard-panel">
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gap: '1rem',
+        marginBottom: '1.5rem',
+      }}>
+        {cards.map(card => (
+          <div key={card.label} style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            padding: '1.25rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#94a3b8', fontSize: '0.8rem' }}>
+              <card.icon size={16} style={{ color: card.color }} />
+              {card.label}
+            </div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#f1f5f9' }}>
+              {card.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {stats.jobs_by_status && Object.keys(stats.jobs_by_status).length > 0 && (
+        <div>
+          <h3 className="settings-category-title">Jobs by Status</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
+            {Object.entries(stats.jobs_by_status).map(([status, count]) => (
+              <span key={status} style={{
+                ...badgeStyle(status),
+                fontSize: '0.85rem',
+                padding: '4px 12px',
+              }}>
+                {status}: {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -416,6 +529,521 @@ function UsersPanel() {
         <div className="empty-state">
           <Users size={48} />
           <p>No users yet</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Jobs Panel ──────────────────────────────────────────────────────
+
+function JobsPanel() {
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [offset, setOffset] = useState(0);
+  const limit = 25;
+
+  const { data: jobs, isLoading } = useQuery<AdminJob[]>({
+    queryKey: ['admin-jobs', statusFilter, offset],
+    queryFn: () => api.listAdminJobs(limit, offset, statusFilter || undefined),
+  });
+
+  if (isLoading) {
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading jobs...</div>;
+  }
+
+  return (
+    <div className="admin-jobs-panel">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Filter by status:</label>
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setOffset(0); }}
+          className="setting-select"
+          style={{ minWidth: '150px' }}
+        >
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+          <option value="completed">Completed</option>
+          <option value="failed">Failed</option>
+        </select>
+      </div>
+
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Tenant</th>
+            <th>Status</th>
+            <th>Items</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs?.map((job: AdminJob) => (
+            <tr key={job.id}>
+              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{truncateId(job.job_id)}</td>
+              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{truncateId(job.tenant_id)}</td>
+              <td><span style={badgeStyle(job.status)}>{job.status}</span></td>
+              <td>{job.item_count}</td>
+              <td>{formatDate(job.created_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {(!jobs || jobs.length === 0) && (
+        <div className="empty-state">
+          <Briefcase size={48} />
+          <p>No jobs found</p>
+        </div>
+      )}
+
+      {jobs && jobs.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'center' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - limit))}
+          >
+            Previous
+          </button>
+          <span style={{ color: '#94a3b8', fontSize: '0.85rem', alignSelf: 'center' }}>
+            Showing {offset + 1}–{offset + (jobs?.length || 0)}
+          </span>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={(jobs?.length || 0) < limit}
+            onClick={() => setOffset(offset + limit)}
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Packages Panel ──────────────────────────────────────────────────
+
+function PackagesPanel() {
+  const queryClient = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', tokens: '', price_cents: '', currency: 'EUR', active: true });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: packages, isLoading } = useQuery<AdminTokenPackage[]>({
+    queryKey: ['admin-packages'],
+    queryFn: () => api.listAdminPackages(),
+  });
+
+  const resetForm = () => {
+    setForm({ name: '', tokens: '', price_cents: '', currency: 'EUR', active: true });
+    setShowCreate(false);
+    setEditingId(null);
+    setError(null);
+  };
+
+  const handleCreate = async () => {
+    if (!form.name || !form.tokens || !form.price_cents) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.createAdminPackage({
+        name: form.name,
+        tokens: parseInt(form.tokens, 10),
+        price_cents: parseInt(form.price_cents, 10),
+        currency: form.currency,
+        active: form.active,
+      });
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStartEdit = (pkg: AdminTokenPackage) => {
+    setEditingId(pkg.id);
+    setForm({
+      name: pkg.name,
+      tokens: String(pkg.tokens),
+      price_cents: String(pkg.price_cents),
+      currency: pkg.currency,
+      active: pkg.active,
+    });
+    setShowCreate(false);
+    setError(null);
+  };
+
+  const handleUpdate = async () => {
+    if (editingId === null) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.updateAdminPackage(editingId, {
+        name: form.name,
+        tokens: parseInt(form.tokens, 10),
+        price_cents: parseInt(form.price_cents, 10),
+        currency: form.currency,
+        active: form.active,
+      });
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Update failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this package? This cannot be undone.')) return;
+    try {
+      await api.deleteAdminPackage(id);
+      queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  const handleToggleActive = async (pkg: AdminTokenPackage) => {
+    try {
+      await api.updateAdminPackage(pkg.id, { active: !pkg.active });
+      queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Toggle failed');
+    }
+  };
+
+  if (isLoading) {
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading packages...</div>;
+  }
+
+  return (
+    <div className="admin-packages-panel">
+      {error && (
+        <div className="integration-error">
+          <X size={14} />
+          <span>{error}</span>
+          <button onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Tokens</th>
+            <th>Price</th>
+            <th>Currency</th>
+            <th>Active</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {packages?.map((pkg: AdminTokenPackage) => (
+            <tr key={pkg.id}>
+              {editingId === pkg.id ? (
+                <>
+                  <td>
+                    <input className="setting-input" value={form.name}
+                      onChange={e => setForm({ ...form, name: e.target.value })}
+                      style={{ width: '100%' }} />
+                  </td>
+                  <td>
+                    <input className="setting-input" type="number" value={form.tokens}
+                      onChange={e => setForm({ ...form, tokens: e.target.value })}
+                      style={{ width: '80px' }} />
+                  </td>
+                  <td>
+                    <input className="setting-input" type="number" value={form.price_cents}
+                      onChange={e => setForm({ ...form, price_cents: e.target.value })}
+                      style={{ width: '80px' }} />
+                  </td>
+                  <td>
+                    <input className="setting-input" value={form.currency}
+                      onChange={e => setForm({ ...form, currency: e.target.value })}
+                      style={{ width: '60px' }} />
+                  </td>
+                  <td>
+                    <input type="checkbox" checked={form.active}
+                      onChange={e => setForm({ ...form, active: e.target.checked })} />
+                  </td>
+                  <td>{formatDate(pkg.created_at)}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button className="btn btn-primary btn-sm" onClick={handleUpdate} disabled={saving}>
+                        {saving ? <Loader2 size={12} className="spin" /> : <Check size={12} />}
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={resetForm}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td style={{ fontWeight: 500 }}>{pkg.name}</td>
+                  <td>{pkg.tokens}</td>
+                  <td>{formatMoney(pkg.price_cents)}</td>
+                  <td>{pkg.currency}</td>
+                  <td>
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleToggleActive(pkg)}
+                      title={pkg.active ? 'Click to deactivate' : 'Click to activate'}
+                    >
+                      <span style={badgeStyle(pkg.active ? 'active' : 'disconnected')}>
+                        {pkg.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </button>
+                  </td>
+                  <td>{formatDate(pkg.created_at)}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleStartEdit(pkg)}>
+                        <Edit2 size={12} />
+                      </button>
+                      <button className="btn-icon btn-danger-icon" onClick={() => handleDelete(pkg.id)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {(!packages || packages.length === 0) && (
+        <div className="empty-state">
+          <Package size={48} />
+          <p>No packages yet</p>
+        </div>
+      )}
+
+      {showCreate ? (
+        <div className="setting-add-form" style={{ marginTop: '1rem' }}>
+          <h3>Create New Package</h3>
+          <div className="setting-add-fields">
+            <input className="setting-input" placeholder="Package name"
+              value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <input className="setting-input" type="number" placeholder="Tokens"
+              value={form.tokens} onChange={e => setForm({ ...form, tokens: e.target.value })} />
+            <input className="setting-input" type="number" placeholder="Price (cents)"
+              value={form.price_cents} onChange={e => setForm({ ...form, price_cents: e.target.value })} />
+            <input className="setting-input" placeholder="Currency (EUR)"
+              value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} />
+            <label className="setting-checkbox">
+              <input type="checkbox" checked={form.active}
+                onChange={e => setForm({ ...form, active: e.target.checked })} />
+              Active
+            </label>
+          </div>
+          <div className="setting-add-actions">
+            <button className="btn btn-primary" onClick={handleCreate}
+              disabled={saving || !form.name || !form.tokens || !form.price_cents}>
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Create Package
+            </button>
+            <button className="btn btn-secondary" onClick={resetForm}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn btn-secondary" onClick={() => { resetForm(); setShowCreate(true); }}
+          style={{ marginTop: '1rem' }}>
+          <Plus size={14} /> Add Package
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Activity Panel ──────────────────────────────────────────────────
+
+function ActivityPanel() {
+  const [txOffset, setTxOffset] = useState(0);
+  const [payOffset, setPayOffset] = useState(0);
+  const limit = 20;
+
+  const { data: transactions, isLoading: txLoading } = useQuery<AdminTransaction[]>({
+    queryKey: ['admin-transactions', txOffset],
+    queryFn: () => api.listAdminTransactions(limit, txOffset),
+  });
+
+  const { data: payments, isLoading: payLoading } = useQuery<AdminPayment[]>({
+    queryKey: ['admin-payments', payOffset],
+    queryFn: () => api.listAdminPayments(limit, payOffset),
+  });
+
+  return (
+    <div className="admin-activity-panel">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        {/* Transactions */}
+        <div>
+          <h3 className="settings-category-title">Recent Transactions</h3>
+          {txLoading ? (
+            <div className="empty-state"><Loader2 size={24} className="spin" /> Loading...</div>
+          ) : (
+            <>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Amount</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions?.map((tx: AdminTransaction) => (
+                    <tr key={tx.id}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{truncateId(tx.user_id)}</td>
+                      <td style={{ color: tx.amount >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                        {tx.amount >= 0 ? '+' : ''}{tx.amount}
+                      </td>
+                      <td><span style={badgeStyle(tx.type)}>{tx.type}</span></td>
+                      <td style={{ fontSize: '0.8rem', color: '#94a3b8', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {tx.description || '—'}
+                      </td>
+                      <td>{formatDate(tx.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(!transactions || transactions.length === 0) && (
+                <div className="empty-state"><p>No transactions yet</p></div>
+              )}
+              {transactions && transactions.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center' }}>
+                  <button className="btn btn-secondary btn-sm" disabled={txOffset === 0}
+                    onClick={() => setTxOffset(Math.max(0, txOffset - limit))}>Prev</button>
+                  <button className="btn btn-secondary btn-sm" disabled={(transactions?.length || 0) < limit}
+                    onClick={() => setTxOffset(txOffset + limit)}>Next</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Payments */}
+        <div>
+          <h3 className="settings-category-title">Recent Payments</h3>
+          {payLoading ? (
+            <div className="empty-state"><Loader2 size={24} className="spin" /> Loading...</div>
+          ) : (
+            <>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Mollie ID</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments?.map((pay: AdminPayment) => (
+                    <tr key={pay.id}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{truncateId(pay.user_id)}</td>
+                      <td>{formatMoney(pay.amount_cents)} {pay.currency}</td>
+                      <td><span style={badgeStyle(pay.status)}>{pay.status}</span></td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                        {pay.mollie_payment_id ? truncateId(pay.mollie_payment_id) : '—'}
+                      </td>
+                      <td>{formatDate(pay.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(!payments || payments.length === 0) && (
+                <div className="empty-state"><p>No payments yet</p></div>
+              )}
+              {payments && payments.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center' }}>
+                  <button className="btn btn-secondary btn-sm" disabled={payOffset === 0}
+                    onClick={() => setPayOffset(Math.max(0, payOffset - limit))}>Prev</button>
+                  <button className="btn btn-secondary btn-sm" disabled={(payments?.length || 0) < limit}
+                    onClick={() => setPayOffset(payOffset + limit)}>Next</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Integrations Panel ──────────────────────────────────────────────
+
+function IntegrationsPanel() {
+  const [offset, setOffset] = useState(0);
+  const limit = 25;
+
+  const { data: integrations, isLoading } = useQuery<AdminIntegration[]>({
+    queryKey: ['admin-integrations', offset],
+    queryFn: () => api.listAdminIntegrations(limit, offset),
+  });
+
+  if (isLoading) {
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading integrations...</div>;
+  }
+
+  return (
+    <div className="admin-integrations-panel">
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>Provider</th>
+            <th>Store URL</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {integrations?.map((intg: AdminIntegration) => (
+            <tr key={intg.id}>
+              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{truncateId(intg.user_id)}</td>
+              <td style={{ textTransform: 'capitalize', fontWeight: 500 }}>{intg.provider}</td>
+              <td style={{ fontSize: '0.8rem' }}>
+                <a href={intg.store_url} target="_blank" rel="noopener noreferrer"
+                  style={{ color: '#6366f1', textDecoration: 'none' }}>
+                  {intg.store_url}
+                </a>
+              </td>
+              <td><span style={badgeStyle(intg.status)}>{intg.status}</span></td>
+              <td>{formatDate(intg.created_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {(!integrations || integrations.length === 0) && (
+        <div className="empty-state">
+          <Link size={48} />
+          <p>No integrations yet</p>
+        </div>
+      )}
+
+      {integrations && integrations.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'center' }}>
+          <button className="btn btn-secondary btn-sm" disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - limit))}>Previous</button>
+          <span style={{ color: '#94a3b8', fontSize: '0.85rem', alignSelf: 'center' }}>
+            Showing {offset + 1}–{offset + (integrations?.length || 0)}
+          </span>
+          <button className="btn btn-secondary btn-sm" disabled={(integrations?.length || 0) < limit}
+            onClick={() => setOffset(offset + limit)}>Next</button>
         </div>
       )}
     </div>

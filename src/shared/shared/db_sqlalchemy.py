@@ -1033,3 +1033,200 @@ def set_user_token_balance(user_id: str, balance: int) -> Optional[Dict[str, Any
         session.commit()
         session.refresh(u)
         return _user_to_dict(u)
+
+
+# ── Admin Panel Queries ──────────────────────────────────────────────
+
+def platform_stats() -> Dict[str, Any]:
+    """Aggregate platform statistics for the admin dashboard."""
+    with SessionLocal() as session:
+        total_users = session.query(func.count(User.id)).scalar() or 0
+        total_jobs = session.query(func.count(Job.id)).scalar() or 0
+        total_tokens_in_circulation = session.query(func.coalesce(func.sum(User.token_balance), 0)).scalar()
+        total_tokens_spent = session.query(
+            func.coalesce(func.sum(func.abs(TokenTransaction.amount)), 0)
+        ).filter(TokenTransaction.amount < 0).scalar()
+        total_revenue_cents = session.query(
+            func.coalesce(func.sum(Payment.amount_cents), 0)
+        ).filter(Payment.status == PaymentStatus.paid).scalar()
+
+        # Jobs grouped by status
+        status_rows = session.query(
+            Job.status, func.count(Job.id)
+        ).group_by(Job.status).all()
+        jobs_by_status = {row[0].value: row[1] for row in status_rows}
+
+        return {
+            "total_users": total_users,
+            "total_jobs": total_jobs,
+            "total_tokens_in_circulation": total_tokens_in_circulation,
+            "total_tokens_spent": total_tokens_spent,
+            "total_revenue_cents": total_revenue_cents,
+            "jobs_by_status": jobs_by_status,
+        }
+
+
+def list_all_jobs(limit: int = 20, offset: int = 0, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List all jobs across tenants with item counts (admin only)."""
+    with SessionLocal() as session:
+        q = session.query(Job)
+        if status_filter:
+            q = q.filter(Job.status == JobStatus(status_filter))
+        q = q.order_by(Job.created_at.desc()).offset(offset).limit(limit)
+        results = []
+        for job in q.all():
+            item_count = session.query(func.count(JobItem.id)).filter(JobItem.job_id == job.id).scalar() or 0
+            results.append({
+                "id": job.id,
+                "job_id": job.id,
+                "tenant_id": job.tenant_id,
+                "brand_profile_id": job.brand_profile_id,
+                "correlation_id": job.correlation_id,
+                "status": job.status.value,
+                "processing_options": job.processing_options,
+                "callback_url": job.callback_url,
+                "export_blob_path": job.export_blob_path,
+                "item_count": item_count,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            })
+        return results
+
+
+def list_all_integrations(limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+    """List all integrations across users (admin only)."""
+    with SessionLocal() as session:
+        integrations = (
+            session.query(Integration)
+            .order_by(Integration.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [_integration_to_dict(i) for i in integrations]
+
+
+def list_all_token_packages() -> List[Dict[str, Any]]:
+    """List all token packages including inactive ones."""
+    with SessionLocal() as session:
+        packages = session.query(TokenPackage).order_by(TokenPackage.price_cents.asc()).all()
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "tokens": p.tokens,
+                "price_cents": p.price_cents,
+                "currency": p.currency,
+                "active": p.active,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in packages
+        ]
+
+
+def update_token_package(package_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update a token package. Returns updated dict or None if not found."""
+    with SessionLocal() as session:
+        p = session.get(TokenPackage, package_id)
+        if not p:
+            return None
+        for field in ("name", "tokens", "price_cents", "currency", "active"):
+            if field in updates:
+                setattr(p, field, updates[field])
+        session.commit()
+        session.refresh(p)
+        return {
+            "id": p.id,
+            "name": p.name,
+            "tokens": p.tokens,
+            "price_cents": p.price_cents,
+            "currency": p.currency,
+            "active": p.active,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+
+
+def create_token_package(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new token package."""
+    with SessionLocal() as session:
+        p = TokenPackage(
+            id=data["id"],
+            name=data["name"],
+            tokens=data["tokens"],
+            price_cents=data["price_cents"],
+            currency=data.get("currency", "EUR"),
+            active=data.get("active", True),
+            created_at=datetime.utcnow(),
+        )
+        session.add(p)
+        session.commit()
+        session.refresh(p)
+        return {
+            "id": p.id,
+            "name": p.name,
+            "tokens": p.tokens,
+            "price_cents": p.price_cents,
+            "currency": p.currency,
+            "active": p.active,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+
+
+def delete_token_package(package_id: str) -> bool:
+    """Delete a token package. Returns True if deleted."""
+    with SessionLocal() as session:
+        p = session.get(TokenPackage, package_id)
+        if not p:
+            return False
+        session.delete(p)
+        session.commit()
+        return True
+
+
+def list_all_transactions(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """List all token transactions across users, newest first (admin only)."""
+    with SessionLocal() as session:
+        txs = (
+            session.query(TokenTransaction)
+            .order_by(TokenTransaction.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": tx.id,
+                "user_id": tx.user_id,
+                "amount": tx.amount,
+                "type": tx.type.value,
+                "description": tx.description,
+                "reference_id": tx.reference_id,
+                "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            }
+            for tx in txs
+        ]
+
+
+def list_all_payments(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """List all payments across users, newest first (admin only)."""
+    with SessionLocal() as session:
+        payments = (
+            session.query(Payment)
+            .order_by(Payment.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": pay.id,
+                "user_id": pay.user_id,
+                "package_id": pay.package_id,
+                "mollie_payment_id": pay.mollie_payment_id,
+                "amount_cents": pay.amount_cents,
+                "currency": pay.currency,
+                "status": pay.status.value,
+                "created_at": pay.created_at.isoformat() if pay.created_at else None,
+            }
+            for pay in payments
+        ]

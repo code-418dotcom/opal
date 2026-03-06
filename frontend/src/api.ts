@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment } from './types';
 
 // Detect backend type from environment variables
 const BACKEND_TYPE = (import.meta.env.VITE_BACKEND_TYPE as string) || 'supabase';
@@ -500,6 +500,61 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify({ token_balance: tokenBalance }),
     });
+  }
+
+  async getPlatformStats(): Promise<PlatformStats> {
+    return this.request('/v1/admin/stats');
+  }
+
+  async listAdminJobs(limit = 50, offset = 0, status?: string): Promise<AdminJob[]> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (status) params.set('status', status);
+    const resp = await this.request<{ jobs: AdminJob[] }>(`/v1/admin/jobs?${params}`);
+    return resp.jobs;
+  }
+
+  async listAdminIntegrations(limit = 50, offset = 0): Promise<AdminIntegration[]> {
+    const resp = await this.request<{ integrations: AdminIntegration[] }>(
+      `/v1/admin/integrations?limit=${limit}&offset=${offset}`
+    );
+    return resp.integrations;
+  }
+
+  async listAdminPackages(): Promise<AdminTokenPackage[]> {
+    const resp = await this.request<{ packages: AdminTokenPackage[] }>('/v1/admin/packages');
+    return resp.packages;
+  }
+
+  async createAdminPackage(data: { name: string; tokens: number; price_cents: number; currency?: string; active?: boolean }): Promise<AdminTokenPackage> {
+    return this.request('/v1/admin/packages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminPackage(id: string, data: Record<string, unknown>): Promise<AdminTokenPackage> {
+    return this.request(`/v1/admin/packages/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminPackage(id: string): Promise<void> {
+    await this.request(`/v1/admin/packages/${id}`, { method: 'DELETE' });
+  }
+
+  async listAdminTransactions(limit = 50, offset = 0): Promise<AdminTransaction[]> {
+    const resp = await this.request<{ transactions: AdminTransaction[] }>(
+      `/v1/admin/transactions?limit=${limit}&offset=${offset}`
+    );
+    return resp.transactions;
+  }
+
+  async listAdminPayments(limit = 50, offset = 0): Promise<AdminPayment[]> {
+    const resp = await this.request<{ payments: AdminPayment[] }>(
+      `/v1/admin/payments?limit=${limit}&offset=${offset}`
+    );
+    return resp.payments;
   }
 }
 

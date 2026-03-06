@@ -1,4 +1,4 @@
-"""Admin routes — settings management, user management, and system info."""
+"""Admin routes — settings, users, jobs, packages, stats, and system info."""
 import logging
 from typing import Optional
 
@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field
 from shared.db_sqlalchemy import (
     list_admin_settings, get_admin_setting, upsert_admin_setting, delete_admin_setting,
     list_users, set_user_admin, set_user_token_balance, get_user_by_id,
+    platform_stats, list_all_jobs, list_all_integrations,
+    list_all_token_packages, update_token_package, create_token_package, delete_token_package,
+    list_all_transactions, list_all_payments,
 )
+from shared.util import new_id
 from web_api.auth import get_current_user
 
 LOG = logging.getLogger(__name__)
@@ -32,6 +36,14 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="Admin access required")
 
     return user
+
+
+# ── Platform Stats ───────────────────────────────────────────────────
+
+@router.get("/stats")
+async def get_stats(admin: dict = Depends(require_admin)):
+    """Platform-wide statistics for the admin dashboard."""
+    return platform_stats()
 
 
 # ── Settings Endpoints ───────────────────────────────────────────────
@@ -163,6 +175,129 @@ async def update_user_tokens(
         raise HTTPException(status_code=404, detail="User not found")
     LOG.info("Token balance set to %d for user %s by %s", body.token_balance, user_id, admin["user_id"])
     return result
+
+
+# ── Jobs (all tenants) ───────────────────────────────────────────────
+
+@router.get("/jobs")
+async def get_all_jobs(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    status: Optional[str] = Query(None),
+    admin: dict = Depends(require_admin),
+):
+    """List all jobs across all tenants."""
+    jobs = list_all_jobs(limit=limit, offset=offset, status_filter=status)
+    return {"jobs": jobs, "limit": limit, "offset": offset}
+
+
+# ── Integrations (all users) ────────────────────────────────────────
+
+@router.get("/integrations")
+async def get_all_integrations(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(require_admin),
+):
+    """List all integrations across all users."""
+    integrations = list_all_integrations(limit=limit, offset=offset)
+    return {"integrations": integrations, "limit": limit, "offset": offset}
+
+
+# ── Token Packages ───────────────────────────────────────────────────
+
+@router.get("/packages")
+async def get_all_packages(admin: dict = Depends(require_admin)):
+    """List all token packages (including inactive)."""
+    return {"packages": list_all_token_packages()}
+
+
+class CreatePackageIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    tokens: int = Field(..., ge=1)
+    price_cents: int = Field(..., ge=0)
+    currency: str = Field(default="EUR", max_length=3)
+    active: bool = True
+
+
+@router.post("/packages")
+async def create_package(
+    body: CreatePackageIn,
+    admin: dict = Depends(require_admin),
+):
+    """Create a new token package."""
+    result = create_token_package({
+        "id": new_id("pkg"),
+        "name": body.name,
+        "tokens": body.tokens,
+        "price_cents": body.price_cents,
+        "currency": body.currency,
+        "active": body.active,
+    })
+    LOG.info("Token package '%s' created by %s", body.name, admin["user_id"])
+    return result
+
+
+class UpdatePackageIn(BaseModel):
+    name: Optional[str] = None
+    tokens: Optional[int] = Field(default=None, ge=1)
+    price_cents: Optional[int] = Field(default=None, ge=0)
+    currency: Optional[str] = Field(default=None, max_length=3)
+    active: Optional[bool] = None
+
+
+@router.put("/packages/{package_id}")
+async def update_package(
+    package_id: str,
+    body: UpdatePackageIn,
+    admin: dict = Depends(require_admin),
+):
+    """Update a token package."""
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields to update")
+    result = update_token_package(package_id, updates)
+    if not result:
+        raise HTTPException(status_code=404, detail="Package not found")
+    LOG.info("Token package '%s' updated by %s", package_id, admin["user_id"])
+    return result
+
+
+@router.delete("/packages/{package_id}")
+async def remove_package(
+    package_id: str,
+    admin: dict = Depends(require_admin),
+):
+    """Delete a token package."""
+    deleted = delete_token_package(package_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Package not found")
+    LOG.info("Token package '%s' deleted by %s", package_id, admin["user_id"])
+    return {"ok": True}
+
+
+# ── Activity Log ─────────────────────────────────────────────────────
+
+@router.get("/transactions")
+async def get_all_transactions(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(require_admin),
+):
+    """List all token transactions across users."""
+    txs = list_all_transactions(limit=limit, offset=offset)
+    return {"transactions": txs, "limit": limit, "offset": offset}
+
+
+@router.get("/payments")
+async def get_all_payments(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(require_admin),
+):
+    """List all payments across users."""
+    payments = list_all_payments(limit=limit, offset=offset)
+    return {"payments": payments, "limit": limit, "offset": offset}
 
 
 # ── System Info ──────────────────────────────────────────────────────
