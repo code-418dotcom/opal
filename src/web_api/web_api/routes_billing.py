@@ -77,6 +77,22 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
     return {"payment_url": mollie["checkout_url"], "payment_id": payment_id}
 
 
+@router.get("/usage")
+def get_usage(user: dict = Depends(get_current_user)):
+    """Usage summary: token balance, total spent, recent transactions."""
+    u = get_user_by_id(user["user_id"])
+    txs = list_token_transactions(user["user_id"], limit=200)
+    total_spent = sum(-tx["amount"] for tx in txs if tx["amount"] < 0)
+    total_purchased = sum(tx["amount"] for tx in txs if tx["type"] == "purchase")
+    total_jobs = sum(1 for tx in txs if tx["type"] == "usage")
+    return {
+        "token_balance": u["token_balance"] if u else 0,
+        "total_tokens_spent": total_spent,
+        "total_tokens_purchased": total_purchased,
+        "total_jobs": total_jobs,
+    }
+
+
 @router.get("/transactions")
 def get_transactions(
     user: dict = Depends(get_current_user),

@@ -51,13 +51,19 @@ async def get_current_user(
     Resolve authenticated user. Tries JWT first, then API key.
     Returns: { user_id, tenant_id, email, token_balance }
     """
+    from web_api.rate_limit import check_rate_limit
+
     # Path 1: Bearer JWT (Entra External ID)
     if credentials and credentials.credentials:
-        return await _resolve_jwt_user(credentials.credentials)
+        user = await _resolve_jwt_user(credentials.credentials)
+        check_rate_limit(user["user_id"])
+        return user
 
     # Path 2: API key (programmatic access)
     if api_key:
-        return _resolve_api_key_user(api_key)
+        user = _resolve_api_key_user(api_key)
+        check_rate_limit(user["user_id"])
+        return user
 
     # Path 3: No auth configured (dev mode)
     valid_keys = get_valid_api_keys()
