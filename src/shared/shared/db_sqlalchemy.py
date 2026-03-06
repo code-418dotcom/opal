@@ -285,11 +285,54 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         return _user_to_dict(u) if u else None
 
 
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """Find user by email address."""
+    with SessionLocal() as session:
+        u = session.query(User).filter(User.email == email).first()
+        return _user_to_dict(u) if u else None
+
+
+def link_entra_subject(user_id: str, entra_subject_id: str) -> Optional[Dict[str, Any]]:
+    """Set the entra_subject_id on an existing user (links pre-created user to Entra login)."""
+    with SessionLocal() as session:
+        u = session.get(User, user_id)
+        if not u:
+            return None
+        u.entra_subject_id = entra_subject_id
+        u.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(u)
+        return _user_to_dict(u)
+
+
 def user_count() -> int:
     """Return total number of users."""
     from sqlalchemy import func
     with SessionLocal() as session:
         return session.query(func.count(User.id)).scalar() or 0
+
+
+def admin_exists() -> bool:
+    """Check if at least one admin user exists."""
+    with SessionLocal() as session:
+        return session.query(User).filter(User.is_admin == True).first() is not None
+
+
+def promote_first_user_to_admin() -> Optional[Dict[str, Any]]:
+    """If no admin exists, promote the earliest-created user. Returns promoted user or None."""
+    with SessionLocal() as session:
+        # Quick check — avoid write path if an admin already exists
+        has_admin = session.query(User).filter(User.is_admin == True).first()
+        if has_admin:
+            return None
+        first = session.query(User).order_by(User.created_at.asc()).first()
+        if not first:
+            return None
+        first.is_admin = True
+        first.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(first)
+        return _user_to_dict(first)
 
 
 def create_user(data: Dict[str, Any]) -> Dict[str, Any]:

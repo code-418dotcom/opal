@@ -6,7 +6,10 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 import jwt
 
 from shared.config import settings
-from shared.db_sqlalchemy import get_user_by_entra_subject, create_user, user_count
+from shared.db_sqlalchemy import (
+    get_user_by_entra_subject, get_user_by_email, link_entra_subject,
+    create_user, user_count, admin_exists, promote_first_user_to_admin,
+)
 from shared.util import new_id
 
 LOG = logging.getLogger(__name__)
@@ -88,7 +91,13 @@ async def _resolve_jwt_user(token: str) -> dict:
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError as e:
-        LOG.warning("JWT validation failed: %s", e)
+        # Debug: log the actual audience from the token for diagnosis
+        try:
+            unverified = jwt.decode(token, options={"verify_signature": False, "verify_aud": False, "verify_exp": False, "verify_iss": False})
+            LOG.warning("JWT validation failed: %s | token aud=%s iss=%s | expected aud=%s iss=%s",
+                        e, unverified.get("aud"), unverified.get("iss"), valid_audiences, settings.ENTRA_ISSUER)
+        except Exception:
+            LOG.warning("JWT validation failed: %s", e)
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
     subject = payload["sub"]
@@ -96,6 +105,12 @@ async def _resolve_jwt_user(token: str) -> dict:
 
     # JIT user provisioning — create on first login
     user = get_user_by_entra_subject(subject)
+    if not user and email:
+        # Check if a pre-created user exists with this email (e.g. admin bootstrap)
+        user = get_user_by_email(email)
+        if user:
+            link_entra_subject(user["id"], subject)
+            LOG.info("Linked Entra subject to existing user: %s (%s)", user["id"], email)
     if not user:
         # First user ever gets admin automatically
         is_first = user_count() == 0
@@ -109,6 +124,16 @@ async def _resolve_jwt_user(token: str) -> dict:
             "is_admin": is_first,
         })
         LOG.info("JIT-provisioned user: %s (%s)%s", user["id"], email, " [ADMIN]" if is_first else "")
+
+    # Safety net: if no admin exists at all (e.g. users created before is_admin
+    # column existed), promote the earliest user now.
+    if not user.get("is_admin") and not admin_exists():
+        promoted = promote_first_user_to_admin()
+        if promoted:
+            LOG.info("Admin bootstrap: promoted %s (%s) to admin", promoted["id"], promoted["email"])
+            # If we just promoted *this* user, update the dict
+            if promoted["id"] == user["id"]:
+                user = promoted
 
     return {
         "user_id": user["id"],
