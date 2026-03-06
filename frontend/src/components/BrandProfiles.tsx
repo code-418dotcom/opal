@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Trash2, Edit3, ChevronRight, ChevronLeft,
@@ -45,6 +46,7 @@ const emptyWizard = (): WizardState => ({
 });
 
 export default function BrandProfiles() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
@@ -169,11 +171,11 @@ export default function BrandProfiles() {
         }
       }
       if (results.length === 0) {
-        setError('Failed to generate any previews. Check your scene generation provider.');
+        setError(t('brands.previewFailed'));
       }
       setWizard(w => ({ ...w, previews: results }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Preview generation failed');
+      setError(e instanceof Error ? e.message : t('brands.previewFailed'));
     } finally {
       setGeneratingPreviews(false);
     }
@@ -224,7 +226,7 @@ export default function BrandProfiles() {
       queryClient.invalidateQueries({ queryKey: ['scene-templates'] });
       closeWizard();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : t('brands.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -238,13 +240,13 @@ export default function BrandProfiles() {
     return true;
   };
 
-  const stepLabels = ['Name', 'Product', 'Style', 'Previews', 'Review'];
+  const stepLabels = [t('brands.steps.name'), t('brands.steps.product'), t('brands.steps.style'), t('brands.steps.previews'), t('brands.steps.review')];
 
   if (isLoading) {
     return (
       <div className="loading-box">
         <Loader className="spinning" size={24} />
-        <span>Loading brand profiles...</span>
+        <span>{t('brands.loading')}</span>
       </div>
     );
   }
@@ -254,11 +256,11 @@ export default function BrandProfiles() {
       <div className="section-header">
         <div className="section-header-row">
           <div>
-            <h2>Brand Profiles</h2>
-            <p>Reusable scene configurations for your brands</p>
+            <h2>{t('brands.title')}</h2>
+            <p>{t('brands.subtitle')}</p>
           </div>
           <button className="button-primary button-sm" onClick={openCreate}>
-            <Plus size={16} /> New Brand
+            <Plus size={16} /> {t('brands.newBrand')}
           </button>
         </div>
       </div>
@@ -266,8 +268,8 @@ export default function BrandProfiles() {
       {profiles.length === 0 && !showWizard && (
         <div className="empty-state">
           <Sparkles size={48} />
-          <h3>No brand profiles yet</h3>
-          <p>Create your first brand profile to save reusable scene settings</p>
+          <h3>{t('brands.noBrands')}</h3>
+          <p>{t('brands.noBrandsHint')}</p>
         </div>
       )}
 
@@ -278,13 +280,13 @@ export default function BrandProfiles() {
               <div className="brand-card-header">
                 <h3 className="brand-card-name">{profile.name}</h3>
                 <div className="brand-card-actions">
-                  <button className="button-icon" onClick={() => openEdit(profile)} title="Edit">
+                  <button className="button-icon" onClick={() => openEdit(profile)} title={t('common.edit')}>
                     <Edit3 size={15} />
                   </button>
                   <button
                     className="button-icon"
                     onClick={() => deleteMutation.mutate(profile.id)}
-                    title="Delete"
+                    title={t('common.delete')}
                   >
                     <Trash2 size={15} />
                   </button>
@@ -322,8 +324,8 @@ export default function BrandProfiles() {
 
               <div className="brand-card-meta">
                 {profile.default_scene_count && profile.default_scene_count > 1
-                  ? `${profile.default_scene_count} scenes`
-                  : '1 scene'}
+                  ? t('brands.scenes', { count: profile.default_scene_count })
+                  : t('brands.oneScene')}
               </div>
             </div>
           ))}
@@ -334,7 +336,7 @@ export default function BrandProfiles() {
         <div className="wizard-overlay">
           <div className="wizard">
             <div className="wizard-header">
-              <h3>{editingId ? 'Edit Brand Profile' : 'Create Brand Profile'}</h3>
+              <h3>{editingId ? t('brands.editTitle') : t('brands.createTitle')}</h3>
               <button className="button-icon" onClick={closeWizard}><X size={18} /></button>
             </div>
 
@@ -360,10 +362,10 @@ export default function BrandProfiles() {
             <div className="wizard-body">
               {wizardStep === 0 && (
                 <div className="wizard-step-content">
-                  <label className="form-label">Brand Name</label>
+                  <label className="form-label">{t('brands.brandName')}</label>
                   <input
                     className="input"
-                    placeholder="e.g. Autumn Collection"
+                    placeholder={t('brands.brandNamePlaceholder')}
                     value={wizard.name}
                     onChange={e => setWizard(w => ({ ...w, name: e.target.value }))}
                     autoFocus
@@ -373,9 +375,9 @@ export default function BrandProfiles() {
 
               {wizardStep === 1 && (
                 <div className="wizard-step-content">
-                  <label className="form-label">What do you sell?</label>
+                  <label className="form-label">{t('brands.whatDoYouSell')}</label>
                   <p className="form-hint" style={{ marginBottom: '1rem' }}>
-                    This helps generate backgrounds that suit your products.
+                    {t('brands.categoryHint')}
                   </p>
                   <div className="category-grid">
                     {PRODUCT_CATEGORIES.map(cat => (
@@ -388,10 +390,10 @@ export default function BrandProfiles() {
                       </button>
                     ))}
                   </div>
-                  <label className="form-label" style={{ marginTop: '1rem' }}>Or type your own</label>
+                  <label className="form-label" style={{ marginTop: '1rem' }}>{t('brands.orTypeOwn')}</label>
                   <input
                     className="input"
-                    placeholder="e.g. Candles, Pet supplies, Watches..."
+                    placeholder={t('brands.categoryPlaceholder')}
                     value={PRODUCT_CATEGORIES.includes(wizard.product_category as any) ? '' : wizard.product_category}
                     onChange={e => setWizard(w => ({ ...w, product_category: e.target.value }))}
                   />
@@ -400,7 +402,7 @@ export default function BrandProfiles() {
 
               {wizardStep === 2 && (
                 <div className="wizard-step-content">
-                  <label className="form-label">Mood</label>
+                  <label className="form-label">{t('brands.mood')}</label>
                   <div className="mood-grid">
                     {MOODS.map(m => (
                       <button
@@ -413,11 +415,11 @@ export default function BrandProfiles() {
                     ))}
                   </div>
 
-                  <label className="form-label" style={{ marginTop: '1.25rem' }}>Style Keywords</label>
+                  <label className="form-label" style={{ marginTop: '1.25rem' }}>{t('brands.styleKeywords')}</label>
                   <div className="keyword-input-row">
                     <input
                       className="input"
-                      placeholder="Type and press Enter"
+                      placeholder={t('brands.keywordPlaceholder')}
                       value={keywordInput}
                       onChange={e => setKeywordInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(); } }}
@@ -433,7 +435,7 @@ export default function BrandProfiles() {
                     </div>
                   )}
 
-                  <label className="form-label" style={{ marginTop: '1.25rem' }}>Color Palette</label>
+                  <label className="form-label" style={{ marginTop: '1.25rem' }}>{t('brands.colorPalette')}</label>
                   <div className="palette-inputs">
                     {wizard.color_palette.map((c, i) => (
                       <div key={i} className="palette-input-group">
@@ -458,17 +460,17 @@ export default function BrandProfiles() {
               {wizardStep === 3 && (
                 <div className="wizard-step-content">
                   <p className="form-hint">
-                    Generate scene previews based on your style settings. Select the ones you want to save to your library.
+                    {t('brands.previewHint')}
                   </p>
                   {wizard.previews.length === 0 && !generatingPreviews && (
                     <button className="button-primary" onClick={generatePreviews} style={{ marginTop: '1rem' }}>
-                      <Sparkles size={16} /> Generate 4 Scene Previews
+                      <Sparkles size={16} /> {t('brands.generate4')}
                     </button>
                   )}
                   {generatingPreviews && (
                     <div className="loading-box" style={{ margin: '1rem 0' }}>
                       <Loader className="spinning" size={24} />
-                      <span>Generating scenes...</span>
+                      <span>{t('brands.generatingScenes')}</span>
                     </div>
                   )}
                   {wizard.previews.length > 0 && (
@@ -483,7 +485,7 @@ export default function BrandProfiles() {
                             <img src={p.url} alt={`Preview ${i + 1}`} className="preview-img" />
                             <div className="preview-toggle">
                               {p.selected ? <Eye size={14} /> : <EyeOff size={14} />}
-                              {p.selected ? 'Selected' : 'Deselected'}
+                              {p.selected ? t('brands.selected') : t('brands.deselected')}
                             </div>
                           </div>
                         ))}
@@ -494,7 +496,7 @@ export default function BrandProfiles() {
                         disabled={generatingPreviews}
                         style={{ marginTop: '1rem' }}
                       >
-                        <Sparkles size={14} /> Regenerate
+                        <Sparkles size={14} /> {t('brands.regenerate')}
                       </button>
                     </>
                   )}
@@ -505,24 +507,24 @@ export default function BrandProfiles() {
                 <div className="wizard-step-content">
                   <div className="review-section">
                     <div className="review-row">
-                      <span className="review-label">Name</span>
+                      <span className="review-label">{t('brands.reviewName')}</span>
                       <span className="review-value">{wizard.name}</span>
                     </div>
                     {wizard.product_category && (
                       <div className="review-row">
-                        <span className="review-label">Product</span>
+                        <span className="review-label">{t('brands.reviewProduct')}</span>
                         <span className="review-value">{wizard.product_category}</span>
                       </div>
                     )}
                     {wizard.mood && (
                       <div className="review-row">
-                        <span className="review-label">Mood</span>
+                        <span className="review-label">{t('brands.reviewMood')}</span>
                         <span className="brand-mood-badge">{wizard.mood}</span>
                       </div>
                     )}
                     {wizard.style_keywords.length > 0 && (
                       <div className="review-row">
-                        <span className="review-label">Keywords</span>
+                        <span className="review-label">{t('brands.reviewKeywords')}</span>
                         <div className="brand-keywords">
                           {wizard.style_keywords.map(kw => (
                             <span key={kw} className="brand-keyword-chip">{kw}</span>
@@ -532,7 +534,7 @@ export default function BrandProfiles() {
                     )}
                     {wizard.color_palette.filter(c => c).length > 0 && (
                       <div className="review-row">
-                        <span className="review-label">Palette</span>
+                        <span className="review-label">{t('brands.reviewPalette')}</span>
                         <div className="brand-palette">
                           {wizard.color_palette.filter(c => c).map((c, i) => (
                             <span key={i} className="brand-swatch" style={{ background: c }} title={c} />
@@ -541,8 +543,8 @@ export default function BrandProfiles() {
                       </div>
                     )}
                     <div className="review-row">
-                      <span className="review-label">Scenes to save</span>
-                      <span className="review-value">{wizard.previews.filter(p => p.selected).length} of {wizard.previews.length}</span>
+                      <span className="review-label">{t('brands.scenesToSave')}</span>
+                      <span className="review-value">{t('brands.scenesToSaveCount', { selected: wizard.previews.filter(p => p.selected).length, total: wizard.previews.length })}</span>
                     </div>
                   </div>
                 </div>
@@ -552,7 +554,7 @@ export default function BrandProfiles() {
             <div className="wizard-footer">
               {wizardStep > 0 && (
                 <button className="button-secondary button-sm" onClick={() => setWizardStep(s => s - 1)}>
-                  <ChevronLeft size={16} /> Back
+                  <ChevronLeft size={16} /> {t('common.back')}
                 </button>
               )}
               <div style={{ flex: 1 }} />
@@ -562,7 +564,7 @@ export default function BrandProfiles() {
                   onClick={() => setWizardStep(s => s + 1)}
                   disabled={!canNext()}
                 >
-                  Next <ChevronRight size={16} />
+                  {t('common.next')} <ChevronRight size={16} />
                 </button>
               ) : (
                 <button
@@ -570,7 +572,7 @@ export default function BrandProfiles() {
                   onClick={saveBrand}
                   disabled={saving}
                 >
-                  {saving ? <><Loader className="spinning" size={14} /> Saving...</> : <><Check size={16} /> Save Brand</>}
+                  {saving ? <><Loader className="spinning" size={14} /> {t('brands.saving')}</> : <><Check size={16} /> {t('brands.saveBrand')}</>}
                 </button>
               )}
             </div>

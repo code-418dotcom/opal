@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LogIn } from 'lucide-react';
 import { login } from '../auth';
 
@@ -7,6 +8,7 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +34,11 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <div className="login-logo">
           <span className="logo-icon">&#9670;</span>
           <h1>OPAL</h1>
-          <p className="login-subtitle">AI Image Processing</p>
+          <p className="login-subtitle">{t('login.subtitle')}</p>
         </div>
 
         <p className="login-description">
-          Transform your product photos into professional e-commerce imagery.
-          Background removal, AI-generated scenes, and image upscaling — all in one platform.
+          {t('login.description')}
         </p>
 
         {error && <div className="error-banner">{error}</div>}
@@ -48,11 +49,11 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           disabled={loading}
         >
           <LogIn size={18} />
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? t('login.signingIn') : t('common.signIn')}
         </button>
 
         <p className="login-footer-text">
-          New here? Signing in will create your account automatically.
+          {t('login.footerText')}
         </p>
       </div>
     </div>

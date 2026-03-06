@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { api } from '../api';
@@ -15,6 +16,7 @@ interface FileWithStatus {
 }
 
 export default function UploadSection({ onJobCreated }: Props) {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<FileWithStatus[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -141,7 +143,7 @@ export default function UploadSection({ onJobCreated }: Props) {
                 ? {
                     ...f,
                     status: 'failed',
-                    error: error instanceof Error ? error.message : 'Upload failed',
+                    error: error instanceof Error ? error.message : t('upload.uploadFailed'),
                   }
                 : f
             )
@@ -151,7 +153,7 @@ export default function UploadSection({ onJobCreated }: Props) {
 
       await api.enqueueJob(job.job_id);
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Failed to create job');
+      setUploadError(error instanceof Error ? error.message : t('upload.createJobFailed'));
     } finally {
       setIsUploading(false);
     }
@@ -177,8 +179,8 @@ export default function UploadSection({ onJobCreated }: Props) {
   return (
     <div className="upload-section">
       <div className="section-header">
-        <h2>Upload Images</h2>
-        <p>Upload product images to process with AI</p>
+        <h2>{t('upload.title')}</h2>
+        <p>{t('upload.subtitle')}</p>
       </div>
 
       {uploadError && (
@@ -203,9 +205,9 @@ export default function UploadSection({ onJobCreated }: Props) {
         onClick={() => fileInputRef.current?.click()}
       >
         <Upload size={48} />
-        <h3>Drag & drop images here</h3>
-        <p>or click to browse</p>
-        <span className="hint">Supports: JPG, PNG, WebP</span>
+        <h3>{t('upload.dragDrop')}</h3>
+        <p>{t('upload.orBrowse')}</p>
+        <span className="hint">{t('upload.formats')}</span>
         <input
           ref={fileInputRef}
           type="file"
@@ -219,10 +221,10 @@ export default function UploadSection({ onJobCreated }: Props) {
       {files.length > 0 && (
         <div className="file-list">
           <div className="file-list-header">
-            <h3>{files.length} image(s) selected</h3>
+            <h3>{t('upload.imagesSelected', { count: files.length })}</h3>
             {!isUploading && (
               <button className="button-secondary" onClick={() => setFiles([])}>
-                Clear All
+                {t('common.clearAll')}
               </button>
             )}
           </div>
@@ -259,7 +261,7 @@ export default function UploadSection({ onJobCreated }: Props) {
         <>
           {brandProfiles.length > 0 && (
             <div className="brand-selector">
-              <label className="form-label">Brand Profile</label>
+              <label className="form-label">{t('upload.brandProfile')}</label>
               <select
                 className="input"
                 value={selectedBrandId}
@@ -268,7 +270,7 @@ export default function UploadSection({ onJobCreated }: Props) {
                   setSelectedTemplateIds([]);
                 }}
               >
-                <option value="">None (default)</option>
+                <option value="">{t('upload.noneDefault')}</option>
                 {brandProfiles.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -285,7 +287,7 @@ export default function UploadSection({ onJobCreated }: Props) {
           {processingOptions.generate_scene && (
             <>
             <div className="scene-count-section">
-              <label className="scene-count-label">Scenes per image</label>
+              <label className="scene-count-label">{t('upload.scenesPerImage')}</label>
               <div className="scene-count-stepper">
                 <button
                   className="stepper-btn"
@@ -305,7 +307,7 @@ export default function UploadSection({ onJobCreated }: Props) {
               </div>
               {sceneCount > 1 && (
                 <span className="scene-count-hint">
-                  {sceneCount} scene variations per image
+                  {t('upload.sceneVariations', { count: sceneCount })}
                 </span>
               )}
             </div>
@@ -317,7 +319,7 @@ export default function UploadSection({ onJobCreated }: Props) {
                   onClick={() => setShowTemplatePicker(!showTemplatePicker)}
                 >
                   <ImageIcon size={16} />
-                  <span>Choose from Library ({selectedTemplateIds.length} selected)</span>
+                  <span>{t('upload.chooseFromLibrary', { count: selectedTemplateIds.length })}</span>
                   {showTemplatePicker ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
 
@@ -350,7 +352,7 @@ export default function UploadSection({ onJobCreated }: Props) {
 
                 {selectedTemplateIds.length > 0 && (
                   <div className="template-picker-option">
-                    <span>Use exact background</span>
+                    <span>{t('upload.useExactBackground')}</span>
                     <div
                       className={`toggle-switch ${useSavedBackground ? 'toggle-on' : ''}`}
                       onClick={() => setUseSavedBackground(!useSavedBackground)}
@@ -365,8 +367,8 @@ export default function UploadSection({ onJobCreated }: Props) {
           )}
 
           <button className="button-primary" onClick={uploadFiles}>
-            Upload & Process {files.length} Image(s)
-            {sceneCount > 1 && processingOptions.generate_scene && ` (${sceneCount} scenes each)`}
+            {t('upload.uploadProcess', { count: files.length })}
+            {sceneCount > 1 && processingOptions.generate_scene && t('upload.scenesEach', { count: sceneCount })}
           </button>
         </>
       )}
@@ -374,7 +376,7 @@ export default function UploadSection({ onJobCreated }: Props) {
       {isUploading && (
         <div className="upload-status">
           <Loader className="spinning" size={24} />
-          <span>Uploading and processing...</span>
+          <span>{t('upload.uploading')}</span>
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   Image as ImageIcon,
   Download,
@@ -13,6 +14,7 @@ import { api } from '../api';
 import type { Job } from '../types';
 
 function ResultImage({ itemId }: { itemId: string }) {
+  const { t } = useTranslation();
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -47,13 +49,13 @@ function ResultImage({ itemId }: { itemId: string }) {
     return (
       <div className="result-placeholder">
         <ImageIcon size={48} />
-        <p>Preview unavailable</p>
+        <p>{t('results.previewUnavailable')}</p>
       </div>
     );
   }
 
   return (
-    <img className="result-image" src={src} alt="Processed result" onError={() => setError(true)} />
+    <img className="result-image" src={src} alt={t('results.processedResult')} onError={() => setError(true)} />
   );
 }
 
@@ -62,6 +64,7 @@ interface Props {
 }
 
 export default function ResultsGallery({ jobId }: Props) {
+  const { t } = useTranslation();
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const { data: job, isLoading, error } = useQuery<Job>({
@@ -81,7 +84,7 @@ export default function ResultsGallery({ jobId }: Props) {
       link.download = filename;
       link.click();
     } catch {
-      setDownloadError('Failed to generate download URL. Please try again.');
+      setDownloadError(t('results.downloadFailed'));
     }
   };
 
@@ -91,7 +94,7 @@ export default function ResultsGallery({ jobId }: Props) {
       const url = await api.getDownloadUrl(itemId, 'outputs');
       window.open(url, '_blank');
     } catch {
-      setDownloadError('Failed to generate preview URL. Please try again.');
+      setDownloadError(t('results.previewFailed'));
     }
   };
 
@@ -105,7 +108,7 @@ export default function ResultsGallery({ jobId }: Props) {
       link.download = `opal-export-${job.job_id.slice(4, 16)}.zip`;
       link.click();
     } catch {
-      setDownloadError('Failed to generate export download URL. Please try again.');
+      setDownloadError(t('results.exportFailed'));
     }
   };
 
@@ -113,13 +116,13 @@ export default function ResultsGallery({ jobId }: Props) {
     return (
       <div className="results-gallery">
         <div className="section-header">
-          <h2>Results</h2>
-          <p>View and download processed images</p>
+          <h2>{t('results.title')}</h2>
+          <p>{t('results.subtitle')}</p>
         </div>
         <div className="empty-state">
           <ImageIcon size={48} />
-          <h3>No results yet</h3>
-          <p>Upload and process images to see results here</p>
+          <h3>{t('results.noResults')}</h3>
+          <p>{t('results.noResultsHint')}</p>
         </div>
       </div>
     );
@@ -128,8 +131,8 @@ export default function ResultsGallery({ jobId }: Props) {
   return (
     <div className="results-gallery">
       <div className="section-header">
-        <h2>Results</h2>
-        <p>View and download processed images</p>
+        <h2>{t('results.title')}</h2>
+        <p>{t('results.subtitle')}</p>
       </div>
 
       {downloadError && (
@@ -149,23 +152,23 @@ export default function ResultsGallery({ jobId }: Props) {
       {error && (
         <div className="error-box">
           <AlertCircle size={20} />
-          <span>{error instanceof Error ? error.message : 'Failed to load results'}</span>
+          <span>{error instanceof Error ? error.message : t('results.loadFailed')}</span>
         </div>
       )}
 
       {isLoading && (
         <div className="loading-box">
           <Loader className="spinning" size={32} />
-          <span>Loading results...</span>
+          <span>{t('results.loadingResults')}</span>
         </div>
       )}
 
       {job && !isLoading && completedItems.length === 0 && (
         <div className="empty-state">
           <ImageIcon size={48} />
-          <h3>No completed images yet</h3>
+          <h3>{t('results.noCompleted')}</h3>
           <p>
-            {job.items.length} item(s) are being processed. Check back soon.
+            {t('results.beingProcessed', { count: job.items.length })}
           </p>
         </div>
       )}
@@ -177,12 +180,12 @@ export default function ResultsGallery({ jobId }: Props) {
               <div className="export-banner-info">
                 <Archive size={20} />
                 <span>
-                  All {completedItems.length} image(s) ready for download
+                  {t('results.readyForDownload', { count: completedItems.length })}
                 </span>
               </div>
               <button className="button-primary button-sm" onClick={handleDownloadZip}>
                 <Archive size={16} />
-                Download ZIP
+                {t('results.downloadZip')}
               </button>
             </div>
           )}
@@ -210,14 +213,14 @@ export default function ResultsGallery({ jobId }: Props) {
                       onClick={() => handleViewItem(item.item_id)}
                     >
                       <ExternalLink size={14} />
-                      View
+                      {t('common.view')}
                     </button>
                     <button
                       className="button-secondary button-sm"
                       onClick={() => handleDownloadItem(item.item_id, item.filename)}
                     >
                       <Download size={14} />
-                      Download
+                      {t('common.download')}
                     </button>
                   </div>
                 </div>
@@ -227,7 +230,7 @@ export default function ResultsGallery({ jobId }: Props) {
 
           <div className="gallery-summary">
             <p>
-              {completedItems.length} of {job.items.length} image(s) completed
+              {t('results.completedOf', { completed: completedItems.length, total: job.items.length })}
             </p>
           </div>
         </>

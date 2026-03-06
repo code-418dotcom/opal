@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
@@ -17,6 +18,8 @@ const STATUS_WEIGHT: Record<string, number> = {
 };
 
 export default function JobMonitor({ jobId }: Props) {
+  const { t } = useTranslation();
+
   const { data: job, isLoading, error, refetch } = useQuery<Job>({
     queryKey: ['job', jobId],
     queryFn: () => api.getJob(jobId!),
@@ -33,12 +36,12 @@ export default function JobMonitor({ jobId }: Props) {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { icon: typeof Clock; cls: string; label: string }> = {
-      created: { icon: Clock, cls: 'badge-default', label: 'Queued' },
-      uploaded: { icon: Clock, cls: 'badge-default', label: 'Uploaded' },
-      processing: { icon: Loader, cls: 'badge-processing', label: 'Processing' },
-      completed: { icon: CheckCircle, cls: 'badge-success', label: 'Completed' },
-      failed: { icon: XCircle, cls: 'badge-error', label: 'Failed' },
-      partial: { icon: AlertTriangle, cls: 'badge-warning', label: 'Partial' },
+      created: { icon: Clock, cls: 'badge-default', label: t('monitor.status.queued') },
+      uploaded: { icon: Clock, cls: 'badge-default', label: t('monitor.status.uploaded') },
+      processing: { icon: Loader, cls: 'badge-processing', label: t('monitor.status.processing') },
+      completed: { icon: CheckCircle, cls: 'badge-success', label: t('monitor.status.completed') },
+      failed: { icon: XCircle, cls: 'badge-error', label: t('monitor.status.failed') },
+      partial: { icon: AlertTriangle, cls: 'badge-warning', label: t('monitor.status.partial') },
     };
 
     const badge = badges[status] || badges.created;
@@ -80,13 +83,13 @@ export default function JobMonitor({ jobId }: Props) {
     return (
       <div className="job-monitor">
         <div className="section-header">
-          <h2>Job Monitor</h2>
-          <p>Upload images to start tracking a job</p>
+          <h2>{t('monitor.title')}</h2>
+          <p>{t('monitor.subtitle')}</p>
         </div>
         <div className="empty-state">
           <Loader size={48} />
-          <h3>No active job</h3>
-          <p>Upload images from the Upload tab to create a job</p>
+          <h3>{t('monitor.noActiveJob')}</h3>
+          <p>{t('monitor.noActiveJobHint')}</p>
         </div>
       </div>
     );
@@ -97,8 +100,8 @@ export default function JobMonitor({ jobId }: Props) {
       <div className="section-header">
         <div className="section-header-row">
           <div>
-            <h2>Job Monitor</h2>
-            <p>Tracking job progress in real-time</p>
+            <h2>{t('monitor.title')}</h2>
+            <p>{t('monitor.trackingSubtitle')}</p>
           </div>
           <button
             className="button-secondary"
@@ -106,7 +109,7 @@ export default function JobMonitor({ jobId }: Props) {
             disabled={isLoading}
           >
             <RefreshCw size={16} className={isLoading ? 'spinning' : ''} />
-            Refresh
+            {t('common.refresh')}
           </button>
         </div>
       </div>
@@ -114,14 +117,14 @@ export default function JobMonitor({ jobId }: Props) {
       {error && (
         <div className="error-box">
           <XCircle size={20} />
-          <span>{error instanceof Error ? error.message : 'Failed to load job'}</span>
+          <span>{error instanceof Error ? error.message : t('monitor.loadFailed')}</span>
         </div>
       )}
 
       {isLoading && !job && (
         <div className="loading-box">
           <Loader className="spinning" size={32} />
-          <span>Loading job details...</span>
+          <span>{t('monitor.loadingJob')}</span>
         </div>
       )}
 
@@ -136,7 +139,7 @@ export default function JobMonitor({ jobId }: Props) {
 
           <div className="progress-section">
             <div className="progress-header">
-              <span>Overall Progress</span>
+              <span>{t('monitor.overallProgress')}</span>
               <span className="progress-percentage">
                 {getProgressStats(job).percentage}%
               </span>
@@ -148,17 +151,17 @@ export default function JobMonitor({ jobId }: Props) {
               ></div>
             </div>
             <div className="progress-stats">
-              <span className="stat-completed">{getProgressStats(job).completed} completed</span>
-              <span className="stat-processing">{getProgressStats(job).processing} processing</span>
+              <span className="stat-completed">{getProgressStats(job).completed} {t('monitor.completed')}</span>
+              <span className="stat-processing">{getProgressStats(job).processing} {t('monitor.processing')}</span>
               {getProgressStats(job).failed > 0 && (
-                <span className="stat-failed">{getProgressStats(job).failed} failed</span>
+                <span className="stat-failed">{getProgressStats(job).failed} {t('monitor.failed')}</span>
               )}
-              <span className="stat-total">{getProgressStats(job).total} total</span>
+              <span className="stat-total">{getProgressStats(job).total} {t('monitor.total')}</span>
             </div>
           </div>
 
           <div className="items-section">
-            <h4>Items ({job.items.length})</h4>
+            <h4>{t('monitor.items')} ({job.items.length})</h4>
             <div className="items-list">
               {job.items.map((item) => (
                 <div key={item.item_id} className="item-card">

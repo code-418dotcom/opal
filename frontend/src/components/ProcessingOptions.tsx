@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Scissors, Sparkles, ArrowUpFromDot } from 'lucide-react';
 
 export interface ProcessingOptionsType {
@@ -13,37 +14,39 @@ interface ProcessingOptionsProps {
   disabled?: boolean;
 }
 
-const OPTIONS: Array<{
-  key: keyof ProcessingOptionsType;
-  icon: typeof Scissors;
-  name: string;
-  description: string;
-}> = [
-  {
-    key: 'remove_background',
-    icon: Scissors,
-    name: 'Remove Background',
-    description: 'Isolate your product with a transparent background',
-  },
-  {
-    key: 'generate_scene',
-    icon: Sparkles,
-    name: 'AI Scene Generation',
-    description: 'Place your product in a professional setting',
-  },
-  {
-    key: 'upscale',
-    icon: ArrowUpFromDot,
-    name: 'HD Upscale',
-    description: 'Enhance image resolution for print-ready quality',
-  },
-];
-
 export const ProcessingOptions: React.FC<ProcessingOptionsProps> = ({
   options,
   onChange,
   disabled = false,
 }) => {
+  const { t } = useTranslation();
+
+  const OPTIONS: Array<{
+    key: keyof ProcessingOptionsType;
+    icon: typeof Scissors;
+    name: string;
+    description: string;
+  }> = [
+    {
+      key: 'remove_background',
+      icon: Scissors,
+      name: t('processing.removeBackground'),
+      description: t('processing.removeBackgroundDesc'),
+    },
+    {
+      key: 'generate_scene',
+      icon: Sparkles,
+      name: t('processing.sceneGeneration'),
+      description: t('processing.sceneGenerationDesc'),
+    },
+    {
+      key: 'upscale',
+      icon: ArrowUpFromDot,
+      name: t('processing.hdUpscale'),
+      description: t('processing.hdUpscaleDesc'),
+    },
+  ];
+
   const handleToggle = (key: keyof ProcessingOptionsType) => {
     onChange({
       ...options,
@@ -53,7 +56,7 @@ export const ProcessingOptions: React.FC<ProcessingOptionsProps> = ({
 
   return (
     <div className="processing-options">
-      <h3 className="processing-options-title">Processing Pipeline</h3>
+      <h3 className="processing-options-title">{t('processing.title')}</h3>
 
       <div className="processing-options-list">
         {OPTIONS.map((opt) => (

@@ -895,6 +895,90 @@ body {
 }
 
 /* ── Auth Bar ──────────────────────────────────────────── */
+/* ── Language Selector ─────────────────────────────────────── */
+
+.lang-selector {
+  position: relative;
+}
+
+.lang-selector-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.15s;
+}
+
+.lang-selector-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.lang-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  min-width: 140px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.lang-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.lang-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+
+.lang-option.active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.lang-flag {
+  font-size: 1rem;
+}
+
+/* Landing page language selector (absolute positioned) */
+.landing-lang-selector {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.landing-lang-selector .lang-selector-btn {
+  color: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.landing-lang-selector .lang-selector-btn:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 .auth-bar {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);

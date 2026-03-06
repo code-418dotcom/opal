@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff,
@@ -39,17 +40,18 @@ const badgeStyle = (status: string): React.CSSProperties => ({
 });
 
 export default function AdminPage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
 
   const tabs: { id: AdminTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase },
-    { id: 'packages', label: 'Packages', icon: Package },
-    { id: 'activity', label: 'Activity', icon: Activity },
-    { id: 'integrations', label: 'Integrations', icon: Link },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'system', label: 'System', icon: Server },
+    { id: 'dashboard', label: t('admin.tabs.dashboard'), icon: BarChart3 },
+    { id: 'users', label: t('admin.tabs.users'), icon: Users },
+    { id: 'jobs', label: t('admin.tabs.jobs'), icon: Briefcase },
+    { id: 'packages', label: t('admin.tabs.packages'), icon: Package },
+    { id: 'activity', label: t('admin.tabs.activity'), icon: Activity },
+    { id: 'integrations', label: t('admin.tabs.integrations'), icon: Link },
+    { id: 'settings', label: t('admin.tabs.settings'), icon: Settings },
+    { id: 'system', label: t('admin.tabs.system'), icon: Server },
   ];
 
   return (
@@ -82,23 +84,24 @@ export default function AdminPage() {
 // ── Dashboard Panel ──────────────────────────────────────────────
 
 function DashboardPanel() {
+  const { t } = useTranslation();
   const { data: stats, isLoading } = useQuery<PlatformStats>({
     queryKey: ['admin-stats'],
     queryFn: () => api.getPlatformStats(),
   });
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading stats...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   if (!stats) return null;
 
   const cards = [
-    { label: 'Total Users', value: stats.total_users, icon: Users, color: '#6366f1' },
-    { label: 'Total Jobs', value: stats.total_jobs, icon: Briefcase, color: '#06b6d4' },
-    { label: 'Tokens in Circulation', value: stats.total_tokens_in_circulation, icon: Coins, color: '#eab308' },
-    { label: 'Tokens Spent', value: stats.total_tokens_spent, icon: Coins, color: '#f97316' },
-    { label: 'Revenue', value: formatMoney(stats.total_revenue_cents), icon: CreditCard, color: '#22c55e' },
+    { label: t('admin.dashboard.totalUsers'), value: stats.total_users, icon: Users, color: '#6366f1' },
+    { label: t('admin.dashboard.totalJobs'), value: stats.total_jobs, icon: Briefcase, color: '#06b6d4' },
+    { label: t('admin.dashboard.tokensInCirculation'), value: stats.total_tokens_in_circulation, icon: Coins, color: '#eab308' },
+    { label: t('admin.dashboard.tokensSpent'), value: stats.total_tokens_spent, icon: Coins, color: '#f97316' },
+    { label: t('admin.dashboard.revenue'), value: formatMoney(stats.total_revenue_cents), icon: CreditCard, color: '#22c55e' },
   ];
 
   return (
@@ -132,7 +135,7 @@ function DashboardPanel() {
 
       {stats.jobs_by_status && Object.keys(stats.jobs_by_status).length > 0 && (
         <div>
-          <h3 className="settings-category-title">Jobs by Status</h3>
+          <h3 className="settings-category-title">{t('admin.dashboard.jobsByStatus')}</h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
             {Object.entries(stats.jobs_by_status).map(([status, count]) => (
               <span key={status} style={{
@@ -153,6 +156,7 @@ function DashboardPanel() {
 // ── Settings Panel ──────────────────────────────────────────────────
 
 function SettingsPanel() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -197,7 +201,7 @@ function SettingsPanel() {
   };
 
   const handleDelete = async (key: string) => {
-    if (!confirm(`Delete setting "${key}"? This cannot be undone.`)) return;
+    if (!confirm(t('admin.settings.deleteConfirm', { key }))) return;
     try {
       await api.deleteAdminSetting(key);
       queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
@@ -237,15 +241,15 @@ function SettingsPanel() {
   };
 
   const categoryLabels: Record<string, string> = {
-    shopify: 'Shopify Integration',
-    payments: 'Payment Provider (Mollie)',
-    ai: 'AI Providers',
-    security: 'Security',
-    general: 'General',
+    shopify: t('admin.settings.categories.shopify'),
+    payments: t('admin.settings.categories.payments'),
+    ai: t('admin.settings.categories.ai'),
+    security: t('admin.settings.categories.security'),
+    general: t('admin.settings.categories.general'),
   };
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading settings...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   return (
@@ -254,7 +258,7 @@ function SettingsPanel() {
         <div className="integration-error">
           <X size={14} />
           <span>{error}</span>
-          <button onClick={() => setError(null)}>Dismiss</button>
+          <button onClick={() => setError(null)}>{t('common.dismiss')}</button>
         </div>
       )}
 
@@ -279,7 +283,7 @@ function SettingsPanel() {
                       type={setting.is_secret ? 'password' : 'text'}
                       value={editValue}
                       onChange={e => setEditValue(e.target.value)}
-                      placeholder={setting.is_secret ? 'Enter new value...' : 'Value'}
+                      placeholder={setting.is_secret ? t('admin.settings.enterNewValue') : 'Value'}
                       className="setting-input"
                       autoFocus
                       onKeyDown={e => {
@@ -307,7 +311,7 @@ function SettingsPanel() {
                       {setting.is_secret ? (
                         <>
                           <span className="setting-masked">
-                            {revealedKeys.has(setting.key) ? setting.value : (setting.value ? '••••••••' : '(not set)')}
+                            {revealedKeys.has(setting.key) ? setting.value : (setting.value ? '••••••••' : t('admin.settings.notSet'))}
                           </span>
                           {setting.value && (
                             <button className="btn-icon" onClick={() => toggleReveal(setting.key)}>
@@ -317,12 +321,12 @@ function SettingsPanel() {
                         </>
                       ) : (
                         <span className={setting.value ? '' : 'setting-empty'}>
-                          {setting.value || '(not set)'}
+                          {setting.value || t('admin.settings.notSet')}
                         </span>
                       )}
                     </div>
                     <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(setting)}>
-                      Edit
+                      {t('common.edit')}
                     </button>
                     <button className="btn-icon btn-danger-icon" onClick={() => handleDelete(setting.key)}>
                       <Trash2 size={14} />
@@ -343,11 +347,11 @@ function SettingsPanel() {
 
       {showAdd ? (
         <div className="setting-add-form">
-          <h3>Add New Setting</h3>
+          <h3>{t('admin.settings.addNewSetting')}</h3>
           <div className="setting-add-fields">
             <input
               type="text"
-              placeholder="KEY_NAME (UPPER_SNAKE_CASE)"
+              placeholder={t('admin.settings.keyPlaceholder')}
               value={newKey}
               onChange={e => setNewKey(e.target.value.toUpperCase())}
               className="setting-input"
@@ -357,11 +361,11 @@ function SettingsPanel() {
               onChange={e => setNewCategory(e.target.value)}
               className="setting-select"
             >
-              <option value="general">General</option>
-              <option value="shopify">Shopify</option>
-              <option value="payments">Payments</option>
-              <option value="ai">AI Providers</option>
-              <option value="security">Security</option>
+              <option value="general">{t('admin.settings.categories.general')}</option>
+              <option value="shopify">{t('admin.settings.categories.shopify')}</option>
+              <option value="payments">{t('admin.settings.categories.payments')}</option>
+              <option value="ai">{t('admin.settings.categories.ai')}</option>
+              <option value="security">{t('admin.settings.categories.security')}</option>
             </select>
             <label className="setting-checkbox">
               <input
@@ -369,11 +373,11 @@ function SettingsPanel() {
                 checked={newIsSecret}
                 onChange={e => setNewIsSecret(e.target.checked)}
               />
-              Secret (masked)
+              {t('admin.settings.secretMasked')}
             </label>
             <input
               type="text"
-              placeholder="Description (optional)"
+              placeholder={t('admin.settings.descriptionPlaceholder')}
               value={newDescription}
               onChange={e => setNewDescription(e.target.value)}
               className="setting-input"
@@ -381,16 +385,16 @@ function SettingsPanel() {
           </div>
           <div className="setting-add-actions">
             <button className="btn btn-primary" onClick={handleAdd} disabled={!newKey}>
-              <Plus size={14} /> Add Setting
+              <Plus size={14} /> {t('admin.settings.addSetting')}
             </button>
             <button className="btn btn-secondary" onClick={() => setShowAdd(false)}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
       ) : (
         <button className="btn btn-secondary" onClick={() => setShowAdd(true)} style={{ marginTop: '1rem' }}>
-          <Plus size={14} /> Add Custom Setting
+          <Plus size={14} /> {t('admin.settings.addCustomSetting')}
         </button>
       )}
     </div>
@@ -400,6 +404,7 @@ function SettingsPanel() {
 // ── Users Panel ─────────────────────────────────────────────────────
 
 function UsersPanel() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [toggling, setToggling] = useState<string | null>(null);
   const [editingTokens, setEditingTokens] = useState<string | null>(null);
@@ -444,7 +449,7 @@ function UsersPanel() {
   };
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading users...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   return (
@@ -452,11 +457,11 @@ function UsersPanel() {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Email</th>
-            <th>Display Name</th>
-            <th>Tokens</th>
-            <th>Admin</th>
-            <th>Created</th>
+            <th>{t('admin.users.email')}</th>
+            <th>{t('admin.users.displayName')}</th>
+            <th>{t('admin.users.tokens')}</th>
+            <th>{t('admin.users.admin')}</th>
+            <th>{t('admin.users.created')}</th>
             <th></th>
           </tr>
         </thead>
@@ -500,9 +505,9 @@ function UsersPanel() {
               </td>
               <td>
                 {user.is_admin ? (
-                  <span className="admin-badge admin-yes"><Shield size={12} /> Admin</span>
+                  <span className="admin-badge admin-yes"><Shield size={12} /> {t('admin.users.admin')}</span>
                 ) : (
-                  <span className="admin-badge admin-no">User</span>
+                  <span className="admin-badge admin-no">{t('admin.users.user')}</span>
                 )}
               </td>
               <td>{new Date(user.created_at).toLocaleDateString()}</td>
@@ -515,9 +520,9 @@ function UsersPanel() {
                   {toggling === user.id ? (
                     <Loader2 size={12} className="spin" />
                   ) : user.is_admin ? (
-                    <><ShieldOff size={12} /> Revoke</>
+                    <><ShieldOff size={12} /> {t('admin.users.revoke')}</>
                   ) : (
-                    <><Shield size={12} /> Grant</>
+                    <><Shield size={12} /> {t('admin.users.grant')}</>
                   )}
                 </button>
               </td>
@@ -528,7 +533,7 @@ function UsersPanel() {
       {(!users || users.length === 0) && (
         <div className="empty-state">
           <Users size={48} />
-          <p>No users yet</p>
+          <p>{t('admin.users.noUsers')}</p>
         </div>
       )}
     </div>
@@ -538,6 +543,7 @@ function UsersPanel() {
 // ── Jobs Panel ──────────────────────────────────────────────────────
 
 function JobsPanel() {
+  const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [offset, setOffset] = useState(0);
   const limit = 25;
@@ -548,35 +554,35 @@ function JobsPanel() {
   });
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading jobs...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   return (
     <div className="admin-jobs-panel">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Filter by status:</label>
+        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }}>{t('admin.jobs.filterByStatus')}</label>
         <select
           value={statusFilter}
           onChange={e => { setStatusFilter(e.target.value); setOffset(0); }}
           className="setting-select"
           style={{ minWidth: '150px' }}
         >
-          <option value="">All</option>
-          <option value="pending">Pending</option>
-          <option value="processing">Processing</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
+          <option value="">{t('admin.jobs.all')}</option>
+          <option value="pending">{t('admin.jobs.pending')}</option>
+          <option value="processing">{t('admin.jobs.processing')}</option>
+          <option value="completed">{t('admin.jobs.completed')}</option>
+          <option value="failed">{t('admin.jobs.failed')}</option>
         </select>
       </div>
 
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Job ID</th>
-            <th>Tenant</th>
-            <th>Status</th>
-            <th>Items</th>
-            <th>Created</th>
+            <th>{t('admin.jobs.jobId')}</th>
+            <th>{t('admin.jobs.tenant')}</th>
+            <th>{t('admin.jobs.status')}</th>
+            <th>{t('admin.jobs.items')}</th>
+            <th>{t('admin.jobs.created')}</th>
           </tr>
         </thead>
         <tbody>
@@ -595,7 +601,7 @@ function JobsPanel() {
       {(!jobs || jobs.length === 0) && (
         <div className="empty-state">
           <Briefcase size={48} />
-          <p>No jobs found</p>
+          <p>{t('admin.jobs.noJobs')}</p>
         </div>
       )}
 
@@ -606,17 +612,17 @@ function JobsPanel() {
             disabled={offset === 0}
             onClick={() => setOffset(Math.max(0, offset - limit))}
           >
-            Previous
+            {t('common.previous')}
           </button>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem', alignSelf: 'center' }}>
-            Showing {offset + 1}–{offset + (jobs?.length || 0)}
+            {t('admin.jobs.showing', { from: offset + 1, to: offset + (jobs?.length || 0) })}
           </span>
           <button
             className="btn btn-secondary btn-sm"
             disabled={(jobs?.length || 0) < limit}
             onClick={() => setOffset(offset + limit)}
           >
-            Next
+            {t('common.next')}
           </button>
         </div>
       )}
@@ -627,6 +633,7 @@ function JobsPanel() {
 // ── Packages Panel ──────────────────────────────────────────────────
 
 function PackagesPanel() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -702,7 +709,7 @@ function PackagesPanel() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this package? This cannot be undone.')) return;
+    if (!confirm(t('admin.packages.deleteConfirm'))) return;
     try {
       await api.deleteAdminPackage(id);
       queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
@@ -721,7 +728,7 @@ function PackagesPanel() {
   };
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading packages...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   return (
@@ -730,20 +737,20 @@ function PackagesPanel() {
         <div className="integration-error">
           <X size={14} />
           <span>{error}</span>
-          <button onClick={() => setError(null)}>Dismiss</button>
+          <button onClick={() => setError(null)}>{t('common.dismiss')}</button>
         </div>
       )}
 
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Tokens</th>
-            <th>Price</th>
-            <th>Currency</th>
-            <th>Active</th>
-            <th>Created</th>
-            <th>Actions</th>
+            <th>{t('admin.packages.name')}</th>
+            <th>{t('admin.packages.tokens')}</th>
+            <th>{t('admin.packages.price')}</th>
+            <th>{t('admin.packages.currency')}</th>
+            <th>{t('admin.packages.active')}</th>
+            <th>{t('admin.packages.created')}</th>
+            <th>{t('admin.packages.actions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -800,7 +807,7 @@ function PackagesPanel() {
                       title={pkg.active ? 'Click to deactivate' : 'Click to activate'}
                     >
                       <span style={badgeStyle(pkg.active ? 'active' : 'disconnected')}>
-                        {pkg.active ? 'Active' : 'Inactive'}
+                        {pkg.active ? t('admin.packages.active') : t('admin.packages.inactive')}
                       </span>
                     </button>
                   </td>
@@ -825,40 +832,40 @@ function PackagesPanel() {
       {(!packages || packages.length === 0) && (
         <div className="empty-state">
           <Package size={48} />
-          <p>No packages yet</p>
+          <p>{t('admin.packages.noPackages')}</p>
         </div>
       )}
 
       {showCreate ? (
         <div className="setting-add-form" style={{ marginTop: '1rem' }}>
-          <h3>Create New Package</h3>
+          <h3>{t('admin.packages.createNew')}</h3>
           <div className="setting-add-fields">
-            <input className="setting-input" placeholder="Package name"
+            <input className="setting-input" placeholder={t('admin.packages.packageName')}
               value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-            <input className="setting-input" type="number" placeholder="Tokens"
+            <input className="setting-input" type="number" placeholder={t('admin.packages.tokens')}
               value={form.tokens} onChange={e => setForm({ ...form, tokens: e.target.value })} />
-            <input className="setting-input" type="number" placeholder="Price (cents)"
+            <input className="setting-input" type="number" placeholder={t('admin.packages.priceCents')}
               value={form.price_cents} onChange={e => setForm({ ...form, price_cents: e.target.value })} />
-            <input className="setting-input" placeholder="Currency (EUR)"
+            <input className="setting-input" placeholder={t('admin.packages.currencyPlaceholder')}
               value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} />
             <label className="setting-checkbox">
               <input type="checkbox" checked={form.active}
                 onChange={e => setForm({ ...form, active: e.target.checked })} />
-              Active
+              {t('admin.packages.active')}
             </label>
           </div>
           <div className="setting-add-actions">
             <button className="btn btn-primary" onClick={handleCreate}
               disabled={saving || !form.name || !form.tokens || !form.price_cents}>
-              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} Create Package
+              {saving ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {t('admin.packages.createPackage')}
             </button>
-            <button className="btn btn-secondary" onClick={resetForm}>Cancel</button>
+            <button className="btn btn-secondary" onClick={resetForm}>{t('common.cancel')}</button>
           </div>
         </div>
       ) : (
         <button className="btn btn-secondary" onClick={() => { resetForm(); setShowCreate(true); }}
           style={{ marginTop: '1rem' }}>
-          <Plus size={14} /> Add Package
+          <Plus size={14} /> {t('admin.packages.addPackage')}
         </button>
       )}
     </div>
@@ -868,6 +875,7 @@ function PackagesPanel() {
 // ── Activity Panel ──────────────────────────────────────────────────
 
 function ActivityPanel() {
+  const { t } = useTranslation();
   const [txOffset, setTxOffset] = useState(0);
   const [payOffset, setPayOffset] = useState(0);
   const limit = 20;
@@ -887,19 +895,19 @@ function ActivityPanel() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
         {/* Transactions */}
         <div>
-          <h3 className="settings-category-title">Recent Transactions</h3>
+          <h3 className="settings-category-title">{t('admin.activity.recentTransactions')}</h3>
           {txLoading ? (
-            <div className="empty-state"><Loader2 size={24} className="spin" /> Loading...</div>
+            <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>
           ) : (
             <>
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>User</th>
-                    <th>Amount</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>Date</th>
+                    <th>{t('admin.activity.user')}</th>
+                    <th>{t('admin.activity.amount')}</th>
+                    <th>{t('admin.activity.type')}</th>
+                    <th>{t('admin.activity.description')}</th>
+                    <th>{t('admin.activity.date')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -919,14 +927,14 @@ function ActivityPanel() {
                 </tbody>
               </table>
               {(!transactions || transactions.length === 0) && (
-                <div className="empty-state"><p>No transactions yet</p></div>
+                <div className="empty-state"><p>{t('admin.activity.noTransactions')}</p></div>
               )}
               {transactions && transactions.length > 0 && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center' }}>
                   <button className="btn btn-secondary btn-sm" disabled={txOffset === 0}
-                    onClick={() => setTxOffset(Math.max(0, txOffset - limit))}>Prev</button>
+                    onClick={() => setTxOffset(Math.max(0, txOffset - limit))}>{t('common.previous')}</button>
                   <button className="btn btn-secondary btn-sm" disabled={(transactions?.length || 0) < limit}
-                    onClick={() => setTxOffset(txOffset + limit)}>Next</button>
+                    onClick={() => setTxOffset(txOffset + limit)}>{t('common.next')}</button>
                 </div>
               )}
             </>
@@ -935,19 +943,19 @@ function ActivityPanel() {
 
         {/* Payments */}
         <div>
-          <h3 className="settings-category-title">Recent Payments</h3>
+          <h3 className="settings-category-title">{t('admin.activity.recentPayments')}</h3>
           {payLoading ? (
-            <div className="empty-state"><Loader2 size={24} className="spin" /> Loading...</div>
+            <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>
           ) : (
             <>
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>User</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Mollie ID</th>
-                    <th>Date</th>
+                    <th>{t('admin.activity.user')}</th>
+                    <th>{t('admin.activity.amount')}</th>
+                    <th>{t('admin.activity.status')}</th>
+                    <th>{t('admin.activity.mollieId')}</th>
+                    <th>{t('admin.activity.date')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -965,14 +973,14 @@ function ActivityPanel() {
                 </tbody>
               </table>
               {(!payments || payments.length === 0) && (
-                <div className="empty-state"><p>No payments yet</p></div>
+                <div className="empty-state"><p>{t('admin.activity.noPayments')}</p></div>
               )}
               {payments && payments.length > 0 && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center' }}>
                   <button className="btn btn-secondary btn-sm" disabled={payOffset === 0}
-                    onClick={() => setPayOffset(Math.max(0, payOffset - limit))}>Prev</button>
+                    onClick={() => setPayOffset(Math.max(0, payOffset - limit))}>{t('common.previous')}</button>
                   <button className="btn btn-secondary btn-sm" disabled={(payments?.length || 0) < limit}
-                    onClick={() => setPayOffset(payOffset + limit)}>Next</button>
+                    onClick={() => setPayOffset(payOffset + limit)}>{t('common.next')}</button>
                 </div>
               )}
             </>
@@ -986,6 +994,7 @@ function ActivityPanel() {
 // ── Integrations Panel ──────────────────────────────────────────────
 
 function IntegrationsPanel() {
+  const { t } = useTranslation();
   const [offset, setOffset] = useState(0);
   const limit = 25;
 
@@ -995,7 +1004,7 @@ function IntegrationsPanel() {
   });
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading integrations...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   return (
@@ -1003,11 +1012,11 @@ function IntegrationsPanel() {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>User ID</th>
-            <th>Provider</th>
-            <th>Store URL</th>
-            <th>Status</th>
-            <th>Created</th>
+            <th>{t('admin.integrations.userId')}</th>
+            <th>{t('admin.integrations.provider')}</th>
+            <th>{t('admin.integrations.storeUrl')}</th>
+            <th>{t('admin.integrations.status')}</th>
+            <th>{t('admin.integrations.created')}</th>
           </tr>
         </thead>
         <tbody>
@@ -1031,19 +1040,19 @@ function IntegrationsPanel() {
       {(!integrations || integrations.length === 0) && (
         <div className="empty-state">
           <Link size={48} />
-          <p>No integrations yet</p>
+          <p>{t('admin.integrations.noIntegrations')}</p>
         </div>
       )}
 
       {integrations && integrations.length > 0 && (
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'center' }}>
           <button className="btn btn-secondary btn-sm" disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - limit))}>Previous</button>
+            onClick={() => setOffset(Math.max(0, offset - limit))}>{t('common.previous')}</button>
           <span style={{ color: '#94a3b8', fontSize: '0.85rem', alignSelf: 'center' }}>
-            Showing {offset + 1}–{offset + (integrations?.length || 0)}
+            {t('admin.jobs.showing', { from: offset + 1, to: offset + (integrations?.length || 0) })}
           </span>
           <button className="btn btn-secondary btn-sm" disabled={(integrations?.length || 0) < limit}
-            onClick={() => setOffset(offset + limit)}>Next</button>
+            onClick={() => setOffset(offset + limit)}>{t('common.next')}</button>
         </div>
       )}
     </div>
@@ -1053,39 +1062,40 @@ function IntegrationsPanel() {
 // ── System Panel ────────────────────────────────────────────────────
 
 function SystemPanel() {
+  const { t } = useTranslation();
   const { data: system, isLoading } = useQuery({
     queryKey: ['admin-system'],
     queryFn: () => api.getSystemInfo(),
   });
 
   if (isLoading) {
-    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading...</div>;
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
   }
 
   if (!system) return null;
 
   const configItems = [
-    { label: 'Environment', value: system.env_name },
-    { label: 'Storage Backend', value: system.storage_backend },
-    { label: 'Queue Backend', value: system.queue_backend },
-    { label: 'Image Gen Provider', value: system.image_gen_provider },
-    { label: 'Upscale Provider', value: system.upscale_provider },
-    { label: 'Upscale Enabled', value: system.upscale_enabled ? 'Yes' : 'No' },
-    { label: 'BG Removal Provider', value: system.bg_removal_provider },
-    { label: 'Public Base URL', value: system.public_base_url },
+    { label: t('admin.system.environment'), value: system.env_name },
+    { label: t('admin.system.storageBackend'), value: system.storage_backend },
+    { label: t('admin.system.queueBackend'), value: system.queue_backend },
+    { label: t('admin.system.imageGenProvider'), value: system.image_gen_provider },
+    { label: t('admin.system.upscaleProvider'), value: system.upscale_provider },
+    { label: t('admin.system.upscaleEnabled'), value: system.upscale_enabled ? t('admin.system.yes') : t('admin.system.no') },
+    { label: t('admin.system.bgRemovalProvider'), value: system.bg_removal_provider },
+    { label: t('admin.system.publicBaseUrl'), value: system.public_base_url },
   ];
 
   const statusItems = [
-    { label: 'Entra Auth', configured: system.has_entra_config },
-    { label: 'Mollie Payments', configured: system.has_mollie_config },
-    { label: 'Shopify', configured: system.has_shopify_config },
-    { label: 'fal.ai (Image Gen)', configured: system.has_fal_config },
-    { label: 'Encryption Key', configured: system.has_encryption_key },
+    { label: t('admin.system.entraAuth'), configured: system.has_entra_config },
+    { label: t('admin.system.molliePayments'), configured: system.has_mollie_config },
+    { label: t('admin.system.shopify'), configured: system.has_shopify_config },
+    { label: t('admin.system.falAi'), configured: system.has_fal_config },
+    { label: t('admin.system.encryptionKey'), configured: system.has_encryption_key },
   ];
 
   return (
     <div className="admin-system-panel">
-      <h3 className="settings-category-title">Configuration</h3>
+      <h3 className="settings-category-title">{t('admin.system.configuration')}</h3>
       <div className="system-grid">
         {configItems.map(item => (
           <div key={item.label} className="system-item">
@@ -1095,13 +1105,13 @@ function SystemPanel() {
         ))}
       </div>
 
-      <h3 className="settings-category-title" style={{ marginTop: '1.5rem' }}>Service Status</h3>
+      <h3 className="settings-category-title" style={{ marginTop: '1.5rem' }}>{t('admin.system.serviceStatus')}</h3>
       <div className="system-grid">
         {statusItems.map(item => (
           <div key={item.label} className="system-item">
             <span className="system-label">{item.label}</span>
             <span className={`system-status ${item.configured ? 'status-ok' : 'status-missing'}`}>
-              {item.configured ? <><Check size={14} /> Configured</> : <><X size={14} /> Not configured</>}
+              {item.configured ? <><Check size={14} /> {t('admin.system.configured')}</> : <><X size={14} /> {t('admin.system.notConfigured')}</>}
             </span>
           </div>
         ))}

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { api } from '../api';
 import type { TokenPackage, TokenTransaction } from '../types';
 
 export default function BillingPage() {
+  const { t } = useTranslation();
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const [paymentBanner, setPaymentBanner] = useState<{ status: string; message: string } | null>(null);
   const queryClient = useQueryClient();
@@ -26,13 +28,13 @@ export default function BillingPage() {
       try {
         const payment = await api.getPaymentStatus(paymentId);
         if (payment.status === 'paid') {
-          setPaymentBanner({ status: 'paid', message: 'Payment successful! Tokens have been added to your balance.' });
+          setPaymentBanner({ status: 'paid', message: t('billing.paymentSuccess') });
           queryClient.invalidateQueries({ queryKey: ['balance'] });
           queryClient.invalidateQueries({ queryKey: ['transactions'] });
           return;
         }
         if (payment.status === 'failed' || payment.status === 'expired') {
-          setPaymentBanner({ status: 'failed', message: `Payment ${payment.status}. No tokens were charged.` });
+          setPaymentBanner({ status: 'failed', message: t('billing.paymentFailed', { status: payment.status }) });
           return;
         }
         // Still pending — retry up to 10 times (30s total)
@@ -40,14 +42,14 @@ export default function BillingPage() {
         if (attempts < 10) {
           setTimeout(poll, 3000);
         } else {
-          setPaymentBanner({ status: 'pending', message: 'Payment is being processed. Your tokens will appear shortly.' });
+          setPaymentBanner({ status: 'pending', message: t('billing.paymentPending') });
         }
       } catch {
-        setPaymentBanner({ status: 'pending', message: 'Payment is being processed. Your tokens will appear shortly.' });
+        setPaymentBanner({ status: 'pending', message: t('billing.paymentPending') });
       }
     };
     poll();
-  }, [queryClient]);
+  }, [queryClient, t]);
 
   const { data: balance } = useQuery({
     queryKey: ['balance'],
@@ -73,7 +75,7 @@ export default function BillingPage() {
       const result = await api.purchaseTokens(pkg.id, redirectUrl);
       window.location.href = result.payment_url;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Purchase failed';
+      const msg = err instanceof Error ? err.message : t('billing.purchaseFailed');
       alert(msg);
       setPurchaseLoading(null);
     }
@@ -111,7 +113,7 @@ export default function BillingPage() {
 
       {/* Balance Card */}
       <div className="billing-balance-card">
-        <div className="billing-balance-label">Token Balance</div>
+        <div className="billing-balance-label">{t('billing.tokenBalance')}</div>
         <div className="billing-balance-value">
           <Coins size={28} />
           <span>{balance?.token_balance ?? '—'}</span>
@@ -119,7 +121,7 @@ export default function BillingPage() {
       </div>
 
       {/* Packages */}
-      <h2 className="billing-section-title">Top Up Tokens</h2>
+      <h2 className="billing-section-title">{t('billing.topUp')}</h2>
       <div className="billing-packages-grid">
         {packages?.map((pkg) => (
           <div key={pkg.id} className="billing-package-card">
@@ -127,30 +129,30 @@ export default function BillingPage() {
             <div className="billing-package-tokens">{pkg.tokens} tokens</div>
             <div className="billing-package-price">{formatPrice(pkg.price_cents, pkg.currency)}</div>
             <div className="billing-package-per-token">
-              {formatPrice(Math.round(pkg.price_cents / pkg.tokens), pkg.currency)}/token
+              {formatPrice(Math.round(pkg.price_cents / pkg.tokens), pkg.currency)}{t('billing.perToken')}
             </div>
             <button
               className="btn btn-primary billing-buy-btn"
               onClick={() => handlePurchase(pkg)}
               disabled={purchaseLoading === pkg.id}
             >
-              {purchaseLoading === pkg.id ? 'Redirecting...' : 'Buy Now'}
+              {purchaseLoading === pkg.id ? t('billing.redirecting') : t('billing.buyNow')}
             </button>
           </div>
         ))}
       </div>
 
       {/* Transaction History */}
-      <h2 className="billing-section-title">Transaction History</h2>
+      <h2 className="billing-section-title">{t('billing.transactionHistory')}</h2>
       {transactions && transactions.length > 0 ? (
         <div className="billing-transactions">
           <table className="billing-tx-table">
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Description</th>
-                <th>Date</th>
+                <th>{t('billing.type')}</th>
+                <th>{t('billing.amount')}</th>
+                <th>{t('billing.description')}</th>
+                <th>{t('billing.date')}</th>
               </tr>
             </thead>
             <tbody>
@@ -173,7 +175,7 @@ export default function BillingPage() {
       ) : (
         <div className="empty-state">
           <Coins size={48} />
-          <p>No transactions yet</p>
+          <p>{t('billing.noTransactions')}</p>
         </div>
       )}
     </div>

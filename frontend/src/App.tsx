@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Upload, Activity, Image as ImageIcon, Palette, BookImage, CreditCard, LogOut, Coins, Store, Settings } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import ResultsGallery from './components/ResultsGallery';
@@ -10,6 +11,7 @@ import BillingPage from './components/BillingPage';
 import IntegrationsPage from './components/IntegrationsPage';
 import AdminPage from './components/AdminPage';
 import LandingPage from './components/LandingPage';
+import LanguageSelector from './components/LanguageSelector';
 import { api } from './api';
 import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, login, logout } from './auth';
 import './App.css';
@@ -26,6 +28,7 @@ const queryClient = new QueryClient({
 type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library' | 'integrations' | 'billing' | 'admin';
 
 function AppContent({ isAdmin }: { isAdmin: boolean }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
     return localStorage.getItem('currentJobId');
@@ -39,14 +42,14 @@ function AppContent({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const allTabs = [
-    { id: 'upload' as Tab, label: 'Upload', icon: Upload },
-    { id: 'monitor' as Tab, label: 'Monitor', icon: Activity },
-    { id: 'results' as Tab, label: 'Results', icon: ImageIcon },
-    { id: 'brands' as Tab, label: 'Brands', icon: Palette },
-    { id: 'library' as Tab, label: 'Library', icon: BookImage },
-    { id: 'integrations' as Tab, label: 'Integrations', icon: Store },
-    { id: 'billing' as Tab, label: 'Billing', icon: CreditCard },
-    { id: 'admin' as Tab, label: 'Admin', icon: Settings, adminOnly: true },
+    { id: 'upload' as Tab, label: t('app.tabs.upload'), icon: Upload },
+    { id: 'monitor' as Tab, label: t('app.tabs.monitor'), icon: Activity },
+    { id: 'results' as Tab, label: t('app.tabs.results'), icon: ImageIcon },
+    { id: 'brands' as Tab, label: t('app.tabs.brands'), icon: Palette },
+    { id: 'library' as Tab, label: t('app.tabs.library'), icon: BookImage },
+    { id: 'integrations' as Tab, label: t('app.tabs.integrations'), icon: Store },
+    { id: 'billing' as Tab, label: t('app.tabs.billing'), icon: CreditCard },
+    { id: 'admin' as Tab, label: t('app.tabs.admin'), icon: Settings, adminOnly: true },
   ];
 
   const tabs = allTabs.filter(t => !('adminOnly' in t) || isAdmin);
@@ -89,12 +92,12 @@ function AppContent({ isAdmin }: { isAdmin: boolean }) {
             <h1 className="logo">
               <span className="logo-icon">&#9670;</span>
               OPAL
-              <span className="logo-subtitle">AI Image Processing</span>
+              <span className="logo-subtitle">{t('app.subtitle')}</span>
             </h1>
             <div className="header-info">
               <span className="api-status">
                 <span className={`status-dot ${isHealthy ? '' : 'status-dot-error'}`}></span>
-                {isHealthy ? 'Connected' : 'Disconnected'}
+                {isHealthy ? t('common.connected') : t('common.disconnected')}
               </span>
             </div>
           </div>
@@ -139,7 +142,7 @@ function AppContent({ isAdmin }: { isAdmin: boolean }) {
 
       <footer className="footer">
         <div className="container">
-          <p>OPAL Platform v0.5 | AI-Powered Image Processing</p>
+          <p>{t('app.footer')}</p>
         </div>
       </footer>
     </div>
@@ -147,6 +150,7 @@ function AppContent({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
+  const { t } = useTranslation();
   const { data: balance } = useQuery({
     queryKey: ['balance'],
     queryFn: () => api.getBalance(),
@@ -164,12 +168,13 @@ function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout
             {balance && (
               <span className="auth-token-balance">
                 <Coins size={14} />
-                {balance.token_balance} tokens
+                {balance.token_balance} {t('common.tokens')}
               </span>
             )}
+            <LanguageSelector />
             <button className="auth-logout-btn" onClick={onLogout}>
               <LogOut size={14} />
-              Sign out
+              {t('common.signOut')}
             </button>
           </div>
         </div>

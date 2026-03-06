@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Trash2, Loader, Sparkles, AlertCircle, RefreshCw, Image as ImageIcon,
@@ -7,6 +8,7 @@ import { api } from '../api';
 import type { SceneTemplate } from '../types';
 
 export default function SceneLibrary() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [filterBrand, setFilterBrand] = useState('');
@@ -60,7 +62,7 @@ export default function SceneLibrary() {
       setPreviewUrl(result.preview_url);
       setPreviewBlobPath(result.preview_blob_path);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Preview generation failed');
+      setError(e instanceof Error ? e.message : t('library.previewFailed'));
     } finally {
       setGenerating(false);
     }
@@ -82,7 +84,7 @@ export default function SceneLibrary() {
       queryClient.invalidateQueries({ queryKey: ['scene-templates'] });
       setShowForm(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      setError(e instanceof Error ? e.message : t('library.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -105,7 +107,7 @@ export default function SceneLibrary() {
     return (
       <div className="loading-box">
         <Loader className="spinning" size={24} />
-        <span>Loading scene library...</span>
+        <span>{t('library.loading')}</span>
       </div>
     );
   }
@@ -115,11 +117,11 @@ export default function SceneLibrary() {
       <div className="section-header">
         <div className="section-header-row">
           <div>
-            <h2>Scene Library</h2>
-            <p>Saved scene templates with AI-generated previews</p>
+            <h2>{t('library.title')}</h2>
+            <p>{t('library.subtitle')}</p>
           </div>
           <button className="button-primary button-sm" onClick={openForm}>
-            <Plus size={16} /> New Scene
+            <Plus size={16} /> {t('library.newScene')}
           </button>
         </div>
       </div>
@@ -130,7 +132,7 @@ export default function SceneLibrary() {
           value={filterBrand}
           onChange={e => setFilterBrand(e.target.value)}
         >
-          <option value="">All brands</option>
+          <option value="">{t('library.allBrands')}</option>
           {profiles.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -140,7 +142,7 @@ export default function SceneLibrary() {
       {showForm && (
         <div className="scene-form-card">
           <div className="scene-form-header">
-            <h3>New Scene Template</h3>
+            <h3>{t('library.newSceneTemplate')}</h3>
             <button className="button-icon" onClick={() => setShowForm(false)}><X size={16} /></button>
           </div>
 
@@ -154,30 +156,30 @@ export default function SceneLibrary() {
             </div>
           )}
 
-          <label className="form-label">Name</label>
+          <label className="form-label">{t('library.name')}</label>
           <input
             className="input"
-            placeholder="e.g. Cozy Living Room"
+            placeholder={t('library.namePlaceholder')}
             value={name}
             onChange={e => setName(e.target.value)}
           />
 
-          <label className="form-label" style={{ marginTop: '1rem' }}>Prompt</label>
+          <label className="form-label" style={{ marginTop: '1rem' }}>{t('library.prompt')}</label>
           <textarea
             className="input scene-prompt-textarea"
-            placeholder="Describe the scene..."
+            placeholder={t('library.promptPlaceholder')}
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             rows={3}
           />
 
-          <label className="form-label" style={{ marginTop: '1rem' }}>Brand Profile (optional)</label>
+          <label className="form-label" style={{ marginTop: '1rem' }}>{t('library.brandProfile')}</label>
           <select
             className="input"
             value={brandId}
             onChange={e => setBrandId(e.target.value)}
           >
-            <option value="">None</option>
+            <option value="">{t('library.none')}</option>
             {profiles.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -189,7 +191,7 @@ export default function SceneLibrary() {
             ) : (
               <div className="scene-form-preview-placeholder">
                 <ImageIcon size={32} />
-                <span>Generate a preview</span>
+                <span>{t('library.generatePreview')}</span>
               </div>
             )}
           </div>
@@ -201,8 +203,8 @@ export default function SceneLibrary() {
               disabled={generating || !prompt.trim()}
             >
               {generating
-                ? <><Loader className="spinning" size={14} /> Generating...</>
-                : <><Sparkles size={14} /> Generate Preview</>
+                ? <><Loader className="spinning" size={14} /> {t('library.generating')}</>
+                : <><Sparkles size={14} /> {t('library.generatePreviewBtn')}</>
               }
             </button>
             <button
@@ -210,7 +212,7 @@ export default function SceneLibrary() {
               onClick={saveTemplate}
               disabled={saving || !name.trim() || !prompt.trim()}
             >
-              {saving ? <><Loader className="spinning" size={14} /> Saving...</> : 'Save to Library'}
+              {saving ? <><Loader className="spinning" size={14} /> {t('library.saving')}</> : t('library.saveToLibrary')}
             </button>
           </div>
         </div>
@@ -219,8 +221,8 @@ export default function SceneLibrary() {
       {templates.length === 0 && !showForm && (
         <div className="empty-state">
           <ImageIcon size={48} />
-          <h3>No scene templates yet</h3>
-          <p>Create scene templates to reuse in your product jobs</p>
+          <h3>{t('library.noTemplates')}</h3>
+          <p>{t('library.noTemplatesHint')}</p>
         </div>
       )}
 
@@ -253,7 +255,7 @@ export default function SceneLibrary() {
                 className="button-icon"
                 onClick={() => regeneratePreview(tmpl)}
                 disabled={regeneratingId === tmpl.id}
-                title="Regenerate preview"
+                title={t('library.regeneratePreview')}
               >
                 {regeneratingId === tmpl.id
                   ? <Loader className="spinning" size={14} />
@@ -263,7 +265,7 @@ export default function SceneLibrary() {
               <button
                 className="button-icon"
                 onClick={() => deleteMutation.mutate(tmpl.id)}
-                title="Delete"
+                title={t('common.delete')}
               >
                 <Trash2 size={14} />
               </button>

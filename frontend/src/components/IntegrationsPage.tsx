@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Store, Link, Unlink, Image as ImageIcon, ArrowUpRight, Check, X, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { api } from '../api';
@@ -14,6 +15,7 @@ interface ProcessedItem {
 }
 
 export default function IntegrationsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>('list');
   const [shopDomain, setShopDomain] = useState('');
@@ -74,20 +76,20 @@ export default function IntegrationsPage() {
       const result = await api.connectShopify(shop);
       window.location.href = result.auth_url;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Connection failed');
+      setError(err instanceof Error ? err.message : t('integrations.connectionFailed'));
       setConnecting(false);
     }
   };
 
   const handleDisconnect = async (integrationId: string) => {
-    if (!confirm('Disconnect this store? You can reconnect later.')) return;
+    if (!confirm(t('integrations.disconnectConfirm'))) return;
     try {
       await api.disconnectIntegration(integrationId);
       queryClient.invalidateQueries({ queryKey: ['integrations'] });
       setActiveIntegration(null);
       setView('list');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Disconnect failed');
+      setError(err instanceof Error ? err.message : t('integrations.disconnectFailed'));
     }
   };
 
@@ -136,7 +138,7 @@ export default function IntegrationsPage() {
       setView('processing');
       queryClient.invalidateQueries({ queryKey: ['balance'] });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Processing failed');
+      setError(err instanceof Error ? err.message : t('integrations.processingFailed'));
     }
   };
 
@@ -155,7 +157,7 @@ export default function IntegrationsPage() {
       setPushBackResults(result.results);
       queryClient.invalidateQueries({ queryKey: ['balance'] });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Push-back failed');
+      setError(err instanceof Error ? err.message : t('integrations.pushBackFailed'));
     } finally {
       setPushingBack(false);
     }
@@ -193,16 +195,16 @@ export default function IntegrationsPage() {
         <div className="integration-error">
           <X size={14} />
           <span>{error}</span>
-          <button onClick={() => setError(null)}>Dismiss</button>
+          <button onClick={() => setError(null)}>{t('common.dismiss')}</button>
         </div>
       )}
 
       {view === 'list' && (
         <>
-          <h2 className="section-title">Connected Stores</h2>
+          <h2 className="section-title">{t('integrations.connectedStores')}</h2>
 
           {isLoading ? (
-            <div className="empty-state"><Loader2 size={24} className="spin" /> Loading...</div>
+            <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>
           ) : integrations && integrations.length > 0 ? (
             <div className="integrations-grid">
               {integrations.map(integ => (
@@ -222,7 +224,7 @@ export default function IntegrationsPage() {
                   <div className="integration-card-meta">
                     <span className="integration-provider">{integ.provider}</span>
                     <span className="integration-date">
-                      Connected {new Date(integ.created_at).toLocaleDateString()}
+                      {t('common.connected')} {new Date(integ.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="integration-card-actions">
@@ -232,14 +234,14 @@ export default function IntegrationsPage() {
                       disabled={integ.status !== 'active'}
                     >
                       <ImageIcon size={14} />
-                      Browse Products
+                      {t('integrations.browseProducts')}
                     </button>
                     <button
                       className="btn btn-danger"
                       onClick={() => handleDisconnect(integ.id)}
                     >
                       <Unlink size={14} />
-                      Disconnect
+                      {t('integrations.disconnect')}
                     </button>
                   </div>
                 </div>
@@ -248,16 +250,16 @@ export default function IntegrationsPage() {
           ) : (
             <div className="empty-state">
               <Store size={48} />
-              <p>No stores connected yet</p>
+              <p>{t('integrations.noStores')}</p>
             </div>
           )}
 
-          <h2 className="section-title" style={{ marginTop: '2rem' }}>Connect a Store</h2>
+          <h2 className="section-title" style={{ marginTop: '2rem' }}>{t('integrations.connectStore')}</h2>
           <div className="connect-form">
             <div className="connect-input-group">
               <input
                 type="text"
-                placeholder="your-store.myshopify.com"
+                placeholder={t('integrations.shopifyPlaceholder')}
                 value={shopDomain}
                 onChange={e => setShopDomain(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleConnect()}
@@ -269,16 +271,16 @@ export default function IntegrationsPage() {
                 disabled={connecting || !shopDomain}
               >
                 {connecting ? (
-                  <><Loader2 size={14} className="spin" /> Connecting...</>
+                  <><Loader2 size={14} className="spin" /> {t('integrations.connecting')}</>
                 ) : (
-                  <><Link size={14} /> Connect Shopify</>
+                  <><Link size={14} /> {t('integrations.connectShopify')}</>
                 )}
               </button>
             </div>
             {costs && (
               <p className="connect-cost-info">
-                Cost: {costs.process_image} token(s) per image processed
-                {costs.push_back > 0 ? `, ${costs.push_back} token(s) per push-back` : ', push-back free'}
+                {t('integrations.costInfo', { process: costs.process_image })}
+                {costs.push_back > 0 ? t('integrations.costPushBack', { push: costs.push_back }) : t('integrations.costPushBackFree')}
               </p>
             )}
           </div>
@@ -289,7 +291,7 @@ export default function IntegrationsPage() {
         <>
           <div className="view-header">
             <button className="btn btn-secondary" onClick={goBack}>
-              <ChevronLeft size={14} /> Back
+              <ChevronLeft size={14} /> {t('common.back')}
             </button>
             <h2 className="section-title">
               {activeIntegration.provider_metadata?.shop_name || activeIntegration.store_url}
@@ -302,7 +304,7 @@ export default function IntegrationsPage() {
                 <h3>{selectedProduct.title}</h3>
                 <div className="product-detail-actions">
                   <button className="btn btn-secondary" onClick={selectAllImages}>
-                    {selectedImageIds.size === selectedProduct.images.length ? 'Deselect All' : 'Select All'}
+                    {selectedImageIds.size === selectedProduct.images.length ? t('integrations.deselectAll') : t('integrations.selectAll')}
                   </button>
                   <button
                     className="btn btn-primary"
@@ -310,10 +312,10 @@ export default function IntegrationsPage() {
                     disabled={selectedProduct.images.length === 0}
                   >
                     <ArrowUpRight size={14} />
-                    Process {selectedImageIds.size > 0 ? selectedImageIds.size : 'All'} Image(s)
+                    {selectedImageIds.size > 0 ? t('integrations.processImages', { count: selectedImageIds.size }) : t('integrations.processAll')}
                   </button>
                   <button className="btn btn-secondary" onClick={() => setSelectedProduct(null)}>
-                    <X size={14} /> Cancel
+                    <X size={14} /> {t('common.cancel')}
                   </button>
                 </div>
               </div>
@@ -338,7 +340,7 @@ export default function IntegrationsPage() {
           ) : (
             <>
               {loadingProducts ? (
-                <div className="empty-state"><Loader2 size={24} className="spin" /> Loading products...</div>
+                <div className="empty-state"><Loader2 size={24} className="spin" /> {t('integrations.loadingProducts')}</div>
               ) : (
                 <>
                   <div className="products-grid">
@@ -362,7 +364,7 @@ export default function IntegrationsPage() {
                         <div className="product-card-info">
                           <div className="product-card-title">{product.title}</div>
                           <div className="product-card-meta">
-                            {product.images.length} image(s) &middot; {product.status}
+                            {t('integrations.imageCount', { count: product.images.length })} &middot; {product.status}
                           </div>
                         </div>
                         <ChevronRight size={16} className="product-card-arrow" />
@@ -375,14 +377,14 @@ export default function IntegrationsPage() {
                       onClick={handlePrevPage}
                       disabled={pageInfoStack.length === 0}
                     >
-                      <ChevronLeft size={14} /> Previous
+                      <ChevronLeft size={14} /> {t('common.previous')}
                     </button>
                     <button
                       className="btn btn-secondary"
                       onClick={handleNextPage}
                       disabled={!productsData?.next_page_info}
                     >
-                      Next <ChevronRight size={14} />
+                      {t('common.next')} <ChevronRight size={14} />
                     </button>
                   </div>
                 </>
@@ -395,16 +397,16 @@ export default function IntegrationsPage() {
       {view === 'processing' && (
         <div className="processing-view">
           <div className="view-header">
-            <h2 className="section-title">Processing Images</h2>
+            <h2 className="section-title">{t('integrations.processingImages')}</h2>
           </div>
           <div className="processing-status">
             <Loader2 size={48} className="spin" />
-            <p>Processing {processedItems.length} image(s)...</p>
+            <p>{t('integrations.processingCount', { count: processedItems.length })}</p>
             {jobData && (
               <div className="processing-progress">
                 <span className={`status-badge status-${jobData.status}`}>{jobData.status}</span>
                 <span>
-                  {jobData.items.filter((i: { status: string }) => i.status === 'completed').length} / {jobData.items.length} complete
+                  {jobData.items.filter((i: { status: string }) => i.status === 'completed').length} / {jobData.items.length} {t('integrations.complete')}
                 </span>
               </div>
             )}
@@ -416,9 +418,9 @@ export default function IntegrationsPage() {
         <div className="results-view">
           <div className="view-header">
             <button className="btn btn-secondary" onClick={goBack}>
-              <ChevronLeft size={14} /> Back to Products
+              <ChevronLeft size={14} /> {t('integrations.backToProducts')}
             </button>
-            <h2 className="section-title">Results</h2>
+            <h2 className="section-title">{t('results.title')}</h2>
           </div>
 
           <div className="results-images-grid">
@@ -432,7 +434,7 @@ export default function IntegrationsPage() {
 
           {pushBackResults.length === 0 ? (
             <div className="push-back-section">
-              <h3>Push Back to Shopify</h3>
+              <h3>{t('integrations.pushBackTitle')}</h3>
               <div className="push-back-options">
                 <label className="push-back-option">
                   <input
@@ -442,7 +444,7 @@ export default function IntegrationsPage() {
                     checked={pushBackMode === 'add'}
                     onChange={() => setPushBackMode('add')}
                   />
-                  <span>Add as new images</span>
+                  <span>{t('integrations.addAsNew')}</span>
                 </label>
                 <label className="push-back-option">
                   <input
@@ -452,7 +454,7 @@ export default function IntegrationsPage() {
                     checked={pushBackMode === 'replace'}
                     onChange={() => setPushBackMode('replace')}
                   />
-                  <span>Replace original images</span>
+                  <span>{t('integrations.replaceOriginal')}</span>
                 </label>
               </div>
               <button
@@ -461,15 +463,15 @@ export default function IntegrationsPage() {
                 disabled={pushingBack || jobData.status === 'failed'}
               >
                 {pushingBack ? (
-                  <><Loader2 size={14} className="spin" /> Pushing...</>
+                  <><Loader2 size={14} className="spin" /> {t('integrations.pushing')}</>
                 ) : (
-                  <><ArrowUpRight size={14} /> Push {jobData.items.filter((i: { status: string }) => i.status === 'completed').length} Image(s) to Shopify</>
+                  <><ArrowUpRight size={14} /> {t('integrations.pushImages', { count: jobData.items.filter((i: { status: string }) => i.status === 'completed').length })}</>
                 )}
               </button>
             </div>
           ) : (
             <div className="push-back-results">
-              <h3>Push-Back Results</h3>
+              <h3>{t('integrations.pushBackResults')}</h3>
               {pushBackResults.map((r, i) => (
                 <div key={i} className={`push-back-result push-back-${r.status}`}>
                   {r.status === 'success' ? <Check size={14} /> : <X size={14} />}
@@ -478,7 +480,7 @@ export default function IntegrationsPage() {
                 </div>
               ))}
               <button className="btn btn-secondary" onClick={goBack} style={{ marginTop: '1rem' }}>
-                Done
+                {t('common.done')}
               </button>
             </div>
           )}
