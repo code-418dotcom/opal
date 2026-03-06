@@ -22,17 +22,18 @@ def create_mollie_payment(
     currency: str,
     description: str,
     redirect_url: str,
-    webhook_url: str,
+    webhook_url: Optional[str] = None,
     metadata: Optional[dict] = None,
 ) -> dict:
     """Create a Mollie payment. Returns {"id": "tr_...", "checkout_url": "https://..."}."""
     amount_str = f"{amount_cents / 100:.2f}"
-    body = {
+    body: dict = {
         "amount": {"currency": currency, "value": amount_str},
         "description": description,
         "redirectUrl": redirect_url,
-        "webhookUrl": webhook_url,
     }
+    if webhook_url:
+        body["webhookUrl"] = webhook_url
     if metadata:
         body["metadata"] = metadata
 

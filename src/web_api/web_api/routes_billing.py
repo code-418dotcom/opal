@@ -57,20 +57,25 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
     if not get_setting('MOLLIE_API_KEY'):
         raise HTTPException(status_code=503, detail="Payment provider not configured")
 
-    webhook_url = f"{get_setting('PUBLIC_BASE_URL')}/v1/billing/mollie/webhook"
+    public_base = get_setting('PUBLIC_BASE_URL')
+    webhook_url = f"{public_base}/v1/billing/mollie/webhook" if public_base else None
 
     # Append payment_id to redirect URL so frontend can poll status on return
     separator = "&" if "?" in body.redirect_url else "?"
     redirect_with_id = f"{body.redirect_url}{separator}payment_id={payment_id}"
 
-    mollie = create_mollie_payment(
-        amount_cents=pkg["price_cents"],
-        currency=pkg["currency"],
-        description=f"Opal {pkg['name']} — {pkg['tokens']} tokens",
-        redirect_url=redirect_with_id,
-        webhook_url=webhook_url,
-        metadata={"payment_id": payment_id, "user_id": user["user_id"]},
-    )
+    try:
+        mollie = create_mollie_payment(
+            amount_cents=pkg["price_cents"],
+            currency=pkg["currency"],
+            description=f"Opal {pkg['name']} — {pkg['tokens']} tokens",
+            redirect_url=redirect_with_id,
+            webhook_url=webhook_url,
+            metadata={"payment_id": payment_id, "user_id": user["user_id"]},
+        )
+    except Exception as e:
+        LOG.error("Mollie payment creation failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Payment provider error: {e}")
 
     # Store payment record
     create_payment({
