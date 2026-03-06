@@ -1,11 +1,53 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { api } from '../api';
 import type { TokenPackage, TokenTransaction } from '../types';
 
 export default function BillingPage() {
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
+  const [paymentBanner, setPaymentBanner] = useState<{ status: string; message: string } | null>(null);
+  const queryClient = useQueryClient();
+
+  // Check for payment return (payment_id in URL)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentId = params.get('payment_id');
+    if (!paymentId) return;
+
+    // Clean URL immediately
+    const url = new URL(window.location.href);
+    url.searchParams.delete('payment_id');
+    window.history.replaceState({}, '', url.pathname + url.search);
+
+    // Poll payment status (Mollie webhook may not have arrived yet)
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        const payment = await api.getPaymentStatus(paymentId);
+        if (payment.status === 'paid') {
+          setPaymentBanner({ status: 'paid', message: 'Payment successful! Tokens have been added to your balance.' });
+          queryClient.invalidateQueries({ queryKey: ['balance'] });
+          queryClient.invalidateQueries({ queryKey: ['transactions'] });
+          return;
+        }
+        if (payment.status === 'failed' || payment.status === 'expired') {
+          setPaymentBanner({ status: 'failed', message: `Payment ${payment.status}. No tokens were charged.` });
+          return;
+        }
+        // Still pending — retry up to 10 times (30s total)
+        attempts++;
+        if (attempts < 10) {
+          setTimeout(poll, 3000);
+        } else {
+          setPaymentBanner({ status: 'pending', message: 'Payment is being processed. Your tokens will appear shortly.' });
+        }
+      } catch {
+        setPaymentBanner({ status: 'pending', message: 'Payment is being processed. Your tokens will appear shortly.' });
+      }
+    };
+    poll();
+  }, [queryClient]);
 
   const { data: balance } = useQuery({
     queryKey: ['balance'],
@@ -26,7 +68,9 @@ export default function BillingPage() {
   const handlePurchase = async (pkg: TokenPackage) => {
     setPurchaseLoading(pkg.id);
     try {
-      const result = await api.purchaseTokens(pkg.id, window.location.href);
+      // Backend appends payment_id to redirect_url automatically
+      const redirectUrl = window.location.origin + window.location.pathname;
+      const result = await api.purchaseTokens(pkg.id, redirectUrl);
       window.location.href = result.payment_url;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Purchase failed';
@@ -54,6 +98,17 @@ export default function BillingPage() {
 
   return (
     <div className="billing-page">
+      {/* Payment Status Banner */}
+      {paymentBanner && (
+        <div className={`billing-payment-banner billing-banner-${paymentBanner.status}`}>
+          {paymentBanner.status === 'paid' && <CheckCircle size={20} />}
+          {paymentBanner.status === 'failed' && <XCircle size={20} />}
+          {paymentBanner.status === 'pending' && <Clock size={20} />}
+          <span>{paymentBanner.message}</span>
+          <button className="billing-banner-dismiss" onClick={() => setPaymentBanner(null)}>&times;</button>
+        </div>
+      )}
+
       {/* Balance Card */}
       <div className="billing-balance-card">
         <div className="billing-balance-label">Token Balance</div>

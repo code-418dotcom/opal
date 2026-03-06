@@ -370,6 +370,10 @@ class ApiClient {
     });
   }
 
+  async getPaymentStatus(paymentId: string): Promise<{ id: string; status: string; amount_cents: number; currency: string }> {
+    return this.request(`/v1/billing/payments/${paymentId}`);
+  }
+
   async listTransactions(limit = 50, offset = 0): Promise<TokenTransaction[]> {
     const resp = await this.request<{ transactions: TokenTransaction[] }>(
       `/v1/billing/transactions?limit=${limit}&offset=${offset}`

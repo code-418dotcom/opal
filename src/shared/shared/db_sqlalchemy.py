@@ -671,6 +671,24 @@ def update_payment_status(payment_id: str, status: str, mollie_payment_id: Optio
         }
 
 
+def get_payment_by_id(payment_id: str) -> Optional[Dict[str, Any]]:
+    """Look up a payment by its internal ID."""
+    with SessionLocal() as session:
+        payment = session.query(Payment).filter(Payment.id == payment_id).first()
+        if not payment:
+            return None
+        return {
+            "id": payment.id,
+            "user_id": payment.user_id,
+            "package_id": payment.package_id,
+            "mollie_payment_id": payment.mollie_payment_id,
+            "amount_cents": payment.amount_cents,
+            "currency": payment.currency,
+            "status": payment.status.value,
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+        }
+
+
 def get_payment_by_mollie_id(mollie_id: str) -> Optional[Dict[str, Any]]:
     """Look up a payment by Mollie payment ID."""
     with SessionLocal() as session:
