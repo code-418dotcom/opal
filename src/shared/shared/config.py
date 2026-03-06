@@ -1,9 +1,17 @@
 from pathlib import Path
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    @model_validator(mode="after")
+    def strip_string_values(self):
+        """Strip leading/trailing whitespace from all string settings."""
+        for name, field_info in self.model_fields.items():
+            val = getattr(self, name)
+            if isinstance(val, str) and val != val.strip():
+                object.__setattr__(self, name, val.strip())
+        return self
     # Azure AI Vision
     AZURE_VISION_ENDPOINT: str = Field(default='', env='AZURE_VISION_ENDPOINT')
     AZURE_VISION_KEY: str = Field(default='', env='AZURE_VISION_KEY')
