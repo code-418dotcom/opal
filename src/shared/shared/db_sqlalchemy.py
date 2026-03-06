@@ -3,6 +3,7 @@ Direct PostgreSQL database functions using SQLAlchemy.
 For Azure deployment - replaces db_supabase.py functionality.
 """
 from typing import Optional, List, Dict, Any
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from .db import SessionLocal
 from .models import (
@@ -307,7 +308,6 @@ def link_entra_subject(user_id: str, entra_subject_id: str) -> Optional[Dict[str
 
 def user_count() -> int:
     """Return total number of users."""
-    from sqlalchemy import func
     with SessionLocal() as session:
         return session.query(func.count(User.id)).scalar() or 0
 
@@ -357,7 +357,6 @@ def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def update_user_token_balance(user_id: str, delta: int) -> Optional[int]:
     """Atomically adjust token_balance. Returns new balance or None if insufficient."""
-    from sqlalchemy import text
     with SessionLocal() as session:
         result = session.execute(
             text(
