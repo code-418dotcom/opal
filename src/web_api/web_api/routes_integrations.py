@@ -1,6 +1,7 @@
 """Generic integration routes + Shopify-specific OAuth and product endpoints."""
 import logging
 import secrets
+import time
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/v1/integrations", tags=["integrations"])
 # In-memory OAuth state store (short-lived, per-instance)
 # In production, use Redis or DB for multi-instance deployments
 _oauth_states: dict[str, dict] = {}
+_OAUTH_STATE_TTL = 600  # 10 minutes
 
 
 # ── Generic Integration Endpoints ────────────────────────────────────
@@ -78,11 +80,18 @@ async def shopify_connect(
     if not get_setting('SHOPIFY_API_KEY') or not get_setting('SHOPIFY_API_SECRET'):
         raise HTTPException(status_code=503, detail="Shopify integration not configured")
 
+    # Clean up expired states to prevent memory leaks
+    now = time.time()
+    expired = [k for k, v in _oauth_states.items() if now - v.get("created_at", 0) > _OAUTH_STATE_TTL]
+    for k in expired:
+        del _oauth_states[k]
+
     state = secrets.token_urlsafe(32)
     _oauth_states[state] = {
         "user_id": user["user_id"],
         "tenant_id": user["tenant_id"],
         "shop": body.shop,
+        "created_at": now,
     }
 
     redirect_uri = f"{get_setting('PUBLIC_BASE_URL')}/v1/integrations/shopify/callback"
@@ -100,20 +109,20 @@ async def shopify_callback(
     host: str = Query(""),
 ):
     """Handle Shopify OAuth callback. Exchanges code for token and stores integration."""
-    # Validate state
-    oauth_data = _oauth_states.pop(state, None)
-    if not oauth_data:
-        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
-
-    if shop != oauth_data["shop"]:
-        raise HTTPException(status_code=400, detail="Shop mismatch")
-
-    # Verify HMAC
+    # Verify HMAC FIRST before any state or business logic
     query_params = {"code": code, "shop": shop, "state": state, "timestamp": timestamp}
     if host:
         query_params["host"] = host
     if not verify_hmac({**query_params, "hmac": hmac}):
         raise HTTPException(status_code=400, detail="Invalid HMAC signature")
+
+    # Validate state (with TTL check)
+    oauth_data = _oauth_states.pop(state, None)
+    if not oauth_data or time.time() - oauth_data.get("created_at", 0) > _OAUTH_STATE_TTL:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+
+    if shop != oauth_data["shop"]:
+        raise HTTPException(status_code=400, detail="Shop mismatch")
 
     # Exchange code for permanent token
     token_data = await exchange_token(shop, code)
@@ -226,7 +235,7 @@ async def process_images(
     cost_per_image = get_integration_cost("shopify", "process_image")
     total_cost = cost_per_image * len(images)
 
-    if user["token_balance"] != 999999 and total_cost > 0:
+    if user["user_id"] != "apikey" and total_cost > 0:
         new_balance = debit_tokens(
             user_id=user["user_id"],
             amount=total_cost,
@@ -332,7 +341,7 @@ async def push_back_images(
     cost_per_image = get_integration_cost("shopify", "push_back")
     total_cost = cost_per_image * len(body.items)
 
-    if user["token_balance"] != 999999 and total_cost > 0:
+    if user["user_id"] != "apikey" and total_cost > 0:
         new_balance = debit_tokens(
             user_id=user["user_id"],
             amount=total_cost,
@@ -351,9 +360,12 @@ async def push_back_images(
         image_id = item_spec.get("shopify_image_id")
         mode = item_spec.get("mode", "add")
 
-        # Get processed image from our storage
+        # Get processed image from our storage (with tenant isolation)
         job_item = get_job_item(item_id)
-        if not job_item or not job_item.get("output_blob_path"):
+        if not job_item or job_item.get("tenant_id") != user["tenant_id"]:
+            results.append({"item_id": item_id, "status": "error", "error": "Item not found"})
+            continue
+        if not job_item.get("output_blob_path"):
             results.append({"item_id": item_id, "status": "error", "error": "No output image"})
             continue
 
@@ -374,7 +386,7 @@ async def push_back_images(
             })
         except Exception as e:
             LOG.error("Push-back failed for item %s: %s", item_id, e)
-            results.append({"item_id": item_id, "status": "error", "error": str(e)})
+            results.append({"item_id": item_id, "status": "error", "error": "Failed to push image"})
 
     return {"results": results}
 

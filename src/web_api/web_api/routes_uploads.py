@@ -18,7 +18,7 @@ LOG = logging.getLogger(__name__)
 class SasRequest(BaseModel):
     job_id: str = Field(..., min_length=1, pattern=r'^[a-zA-Z0-9_\-]+$')
     item_id: str = Field(..., min_length=1, pattern=r'^[a-zA-Z0-9_\-]+$')
-    filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
+    filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-]+\.(jpg|jpeg|png|webp|tiff|bmp)$')
     content_type: str = "application/octet-stream"
 
 
@@ -32,7 +32,7 @@ class ProcessingOptions(BaseModel):
 class UploadComplete(BaseModel):
     job_id: str = Field(..., min_length=1, pattern=r'^[a-zA-Z0-9_\-]+$')
     item_id: str = Field(..., min_length=1, pattern=r'^[a-zA-Z0-9_\-]+$')
-    filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
+    filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-]+\.(jpg|jpeg|png|webp|tiff|bmp)$')
     processing_options: ProcessingOptions = Field(default_factory=ProcessingOptions)
 
 

@@ -1,8 +1,12 @@
 import logging
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from pydantic import BaseModel
 
+from shared.config import settings as app_settings
 from shared.settings_service import get_setting
+from web_api.rate_limit import check_ip_rate_limit
 from shared.db_sqlalchemy import (
     list_token_packages,
     get_token_package,
@@ -27,8 +31,9 @@ public_router = APIRouter(prefix="/v1/billing", tags=["billing"])
 
 
 @public_router.get("/packages")
-def get_packages():
+def get_packages(request: Request):
     """List available token packages (public endpoint, no auth)."""
+    check_ip_rate_limit(request)
     return {"packages": list_token_packages(active_only=True)}
 
 
@@ -45,11 +50,23 @@ class PurchaseIn(BaseModel):
     redirect_url: str  # where to redirect after Mollie checkout
 
 
+def _validate_redirect_url(url: str) -> bool:
+    """Validate redirect URL against CORS allowed origins to prevent open redirects."""
+    parsed = urlparse(url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    allowed = [o.strip() for o in app_settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+    return any(origin == a for a in allowed)
+
+
 @router.post("/purchase")
 def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
     pkg = get_token_package(body.package_id)
     if not pkg or not pkg.get("active"):
         raise HTTPException(status_code=404, detail="Package not found")
+
+    # Validate redirect URL to prevent open redirect attacks
+    if not _validate_redirect_url(body.redirect_url):
+        raise HTTPException(status_code=400, detail="Invalid redirect URL")
 
     payment_id = new_id("pay")
 
@@ -75,7 +92,7 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
         )
     except Exception as e:
         LOG.error("Mollie payment creation failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"Payment provider error: {e}")
+        raise HTTPException(status_code=502, detail="Payment provider error")
 
     # Store payment record
     create_payment({
@@ -139,6 +156,7 @@ async def mollie_webhook(request: Request):
     We always fetch real status from Mollie API (never trust webhook body).
     Idempotent: only credits tokens once per payment.
     """
+    check_ip_rate_limit(request, limit=60)
     # Mollie sends form-encoded or JSON
     content_type = request.headers.get("content-type", "")
     mollie_id = None
@@ -154,7 +172,14 @@ async def mollie_webhook(request: Request):
     if not mollie_id:
         raise HTTPException(status_code=400, detail="Missing payment id")
 
-    # Fetch real status from Mollie
+    # Validate mollie_id format to prevent abuse (Mollie IDs are tr_ + alphanumeric)
+    if not mollie_id.startswith("tr_") or len(mollie_id) > 40:
+        LOG.warning("Webhook called with invalid Mollie ID format: %s", mollie_id[:50])
+        return {"ok": True}
+
+    # Security: we ALWAYS fetch real status from Mollie API (never trust webhook body).
+    # This is Mollie's recommended verification approach — the webhook only tells us
+    # which payment to check, not the actual status.
     try:
         mollie_payment = get_mollie_payment(mollie_id)
     except Exception as e:

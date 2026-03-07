@@ -38,7 +38,7 @@ class PreviewRequest(BaseModel):
 
 
 class SetPreviewIn(BaseModel):
-    preview_blob_path: str = Field(..., min_length=1)
+    preview_blob_path: str = Field(..., min_length=1, max_length=512, pattern=r'^[a-zA-Z0-9_\-/\.]+$')
 
 
 @router.post("/scene-templates", status_code=201)
@@ -121,7 +121,9 @@ def generate_preview(body: PreviewRequest, tenant_id: str = Depends(get_tenant_f
 
     provider = get_image_gen_provider(provider_name, api_key=api_key)
 
-    LOG.info("Generating scene preview for tenant=%s prompt=%.50s...", tenant_id, body.prompt)
+    # Sanitize prompt for logging (strip newlines to prevent log injection)
+    safe_prompt = body.prompt[:50].replace("\n", " ").replace("\r", "")
+    LOG.info("Generating scene preview for tenant=%s prompt=%s...", tenant_id, safe_prompt)
     image_bytes = provider.generate(body.prompt)
 
     # Store preview in blob storage
@@ -146,6 +148,9 @@ def generate_preview(body: PreviewRequest, tenant_id: str = Depends(get_tenant_f
 @router.post("/scene-templates/{template_id}/set-preview")
 def set_preview(template_id: str, body: SetPreviewIn, tenant_id: str = Depends(get_tenant_from_api_key)):
     """Attach a generated preview image to a scene template."""
+    # Prevent path traversal — blob path must belong to this tenant
+    if ".." in body.preview_blob_path or not body.preview_blob_path.startswith(f"{tenant_id}/"):
+        raise HTTPException(status_code=400, detail="Invalid blob path")
     result = update_scene_template(template_id, tenant_id, {"preview_blob_path": body.preview_blob_path})
     if not result:
         raise HTTPException(status_code=404, detail="Scene template not found")

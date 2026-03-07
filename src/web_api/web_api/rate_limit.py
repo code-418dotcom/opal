@@ -26,18 +26,24 @@ def _cleanup(key: str, now: float) -> None:
         _requests[key] = entries[i:]
 
 
-def check_rate_limit(user_id: str) -> None:
+def check_rate_limit(user_id: str, limit: int = RATE_LIMIT) -> None:
     """Raise 429 if user exceeds rate limit."""
     now = time.monotonic()
     key = user_id
 
     _cleanup(key, now)
 
-    if len(_requests[key]) >= RATE_LIMIT:
+    if len(_requests[key]) >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Rate limit exceeded. Max {RATE_LIMIT} requests per {WINDOW_SECONDS}s.",
+            detail=f"Rate limit exceeded. Max {limit} requests per {WINDOW_SECONDS}s.",
             headers={"Retry-After": str(WINDOW_SECONDS)},
         )
 
     _requests[key].append(now)
+
+
+def check_ip_rate_limit(request: Request, limit: int = 30) -> None:
+    """Rate limit by IP for unauthenticated/public endpoints."""
+    client_ip = request.client.host if request.client else "unknown"
+    check_rate_limit(f"ip:{client_ip}", limit=limit)

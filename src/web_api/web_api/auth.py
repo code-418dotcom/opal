@@ -1,4 +1,5 @@
 import logging
+import secrets
 from typing import Optional
 
 from fastapi import HTTPException, Security, Depends, status
@@ -104,7 +105,7 @@ async def _resolve_jwt_user(token: str) -> dict:
                         e, unverified.get("aud"), unverified.get("iss"), valid_audiences, settings.ENTRA_ISSUER)
         except Exception:
             LOG.warning("JWT validation failed: %s", e)
-        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     subject = payload["sub"]
     email = payload.get("email") or payload.get("preferred_username", "")
@@ -153,7 +154,8 @@ async def _resolve_jwt_user(token: str) -> dict:
 def _resolve_api_key_user(api_key: str) -> dict:
     """Validate static API key (backward-compatible)."""
     valid_keys = get_valid_api_keys()
-    if api_key not in valid_keys:
+    # Constant-time comparison to prevent timing attacks
+    if not any(secrets.compare_digest(api_key, key) for key in valid_keys):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     tenant = api_key.split('_')[0] if '_' in api_key else "default"

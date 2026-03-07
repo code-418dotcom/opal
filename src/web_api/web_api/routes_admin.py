@@ -23,14 +23,21 @@ router = APIRouter(prefix="/v1/admin", tags=["admin"])
 # ── Admin Auth Dependency ────────────────────────────────────────────
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    """Require admin access. API key users are always admin."""
-    if user.get("token_balance") == 999999:
-        return user  # API key users are admin
+    """Require admin access. API key users and dev-mode anonymous are always admin."""
+    # API key users are identified by user_id, not token_balance
+    if user.get("user_id") == "apikey":
+        return user
 
+    # Dev mode (no auth configured) — anonymous is admin
     if user.get("user_id") == "anonymous":
-        return user  # Dev mode is admin
+        return user
 
-    # Check is_admin flag from DB
+    # JWT users: verify is_admin flag. The flag in user dict comes from
+    # get_current_user() which reads it from DB during JIT provisioning.
+    # Double-check against DB to prevent stale token claims.
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     db_user = get_user_by_id(user["user_id"])
     if not db_user or not db_user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -55,6 +62,14 @@ async def get_settings(
 ):
     """List all settings (secrets are masked)."""
     settings = list_admin_settings(category=category)
+    # Mask secret values — only show first/last 2 chars for identification
+    for s in settings:
+        if s.get("is_secret") and s.get("value"):
+            val = s["value"]
+            if len(val) > 6:
+                s["value"] = f"{val[:2]}{'*' * (len(val) - 4)}{val[-2:]}"
+            else:
+                s["value"] = "******"
     return {"settings": settings}
 
 
@@ -309,7 +324,7 @@ async def system_info(admin: dict = Depends(require_admin)):
     from shared.settings_service import get_setting
     return {
         "env_name": env_settings.ENV_NAME,
-        "storage_backend": env_settings.STORAGE_BACKEND,
+        "storage_backend": "azure",
         "queue_backend": env_settings.QUEUE_BACKEND,
         "image_gen_provider": env_settings.IMAGE_GEN_PROVIDER,
         "upscale_provider": env_settings.UPSCALE_PROVIDER,

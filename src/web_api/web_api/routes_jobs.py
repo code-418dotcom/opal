@@ -1,4 +1,6 @@
 from typing import Optional
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 from shared.db_sqlalchemy import (
@@ -21,7 +23,7 @@ router = APIRouter(prefix="/v1", tags=["jobs"])
 
 class ItemIn(BaseModel):
     filename: str = Field(..., min_length=1, max_length=255, pattern=r'^[a-zA-Z0-9_\-\.]+$')
-    scene_prompt: str | None = None
+    scene_prompt: str | None = Field(default=None, max_length=2000)
     scene_count: int = Field(default=1, ge=1, le=10)
     scene_types: list[str] | None = None
     scene_template_ids: list[str] | None = None
@@ -39,7 +41,7 @@ class CreateJobIn(BaseModel):
     brand_profile_id: str = "default"
     items: list[ItemIn] = Field(..., min_length=1, max_length=100)
     processing_options: ProcessingOptions = Field(default_factory=ProcessingOptions)
-    callback_url: str | None = None
+    callback_url: str | None = Field(default=None, max_length=2048)
 
 
 @router.post("/jobs")
@@ -48,6 +50,14 @@ def create_job(
     tenant_id: str = Depends(get_tenant_from_api_key),
     user: dict = Depends(get_current_user),
 ):
+    # Validate callback_url to prevent SSRF
+    if body.callback_url:
+        parsed = urlparse(body.callback_url)
+        if parsed.scheme not in ("https", "http"):
+            raise HTTPException(status_code=400, detail="Callback URL must use HTTP(S)")
+        if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]"):
+            raise HTTPException(status_code=400, detail="Internal callback URLs not allowed")
+
     # Validate brand profile exists (skip for backward-compat "default")
     if body.brand_profile_id != "default":
         bp = get_brand_profile(body.brand_profile_id, tenant_id)
@@ -55,7 +65,7 @@ def create_job(
             raise HTTPException(status_code=404, detail="Brand profile not found")
 
     # Token deduction (skip for API key users who have unlimited balance)
-    if user["token_balance"] != 999999:
+    if user["user_id"] != "apikey":
         total_items = sum(
             len(it.scene_template_ids) if it.scene_template_ids else it.scene_count
             for it in body.items
