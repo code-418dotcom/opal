@@ -216,6 +216,29 @@ class ApiClient {
     await this.request(`/v1/brand-profiles/${id}`, { method: 'DELETE' });
   }
 
+  // ── Brand Reference Images ─────────────────────────────────────
+
+  async listReferenceImages(profileId: string): Promise<{ reference_images: Array<{ id: string; blob_path: string; download_url?: string; extracted_style?: { colors?: string[]; lighting?: string; mood?: string; keywords?: string[] }; created_at: string }> }> {
+    return this.request(`/v1/brand-profiles/${profileId}/reference-images`);
+  }
+
+  async uploadReferenceImage(profileId: string, filename: string): Promise<{ upload_url: string; reference_image: { id: string } }> {
+    return this.request(`/v1/brand-profiles/${profileId}/reference-images`, {
+      method: 'POST',
+      body: JSON.stringify({ filename }),
+    });
+  }
+
+  async analyzeReferenceImage(profileId: string, imageId: string): Promise<{ extracted_style: { colors?: string[]; lighting?: string; mood?: string; keywords?: string[] } }> {
+    return this.request(`/v1/brand-profiles/${profileId}/reference-images/${imageId}/analyze`, {
+      method: 'POST',
+    });
+  }
+
+  async deleteReferenceImage(profileId: string, imageId: string): Promise<void> {
+    await this.request(`/v1/brand-profiles/${profileId}/reference-images/${imageId}`, { method: 'DELETE' });
+  }
+
   // ── Scene Templates ─────────────────────────────────────────────
 
   async listSceneTemplates(brandProfileId?: string): Promise<SceneTemplate[]> {

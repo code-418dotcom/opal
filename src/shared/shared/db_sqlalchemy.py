@@ -6,7 +6,8 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from .db import SessionLocal
 from .models import (
-    Job, JobItem, JobStatus, ItemStatus, BrandProfile, SceneTemplate, User,
+    Job, JobItem, JobStatus, ItemStatus, BrandProfile, BrandReferenceImage,
+    SceneTemplate, User,
     TokenTransaction, TokenTxType, TokenPackage, Payment, PaymentStatus,
     Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
     AdminSetting,
@@ -464,6 +465,93 @@ def delete_brand_profile(profile_id: str, tenant_id: str) -> bool:
         session.delete(bp)
         session.commit()
         return True
+
+
+# ── Brand Reference Images ─────────────────────────────────────────
+
+def list_brand_reference_images(brand_profile_id: str, tenant_id: str) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        images = session.query(BrandReferenceImage).filter(
+            BrandReferenceImage.brand_profile_id == brand_profile_id,
+            BrandReferenceImage.tenant_id == tenant_id,
+        ).order_by(BrandReferenceImage.created_at).all()
+        return [
+            {
+                "id": img.id,
+                "brand_profile_id": img.brand_profile_id,
+                "blob_path": img.blob_path,
+                "extracted_style": img.extracted_style,
+                "created_at": img.created_at.isoformat() if img.created_at else None,
+            }
+            for img in images
+        ]
+
+
+def create_brand_reference_image(data: Dict[str, Any]) -> Dict[str, Any]:
+    with SessionLocal() as session:
+        img = BrandReferenceImage(
+            id=data["id"],
+            brand_profile_id=data["brand_profile_id"],
+            tenant_id=data["tenant_id"],
+            blob_path=data["blob_path"],
+            extracted_style=data.get("extracted_style"),
+        )
+        session.add(img)
+        session.commit()
+        session.refresh(img)
+        return {
+            "id": img.id,
+            "brand_profile_id": img.brand_profile_id,
+            "blob_path": img.blob_path,
+            "extracted_style": img.extracted_style,
+            "created_at": img.created_at.isoformat() if img.created_at else None,
+        }
+
+
+def delete_brand_reference_image(image_id: str, tenant_id: str) -> bool:
+    with SessionLocal() as session:
+        img = session.query(BrandReferenceImage).filter(
+            BrandReferenceImage.id == image_id,
+            BrandReferenceImage.tenant_id == tenant_id,
+        ).first()
+        if not img:
+            return False
+        session.delete(img)
+        session.commit()
+        return True
+
+
+def update_reference_image_style(image_id: str, extracted_style: dict) -> bool:
+    with SessionLocal() as session:
+        img = session.get(BrandReferenceImage, image_id)
+        if not img:
+            return False
+        img.extracted_style = extracted_style
+        session.commit()
+        return True
+
+
+def get_brand_style_context(brand_profile_id: str, tenant_id: str) -> Optional[str]:
+    """Build a style context string from all reference images for a brand profile.
+    Returns a comma-separated string of extracted style cues, or None."""
+    images = list_brand_reference_images(brand_profile_id, tenant_id)
+    if not images:
+        return None
+
+    style_parts = []
+    for img in images:
+        style = img.get("extracted_style")
+        if style:
+            if style.get("colors"):
+                style_parts.append(f"colors: {', '.join(style['colors'][:5])}")
+            if style.get("lighting"):
+                style_parts.append(f"lighting: {style['lighting']}")
+            if style.get("mood"):
+                style_parts.append(f"mood: {style['mood']}")
+            if style.get("keywords"):
+                style_parts.extend(style["keywords"][:5])
+
+    return ", ".join(style_parts) if style_parts else None
 
 
 # ── Scene Template CRUD ────────────────────────────────────────────

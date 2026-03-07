@@ -19,7 +19,7 @@ from shared.models import JobItem, ItemStatus
 from shared.storage import build_output_blob_path
 from shared.pipeline import ProcessingOptions, finalize_job_status, mark_item_failed
 from shared.scene_types import SCENE_PROMPTS
-from shared.db_sqlalchemy import get_brand_profile, get_job_by_id as get_job_record
+from shared.db_sqlalchemy import get_brand_profile, get_job_by_id as get_job_record, get_brand_style_context
 from shared.util import new_id
 
 from pipeline_worker.clients import (
@@ -115,6 +115,10 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
                 parts.append(", ".join(bp["style_keywords"]))
             if bp.get("mood"):
                 parts.append(bp["mood"])
+            # Add style context from reference images
+            style_ctx = get_brand_style_context(job_record["brand_profile_id"], tenant_id)
+            if style_ctx:
+                parts.append(style_ctx)
             parts.append("completely bare scene, nothing on the surface, shallow depth of field")
             prompt = ", ".join(parts)
             LOG.info("Brand prompt for job=%s", job_id)

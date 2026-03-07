@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Trash2, Edit3, ChevronRight, ChevronLeft,
   Loader, Check, AlertCircle, Sparkles, Eye, EyeOff,
+  ImagePlus, Palette, Zap,
 } from 'lucide-react';
 import { api } from '../api';
 import type { BrandProfile } from '../types';
@@ -322,6 +323,8 @@ export default function BrandProfiles() {
                 </div>
               )}
 
+              <ReferenceImages profileId={profile.id} />
+
               <div className="brand-card-meta">
                 {profile.default_scene_count && profile.default_scene_count > 1
                   ? t('brands.scenes', { count: profile.default_scene_count })
@@ -577,6 +580,109 @@ export default function BrandProfiles() {
               )}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function ReferenceImages({ profileId }: { profileId: string }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState<string | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ['brand-refs', profileId],
+    queryFn: () => api.listReferenceImages(profileId),
+  });
+
+  const images = data?.reference_images || [];
+
+  const handleUpload = async (file: File) => {
+    // Sanitize filename
+    const safeName = file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_');
+    setUploading(true);
+    try {
+      const resp = await api.uploadReferenceImage(profileId, safeName);
+      // Upload to blob storage
+      await fetch(resp.upload_url, {
+        method: 'PUT',
+        headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-Type': file.type || 'image/jpeg' },
+        body: file,
+      });
+      // Auto-analyze
+      setAnalyzing(resp.reference_image.id);
+      await api.analyzeReferenceImage(profileId, resp.reference_image.id);
+      queryClient.invalidateQueries({ queryKey: ['brand-refs', profileId] });
+    } catch (e) {
+      console.error('Reference upload failed:', e);
+    } finally {
+      setUploading(false);
+      setAnalyzing(null);
+    }
+  };
+
+  const handleDelete = async (imageId: string) => {
+    await api.deleteReferenceImage(profileId, imageId);
+    queryClient.invalidateQueries({ queryKey: ['brand-refs', profileId] });
+  };
+
+  return (
+    <div className="brand-refs">
+      <div className="brand-refs-header">
+        <span className="brand-refs-label">
+          <Palette size={12} />
+          {t('brands.referenceImages', { defaultValue: 'Style References' })}
+          {images.length > 0 && <span className="brand-refs-count">{images.length}/5</span>}
+        </span>
+        {images.length < 5 && (
+          <button
+            className="button-icon"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            title={t('brands.addReference', { defaultValue: 'Add reference image' })}
+          >
+            {uploading ? <Loader className="spinning" size={14} /> : <ImagePlus size={14} />}
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          style={{ display: 'none' }}
+          onChange={(e) => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = ''; }}
+        />
+      </div>
+
+      {images.length > 0 && (
+        <div className="brand-refs-grid">
+          {images.map((img) => (
+            <div key={img.id} className="brand-ref-thumb">
+              {img.download_url ? (
+                <img src={img.download_url} alt="" className="brand-ref-img" />
+              ) : (
+                <div className="brand-ref-placeholder" />
+              )}
+              {img.extracted_style?.colors && (
+                <div className="brand-ref-colors">
+                  {img.extracted_style.colors.slice(0, 3).map((c, i) => (
+                    <span key={i} className="brand-swatch-mini" style={{ background: c }} />
+                  ))}
+                </div>
+              )}
+              {analyzing === img.id && (
+                <div className="brand-ref-analyzing">
+                  <Zap size={10} />
+                </div>
+              )}
+              <button className="brand-ref-delete" onClick={() => handleDelete(img.id)}>
+                <X size={10} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>

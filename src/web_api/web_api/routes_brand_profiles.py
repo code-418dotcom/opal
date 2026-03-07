@@ -8,9 +8,14 @@ from shared.db_sqlalchemy import (
     create_brand_profile,
     update_brand_profile,
     delete_brand_profile,
+    list_brand_reference_images,
+    create_brand_reference_image,
+    delete_brand_reference_image,
+    update_reference_image_style,
 )
+from shared.storage import generate_upload_url, generate_download_url, build_raw_blob_path
 from shared.util import new_id
-from web_api.auth import get_tenant_from_api_key
+from web_api.auth import get_tenant_from_api_key, get_current_user
 
 router = APIRouter(prefix="/v1", tags=["brand-profiles"])
 
@@ -84,3 +89,105 @@ def update(profile_id: str, body: UpdateBrandProfileIn, tenant_id: str = Depends
 def delete(profile_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
     if not delete_brand_profile(profile_id, tenant_id):
         raise HTTPException(status_code=404, detail="Brand profile not found")
+
+
+# ── Reference Images ───────────────────────────────────────────────
+
+@router.get("/brand-profiles/{profile_id}/reference-images")
+def list_references(
+    profile_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """List reference images for a brand profile."""
+    bp = get_brand_profile(profile_id, user["tenant_id"])
+    if not bp:
+        raise HTTPException(status_code=404, detail="Brand profile not found")
+
+    images = list_brand_reference_images(profile_id, user["tenant_id"])
+
+    # Add download URLs for each image
+    for img in images:
+        if img.get("blob_path"):
+            try:
+                img["download_url"] = generate_download_url("raw", img["blob_path"])
+            except Exception:
+                img["download_url"] = None
+
+    return {"reference_images": images}
+
+
+class UploadReferenceIn(BaseModel):
+    filename: str = Field(..., pattern=r'^[a-zA-Z0-9_\-]+\.(jpg|jpeg|png|webp)$')
+
+
+@router.post("/brand-profiles/{profile_id}/reference-images")
+def upload_reference(
+    profile_id: str,
+    body: UploadReferenceIn,
+    user: dict = Depends(get_current_user),
+):
+    """Get a SAS URL to upload a reference image and register it."""
+    bp = get_brand_profile(profile_id, user["tenant_id"])
+    if not bp:
+        raise HTTPException(status_code=404, detail="Brand profile not found")
+
+    # Limit to 5 reference images per profile
+    existing = list_brand_reference_images(profile_id, user["tenant_id"])
+    if len(existing) >= 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 reference images per brand profile")
+
+    image_id = new_id("bref")
+    blob_path = f"{user['tenant_id']}/brand-refs/{profile_id}/{image_id}/{body.filename}"
+
+    upload_url = generate_upload_url("raw", blob_path)
+
+    ref = create_brand_reference_image({
+        "id": image_id,
+        "brand_profile_id": profile_id,
+        "tenant_id": user["tenant_id"],
+        "blob_path": blob_path,
+    })
+
+    return {
+        "upload_url": upload_url,
+        "reference_image": ref,
+    }
+
+
+@router.post("/brand-profiles/{profile_id}/reference-images/{image_id}/analyze")
+def analyze_reference(
+    profile_id: str,
+    image_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Trigger style extraction for a reference image."""
+    from shared.style_extraction import extract_style
+    from shared.storage import download_file
+
+    bp = get_brand_profile(profile_id, user["tenant_id"])
+    if not bp:
+        raise HTTPException(status_code=404, detail="Brand profile not found")
+
+    images = list_brand_reference_images(profile_id, user["tenant_id"])
+    ref = next((img for img in images if img["id"] == image_id), None)
+    if not ref:
+        raise HTTPException(status_code=404, detail="Reference image not found")
+
+    # Download and analyze
+    image_bytes = download_file("raw", ref["blob_path"])
+    style = extract_style(image_bytes)
+
+    update_reference_image_style(image_id, style)
+
+    return {"extracted_style": style}
+
+
+@router.delete("/brand-profiles/{profile_id}/reference-images/{image_id}", status_code=204)
+def delete_reference(
+    profile_id: str,
+    image_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Delete a reference image."""
+    if not delete_brand_reference_image(image_id, user["tenant_id"]):
+        raise HTTPException(status_code=404, detail="Reference image not found")

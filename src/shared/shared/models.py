@@ -124,6 +124,17 @@ class BrandProfile(Base):
         return f'<BrandProfile {self.id} name={self.name}>'
 
 
+class BrandReferenceImage(Base):
+    __tablename__ = 'brand_reference_images'
+
+    id = Column(String, primary_key=True)
+    brand_profile_id = Column(String, ForeignKey('brand_profiles.id', ondelete='CASCADE'), nullable=False, index=True)
+    tenant_id = Column(String, nullable=False)
+    blob_path = Column(String, nullable=False)
+    extracted_style = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class SceneTemplate(Base):
     __tablename__ = 'scene_templates'
 
