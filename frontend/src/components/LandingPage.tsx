@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Eraser, Image, Maximize, ArrowRight, Check, Store, Sparkles } from 'lucide-react';
+import {
+  Eraser, Image, Maximize, ArrowRight, Check, Store, Sparkles,
+  FlaskConical, Layers, Palette, ShoppingBag, Zap, TrendingUp,
+  Globe, Camera, BarChart3,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
-
-// Stock images from Unsplash (free license)
-const HERO_IMG = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=860&h=480&fit=crop&q=80';
-const BEFORE_IMG = 'https://images.unsplash.com/photo-1523293182086-7651a899d37f?w=440&h=260&fit=crop&q=80';
-const AFTER_IMG = 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=440&h=260&fit=crop&q=80';
 
 interface TokenPackage {
   id: string;
@@ -42,29 +41,6 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       minimumFractionDigits: 2,
     }).format(amount);
   };
-
-  const features = [
-    {
-      icon: Eraser,
-      title: t('landing.feature1Title'),
-      description: t('landing.feature1Desc'),
-    },
-    {
-      icon: Image,
-      title: t('landing.feature2Title'),
-      description: t('landing.feature2Desc'),
-    },
-    {
-      icon: Maximize,
-      title: t('landing.feature3Title'),
-      description: t('landing.feature3Desc'),
-    },
-    {
-      icon: Store,
-      title: t('landing.feature4Title'),
-      description: t('landing.feature4Desc'),
-    },
-  ];
 
   return (
     <div className="landing">
@@ -128,15 +104,36 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           </div>
           <p className="landing-hero-note">{t('landing.heroNote')}</p>
 
-          {/* Hero product image with opal frame */}
-          <div className="landing-hero-image">
-            <div className="landing-hero-image-glow" />
-            <img
-              src={HERO_IMG}
-              alt={t('landing.heroImgAlt')}
-              loading="eager"
-            />
+          {/* Store logos strip */}
+          <div className="landing-stores-strip">
+            <span className="landing-stores-label">{t('landing.worksWithLabel')}</span>
+            <div className="landing-stores-logos">
+              <span className="landing-store-logo"><ShoppingBag size={18} /> Shopify</span>
+              <span className="landing-store-logo"><Globe size={18} /> WooCommerce</span>
+              <span className="landing-store-logo"><Store size={18} /> Etsy</span>
+            </div>
           </div>
+        </div>
+      </section>
+
+      {/* Pain points — webshop specific */}
+      <section className="landing-pain">
+        <div className="landing-pain-inner">
+          <h2 className="landing-h2">{t('landing.painTitle')}</h2>
+          <div className="landing-pain-grid">
+            <div className="landing-pain-card">
+              <p>&ldquo;{t('landing.pain1')}&rdquo;</p>
+            </div>
+            <div className="landing-pain-card">
+              <p>&ldquo;{t('landing.pain2')}&rdquo;</p>
+            </div>
+            <div className="landing-pain-card">
+              <p>&ldquo;{t('landing.pain3')}&rdquo;</p>
+            </div>
+          </div>
+          <p className="landing-pain-cta">
+            {t('landing.painCta')}
+          </p>
         </div>
       </section>
 
@@ -185,50 +182,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </section>
 
-      {/* Before / After showcase */}
-      <section className="landing-showcase">
-        <div className="landing-showcase-inner">
-          <div className="landing-section-header">
-            <h2 className="landing-h2">{t('landing.showcaseTitle')}</h2>
-            <p className="landing-section-sub">
-              {t('landing.showcaseSub')}
-            </p>
-          </div>
-          <div className="landing-showcase-grid">
-            <div className="landing-showcase-card">
-              <img src={BEFORE_IMG} alt={t('landing.beforeAlt')} loading="lazy" />
-              <div className="landing-showcase-label">{t('landing.beforeLabel')}</div>
-            </div>
-            <div className="landing-showcase-card landing-showcase-after">
-              <img src={AFTER_IMG} alt={t('landing.afterAlt')} loading="lazy" />
-              <div className="landing-showcase-label">{t('landing.afterLabel')}</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pain point bridge */}
-      <section className="landing-pain">
-        <div className="landing-pain-inner">
-          <h2 className="landing-h2">{t('landing.painTitle')}</h2>
-          <div className="landing-pain-grid">
-            <div className="landing-pain-card">
-              <p>&ldquo;{t('landing.pain1')}&rdquo;</p>
-            </div>
-            <div className="landing-pain-card">
-              <p>&ldquo;{t('landing.pain2')}&rdquo;</p>
-            </div>
-            <div className="landing-pain-card">
-              <p>&ldquo;{t('landing.pain3')}&rdquo;</p>
-            </div>
-          </div>
-          <p className="landing-pain-cta">
-            {t('landing.painCta')}
-          </p>
-        </div>
-      </section>
-
-      {/* Features */}
+      {/* Core features — expanded with new capabilities */}
       <section className="landing-features" id="features">
         <div className="landing-section-inner">
           <div className="landing-section-header">
@@ -241,16 +195,105 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               {t('landing.featuresSub')}
             </p>
           </div>
-          <div className="landing-features-grid">
-            {features.map((f, i) => (
-              <div key={i} className="landing-feature-card">
-                <div className="landing-feature-icon">
-                  <f.icon size={22} />
+          <div className="landing-features-grid landing-features-grid-3">
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon"><Eraser size={22} /></div>
+              <h3>{t('landing.feature1Title')}</h3>
+              <p>{t('landing.feature1Desc')}</p>
+            </div>
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon"><Image size={22} /></div>
+              <h3>{t('landing.feature2Title')}</h3>
+              <p>{t('landing.feature2Desc')}</p>
+            </div>
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon"><Maximize size={22} /></div>
+              <h3>{t('landing.feature3Title')}</h3>
+              <p>{t('landing.feature3Desc')}</p>
+            </div>
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon"><Layers size={22} /></div>
+              <h3>{t('landing.feature5Title')}</h3>
+              <p>{t('landing.feature5Desc')}</p>
+            </div>
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon"><FlaskConical size={22} /></div>
+              <h3>{t('landing.feature6Title')}</h3>
+              <p>{t('landing.feature6Desc')}</p>
+            </div>
+            <div className="landing-feature-card">
+              <div className="landing-feature-icon"><Palette size={22} /></div>
+              <h3>{t('landing.feature7Title')}</h3>
+              <p>{t('landing.feature7Desc')}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Store integration spotlight */}
+      <section className="landing-integration-spotlight">
+        <div className="landing-section-inner">
+          <div className="landing-spotlight-content">
+            <div className="landing-spotlight-text">
+              <div className="landing-badge"><Store size={12} /> {t('landing.integrationBadge')}</div>
+              <h2 className="landing-h2">{t('landing.integrationTitle')}</h2>
+              <p>{t('landing.integrationDesc')}</p>
+              <ul className="landing-spotlight-list">
+                <li><Check size={16} /> {t('landing.integrationPoint1')}</li>
+                <li><Check size={16} /> {t('landing.integrationPoint2')}</li>
+                <li><Check size={16} /> {t('landing.integrationPoint3')}</li>
+                <li><Check size={16} /> {t('landing.integrationPoint4')}</li>
+              </ul>
+            </div>
+            <div className="landing-spotlight-visual">
+              <div className="landing-spotlight-card">
+                <div className="landing-spotlight-card-header">
+                  <ShoppingBag size={16} /> {t('landing.integrationCardTitle')}
                 </div>
-                <h3>{f.title}</h3>
-                <p>{f.description}</p>
+                <div className="landing-spotlight-card-body">
+                  <div className="landing-spotlight-stat">
+                    <Zap size={14} />
+                    <span>{t('landing.integrationStat1')}</span>
+                  </div>
+                  <div className="landing-spotlight-stat">
+                    <TrendingUp size={14} />
+                    <span>{t('landing.integrationStat2')}</span>
+                  </div>
+                  <div className="landing-spotlight-stat">
+                    <Camera size={14} />
+                    <span>{t('landing.integrationStat3')}</span>
+                  </div>
+                </div>
               </div>
-            ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* A/B Testing highlight */}
+      <section className="landing-ab-highlight">
+        <div className="landing-section-inner">
+          <div className="landing-section-header">
+            <div className="landing-badge"><FlaskConical size={12} /> {t('landing.abBadge')}</div>
+            <h2 className="landing-h2">{t('landing.abTitle')}</h2>
+            <p className="landing-section-sub">{t('landing.abSub')}</p>
+          </div>
+          <div className="landing-ab-steps">
+            <div className="landing-ab-step">
+              <div className="landing-ab-step-num">1</div>
+              <h4>{t('landing.abStep1Title')}</h4>
+              <p>{t('landing.abStep1Desc')}</p>
+            </div>
+            <div className="landing-ab-step">
+              <div className="landing-ab-step-num">2</div>
+              <h4>{t('landing.abStep2Title')}</h4>
+              <p>{t('landing.abStep2Desc')}</p>
+            </div>
+            <div className="landing-ab-step">
+              <div className="landing-ab-step-num">3</div>
+              <h4>{t('landing.abStep3Title')}</h4>
+              <p>{t('landing.abStep3Desc')}</p>
+            </div>
           </div>
         </div>
       </section>
@@ -265,6 +308,27 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               {t('landing.brandCta')}
               <ArrowRight size={16} />
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Social proof / numbers */}
+      <section className="landing-proof">
+        <div className="landing-proof-inner">
+          <div className="landing-proof-item">
+            <BarChart3 size={20} />
+            <span className="landing-proof-stat">{t('landing.proofStat1')}</span>
+            <span className="landing-proof-label">{t('landing.proofLabel1')}</span>
+          </div>
+          <div className="landing-proof-item">
+            <Zap size={20} />
+            <span className="landing-proof-stat">{t('landing.proofStat2')}</span>
+            <span className="landing-proof-label">{t('landing.proofLabel2')}</span>
+          </div>
+          <div className="landing-proof-item">
+            <Store size={20} />
+            <span className="landing-proof-stat">{t('landing.proofStat3')}</span>
+            <span className="landing-proof-label">{t('landing.proofLabel3')}</span>
           </div>
         </div>
       </section>
