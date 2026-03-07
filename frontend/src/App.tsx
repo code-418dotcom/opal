@@ -29,7 +29,14 @@ type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library' | 'integratio
 
 function AppContent({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<Tab>('upload');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    // Auto-switch to billing tab when returning from payment
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('payment_id')) return 'billing';
+    // Auto-switch to integrations tab when returning from Shopify OAuth
+    if (params.get('tab') === 'integrations') return 'integrations';
+    return 'upload';
+  });
   const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
     return localStorage.getItem('currentJobId');
   });

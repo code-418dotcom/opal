@@ -158,12 +158,12 @@ class ApiClient {
     });
   }
 
-  async enqueueJob(jobId: string): Promise<void> {
+  async enqueueJob(_jobId: string): Promise<void> {
     // Azure backend automatically enqueues on upload completion
     console.log('[API Client] Job auto-enqueued on upload completion');
   }
 
-  async getDownloadUrl(itemId: string, bucket: string = 'outputs'): Promise<string> {
+  async getDownloadUrl(itemId: string, _bucket: string = 'outputs'): Promise<string> {
     const response = await this.request<{ download_url: string }>(
       `/v1/downloads/${itemId}`
     );
