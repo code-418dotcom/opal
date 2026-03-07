@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from shared.db_sqlalchemy import get_job_item, get_job_by_id
-from shared.storage_unified import generate_download_url
+from shared.storage import generate_download_url
 from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["downloads"])

@@ -1,51 +1,27 @@
 import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment } from './types';
 
-// Detect backend type from environment variables
-const BACKEND_TYPE = (import.meta.env.VITE_BACKEND_TYPE as string) || 'supabase';
 const API_URL = import.meta.env.VITE_API_URL as string;
 const API_KEY = import.meta.env.VITE_API_KEY as string;
 
-// Supabase-specific (optional for Azure backend)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-// Validate configuration based on backend type (warn, don't throw — landing page must render)
-if (BACKEND_TYPE === 'azure') {
-  if (!API_URL || !API_KEY) {
-    console.warn('Azure backend: VITE_API_URL and/or VITE_API_KEY not set. API calls will fail.');
-  }
-} else if (BACKEND_TYPE === 'supabase') {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !API_KEY) {
-    console.warn('Supabase backend: missing required env vars. API calls will fail.');
-  }
-} else {
-  console.warn(`Unknown backend type: ${BACKEND_TYPE}. Defaulting to azure.`);
+if (!API_URL) {
+  console.warn('VITE_API_URL not set. API calls will fail.');
 }
-
-// Determine the base URL based on backend type
-const BASE_URL = BACKEND_TYPE === 'azure'
-  ? API_URL
-  : `${SUPABASE_URL}/functions/v1`;
 
 if (import.meta.env.DEV) {
   console.log('[API Client] Configuration:', {
-    backendType: BACKEND_TYPE,
-    baseUrl: BASE_URL,
+    baseUrl: API_URL,
     hasApiKey: !!API_KEY,
-    hasSupabaseKey: !!SUPABASE_ANON_KEY
   });
 }
 
 class ApiClient {
   private baseUrl: string;
   private apiKey: string;
-  private backendType: string;
   private accessToken: string | null = null;
 
   constructor() {
-    this.baseUrl = BASE_URL;
+    this.baseUrl = API_URL;
     this.apiKey = API_KEY;
-    this.backendType = BACKEND_TYPE;
   }
 
   setAccessToken(token: string | null) {
@@ -68,12 +44,6 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
     } else if (this.apiKey) {
       headers['X-API-Key'] = this.apiKey;
-    }
-
-    // Add Supabase-specific headers if using Supabase backend
-    if (this.backendType === 'supabase' && SUPABASE_ANON_KEY) {
-      headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
-      headers['apikey'] = SUPABASE_ANON_KEY;
     }
 
     const response = await fetch(url, {
@@ -105,34 +75,27 @@ class ApiClient {
     },
     brandProfileId?: string,
   ): Promise<CreateJobResponse> {
-    const endpoint = this.backendType === 'azure' ? '/v1/jobs' : '/create-job';
-    const body = this.backendType === 'azure'
-      ? {
-          brand_profile_id: brandProfileId || 'default',
-          items: filenames.map(filename => ({
-            filename,
-            ...(sceneOptions?.scene_count && sceneOptions.scene_count > 1
-              ? { scene_count: sceneOptions.scene_count }
-              : {}),
-            ...(sceneOptions?.scene_types ? { scene_types: sceneOptions.scene_types } : {}),
-            ...(sceneOptions?.scene_template_ids ? {
-              scene_template_ids: sceneOptions.scene_template_ids,
-              use_saved_background: sceneOptions.use_saved_background || false,
-            } : {}),
-          })),
-          processing_options: processingOptions || {
-            remove_background: true,
-            generate_scene: true,
-            upscale: true
-          },
-        }
-      : {
-          items: filenames.map(filename => ({ filename })),
-        };
-
-    return this.request<CreateJobResponse>(endpoint, {
+    return this.request<CreateJobResponse>('/v1/jobs', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        brand_profile_id: brandProfileId || 'default',
+        items: filenames.map(filename => ({
+          filename,
+          ...(sceneOptions?.scene_count && sceneOptions.scene_count > 1
+            ? { scene_count: sceneOptions.scene_count }
+            : {}),
+          ...(sceneOptions?.scene_types ? { scene_types: sceneOptions.scene_types } : {}),
+          ...(sceneOptions?.scene_template_ids ? {
+            scene_template_ids: sceneOptions.scene_template_ids,
+            use_saved_background: sceneOptions.use_saved_background || false,
+          } : {}),
+        })),
+        processing_options: processingOptions || {
+          remove_background: true,
+          generate_scene: true,
+          upscale: true
+        },
+      }),
     });
   }
 
@@ -144,27 +107,10 @@ class ApiClient {
   }
 
   async getJob(jobId: string): Promise<Job> {
-    const endpoint = this.backendType === 'azure'
-      ? `/v1/jobs/${jobId}`
-      : `/get-job/${jobId}`;
-    return this.request<Job>(endpoint);
+    return this.request<Job>(`/v1/jobs/${jobId}`);
   }
 
   async uploadDirect(jobId: string, itemId: string, file: File, processingOptions?: {
-    remove_background: boolean;
-    generate_scene: boolean;
-    upscale: boolean;
-  }): Promise<void> {
-    if (this.backendType === 'azure') {
-      // Azure backend: first get upload URL, then upload
-      await this.uploadToAzure(jobId, itemId, file, processingOptions);
-    } else {
-      // Supabase backend: direct upload to edge function
-      await this.uploadToSupabase(jobId, itemId, file);
-    }
-  }
-
-  private async uploadToAzure(jobId: string, itemId: string, file: File, processingOptions?: {
     remove_background: boolean;
     generate_scene: boolean;
     upscale: boolean;
@@ -212,85 +158,21 @@ class ApiClient {
     });
   }
 
-  private async uploadToSupabase(jobId: string, itemId: string, file: File): Promise<void> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('job_id', jobId);
-    formData.append('item_id', itemId);
-
-    const url = `${this.baseUrl}/upload-file`;
-    const headers: Record<string, string> = {
-      'X-API-Key': this.apiKey,
-    };
-
-    if (SUPABASE_ANON_KEY) {
-      headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
-      headers['apikey'] = SUPABASE_ANON_KEY;
-    }
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error || error.detail || `Upload failed: ${response.statusText}`);
-    }
-  }
-
   async enqueueJob(jobId: string): Promise<void> {
-    if (this.backendType === 'azure') {
-      // Azure backend automatically enqueues on upload completion
-      console.log('[API Client] Job auto-enqueued on Azure backend');
-    } else {
-      // Supabase backend needs explicit enqueue
-      await this.request(`/enqueue-job/${jobId}`, {
-        method: 'POST',
-      });
-
-      // Trigger worker for Supabase
-      setTimeout(async () => {
-        try {
-          await this.triggerWorker();
-        } catch (error) {
-          console.error('Failed to trigger worker:', error);
-        }
-      }, 1000);
-    }
-  }
-
-  async triggerWorker(): Promise<void> {
-    if (this.backendType === 'supabase') {
-      try {
-        await this.request('/process-job-worker', {
-          method: 'POST',
-        });
-      } catch (error) {
-        console.warn('Worker trigger failed (non-critical):', error);
-      }
-    }
+    // Azure backend automatically enqueues on upload completion
+    console.log('[API Client] Job auto-enqueued on upload completion');
   }
 
   async getDownloadUrl(itemId: string, bucket: string = 'outputs'): Promise<string> {
-    if (this.backendType === 'azure') {
-      const response = await this.request<{ download_url: string }>(
-        `/v1/downloads/${itemId}`
-      );
-      return response.download_url;
-    } else {
-      const response = await this.request<{ download_url: string }>(
-        `/get-download-url?item_id=${itemId}&bucket=${bucket}`
-      );
-      return response.download_url;
-    }
+    const response = await this.request<{ download_url: string }>(
+      `/v1/downloads/${itemId}`
+    );
+    return response.download_url;
   }
 
   async checkHealth(): Promise<{ status: string }> {
-    const endpoint = this.backendType === 'azure' ? '/healthz' : '/health';
     try {
-      return await this.request<{ status: string }>(endpoint);
+      return await this.request<{ status: string }>('/healthz');
     } catch {
       return { status: 'error' };
     }

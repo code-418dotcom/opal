@@ -1,6 +1,5 @@
 """
 Direct PostgreSQL database functions using SQLAlchemy.
-For Azure deployment - replaces db_supabase.py functionality.
 """
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func, text

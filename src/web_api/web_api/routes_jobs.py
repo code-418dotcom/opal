@@ -13,7 +13,7 @@ from shared.db_sqlalchemy import (
     debit_tokens,
 )
 from shared.util import new_id, new_correlation_id
-from shared.queue_unified import send_job_message
+from shared.queue_database import send_job_message
 from web_api.auth import get_tenant_from_api_key, get_current_user
 
 router = APIRouter(prefix="/v1", tags=["jobs"])

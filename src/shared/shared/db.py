@@ -3,7 +3,6 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from .config import settings
 
 # Only create SQLAlchemy engine if DATABASE_URL is provided
-# When using Supabase, the Supabase client handles all database interactions
 if settings.DATABASE_URL:
     engine = create_engine(
         settings.DATABASE_URL,

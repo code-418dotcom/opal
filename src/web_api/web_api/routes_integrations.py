@@ -17,7 +17,7 @@ from shared.encryption import encrypt, decrypt
 from shared.shopify_client import (
     build_oauth_url, exchange_token, verify_hmac, verify_webhook_hmac, ShopifyClient,
 )
-from shared.storage_unified import download_file
+from shared.storage import download_file
 from shared.util import new_id
 from web_api.auth import get_current_user
 
@@ -203,8 +203,8 @@ async def process_images(
 ):
     """Download images from Shopify, create an Opal job to process them."""
     from shared.db_sqlalchemy import create_job_record, create_job_item_records
-    from shared.storage_unified import upload_file, build_raw_blob_path
-    from shared.queue_unified import send_job_message
+    from shared.storage import upload_file, build_raw_blob_path
+    from shared.queue_database import send_job_message
 
     integ = get_integration(integration_id, user["user_id"])
     if not integ:

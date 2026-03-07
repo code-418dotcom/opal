@@ -3,12 +3,12 @@ from pydantic import BaseModel, Field
 import logging
 
 from shared.db_sqlalchemy import get_job_by_id, get_job_item, update_job_item, get_job_items_by_filename
-from shared.storage_unified import (
+from shared.storage import (
     build_raw_blob_path,
     generate_upload_url,
     upload_file as storage_upload_file,
 )
-from shared.queue_unified import send_job_message
+from shared.queue_database import send_job_message
 from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["uploads"])

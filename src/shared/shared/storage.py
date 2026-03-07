@@ -81,6 +81,24 @@ def generate_write_sas(container: str, blob_path: str, expiry_minutes: int = 30)
     return f"{_account_url()}/{container}/{blob_path}?{sas}"
 
 
+# Convenience aliases matching the unified interface names
+def generate_upload_url(bucket: str, path: str, expires_in: int = 3600) -> str:
+    return generate_write_sas(container=bucket, blob_path=path, expiry_minutes=expires_in // 60)
+
+
+def generate_download_url(bucket: str, path: str, expires_in: int = 3600) -> str:
+    return generate_read_sas(container=bucket, blob_path=path, expiry_minutes=expires_in // 60)
+
+
+def upload_file(bucket: str, path: str, data: bytes, content_type: str = "application/octet-stream") -> dict:
+    upload_blob(container=bucket, blob_path=path, data=data, content_type=content_type)
+    return {"path": path}
+
+
+def download_file(bucket: str, path: str) -> bytes:
+    return download_blob(container=bucket, blob_path=path)
+
+
 def download_blob(container: str, blob_path: str) -> bytes:
     """Download a blob's content using managed identity."""
     client = get_blob_service_client()

@@ -80,7 +80,7 @@ Web API (FastAPI / Container App)
 - Python 3.11+
 - Node.js 18+
 - Docker (optional, for containerized local run)
-- A Supabase project (free tier works for local dev) **or** Azure credentials
+- Azure credentials (or local PostgreSQL for dev)
 
 ### 1. Clone & Configure
 
@@ -127,7 +127,6 @@ OIDC is used for Azure auth in CI/CD (no stored credentials).
 
 See [`.env.example`](.env.example) for all configuration options. Key settings:
 
-- `STORAGE_BACKEND`: `azure` (production) or `supabase` (local dev)
 - `QUEUE_BACKEND`: `azure` (production) or `database` (local dev)
 - `AML_ENDPOINT_URL` / `AML_ENDPOINT_KEY`: Azure ML endpoint for AI processing
 

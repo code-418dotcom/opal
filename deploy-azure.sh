@@ -32,7 +32,7 @@ echo ""
 
 # Prompt for secrets if not set
 if [ -z "$DATABASE_URL" ]; then
-    echo "Enter DATABASE_URL (Supabase PostgreSQL):"
+    echo "Enter DATABASE_URL (PostgreSQL):"
     read -s DATABASE_URL
     echo ""
 fi

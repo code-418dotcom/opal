@@ -11,7 +11,7 @@ from shared.db_sqlalchemy import (
     update_scene_template,
     delete_scene_template,
 )
-from shared.storage_unified import generate_download_url, upload_file as storage_upload_file
+from shared.storage import generate_download_url, upload_file as storage_upload_file
 from shared.util import new_id
 from web_api.auth import get_tenant_from_api_key
 
