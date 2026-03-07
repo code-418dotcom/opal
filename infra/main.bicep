@@ -222,7 +222,7 @@ resource budgetActionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (!e
   }
 }
 
-resource budget 'Microsoft.CostManagement/budgets@2023-11-01' = {
+resource budget 'Microsoft.CostManagement/budgets@2023-11-01' = if (!empty(budgetAlertEmails)) {
   name: '${namePrefix}-${envName}-monthly'
   scope: resourceGroup()
   properties: {
