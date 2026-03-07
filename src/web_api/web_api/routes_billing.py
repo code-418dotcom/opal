@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
@@ -17,8 +18,19 @@ from shared.db_sqlalchemy import (
     credit_tokens,
     list_token_transactions,
     get_user_by_id,
+    list_subscription_plans,
+    get_subscription_plan,
+    create_user_subscription,
+    get_user_subscription,
+    update_subscription,
+    get_user_mollie_customer_id,
+    set_user_mollie_customer_id,
 )
-from shared.mollie_client import create_mollie_payment, get_mollie_payment
+from shared.mollie_client import (
+    create_mollie_payment, get_mollie_payment,
+    create_mollie_customer, create_first_payment,
+    create_mollie_subscription, cancel_mollie_subscription,
+)
 from shared.util import new_id
 from web_api.auth import get_current_user
 
@@ -226,4 +238,168 @@ async def mollie_webhook(request: Request):
             LOG.info("Credited %d tokens to user %s (balance: %d)",
                      pkg["tokens"], payment["user_id"], new_balance)
 
+        # Check if this was a first payment for a subscription
+        payment_metadata = mollie_payment.get("metadata") or {}
+        sub_id = payment_metadata.get("subscription_id")
+        if sub_id:
+            _activate_subscription(sub_id, payment_metadata)
+
     return {"ok": True}
+
+
+def _activate_subscription(sub_id: str, metadata: dict) -> None:
+    """After first payment succeeds, create the actual Mollie subscription."""
+    from shared.db_sqlalchemy import get_user_subscription as _get_sub
+    sub = _get_sub(metadata.get("user_id", ""))
+    if not sub or sub["id"] != sub_id or sub["status"] == "active":
+        return
+
+    plan = get_subscription_plan(sub["plan_id"])
+    if not plan:
+        return
+
+    public_base = get_setting('PUBLIC_BASE_URL')
+    webhook_url = f"{public_base}/v1/billing/mollie/webhook" if public_base else None
+
+    try:
+        mollie_sub = create_mollie_subscription(
+            customer_id=sub["mollie_customer_id"],
+            amount_cents=plan["price_cents"],
+            currency=plan["currency"],
+            interval=plan["interval"],
+            description=f"Opal {plan['name']} Monthly",
+            webhook_url=webhook_url,
+            metadata={"subscription_id": sub_id, "user_id": metadata.get("user_id")},
+        )
+        now = datetime.utcnow()
+        update_subscription(sub_id, {
+            "mollie_subscription_id": mollie_sub["id"],
+            "status": "active",
+            "current_period_start": now,
+            "current_period_end": now + timedelta(days=30),
+        })
+        LOG.info("Subscription %s activated with Mollie sub %s", sub_id, mollie_sub["id"])
+    except Exception as e:
+        LOG.error("Failed to create Mollie subscription for %s: %s", sub_id, e)
+
+
+# ── Subscription Endpoints ─────────────────────────────────────────
+
+@public_router.get("/subscription-plans")
+def get_subscription_plans(request: Request):
+    """List available subscription plans (public)."""
+    check_ip_rate_limit(request)
+    return {"plans": list_subscription_plans(active_only=True)}
+
+
+@router.get("/subscription")
+def get_my_subscription(user: dict = Depends(get_current_user)):
+    """Get current user's active subscription."""
+    sub = get_user_subscription(user["user_id"])
+    if not sub:
+        return {"subscription": None}
+
+    # Include plan details
+    plan = get_subscription_plan(sub["plan_id"])
+    return {"subscription": {**sub, "plan": plan}}
+
+
+class SubscribeIn(BaseModel):
+    plan_id: str
+    redirect_url: str
+
+
+@router.post("/subscribe")
+def subscribe(body: SubscribeIn, user: dict = Depends(get_current_user)):
+    """Start a subscription. Creates a Mollie first payment to establish mandate."""
+    plan = get_subscription_plan(body.plan_id)
+    if not plan or not plan.get("active"):
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    if not _validate_redirect_url(body.redirect_url):
+        raise HTTPException(status_code=400, detail="Invalid redirect URL")
+
+    if not get_setting('MOLLIE_API_KEY'):
+        raise HTTPException(status_code=503, detail="Payment provider not configured")
+
+    # Check for existing active subscription
+    existing = get_user_subscription(user["user_id"])
+    if existing and existing["status"] == "active":
+        raise HTTPException(status_code=400, detail="Already have an active subscription. Cancel first.")
+
+    # Get or create Mollie customer
+    customer_id = get_user_mollie_customer_id(user["user_id"])
+    if not customer_id:
+        try:
+            customer = create_mollie_customer(
+                name=user.get("email", ""),
+                email=user.get("email", ""),
+                metadata={"user_id": user["user_id"]},
+            )
+            customer_id = customer["id"]
+            set_user_mollie_customer_id(user["user_id"], customer_id)
+        except Exception as e:
+            LOG.error("Failed to create Mollie customer: %s", e)
+            raise HTTPException(status_code=502, detail="Payment provider error")
+
+    # Create first payment (establishes mandate)
+    sub_id = new_id("sub")
+    public_base = get_setting('PUBLIC_BASE_URL')
+    webhook_url = f"{public_base}/v1/billing/mollie/webhook" if public_base else None
+
+    separator = "&" if "?" in body.redirect_url else "?"
+    redirect_with_id = f"{body.redirect_url}{separator}subscription_id={sub_id}"
+
+    try:
+        payment = create_first_payment(
+            customer_id=customer_id,
+            amount_cents=plan["price_cents"],
+            currency=plan["currency"],
+            description=f"Opal {plan['name']} Subscription — First Payment",
+            redirect_url=redirect_with_id,
+            webhook_url=webhook_url,
+            metadata={"subscription_id": sub_id, "user_id": user["user_id"], "plan_id": plan["id"]},
+        )
+    except Exception as e:
+        LOG.error("Mollie first payment failed: %s", e)
+        raise HTTPException(status_code=502, detail="Payment provider error")
+
+    # Store payment record for webhook handling
+    create_payment({
+        "id": new_id("pay"),
+        "user_id": user["user_id"],
+        "package_id": plan["id"],
+        "mollie_payment_id": payment["id"],
+        "amount_cents": plan["price_cents"],
+        "currency": plan["currency"],
+    })
+
+    # Create pending subscription
+    create_user_subscription({
+        "id": sub_id,
+        "user_id": user["user_id"],
+        "plan_id": plan["id"],
+        "mollie_customer_id": customer_id,
+        "status": "pending",
+    })
+
+    return {"payment_url": payment["checkout_url"], "subscription_id": sub_id}
+
+
+@router.post("/subscription/cancel")
+def cancel_subscription(user: dict = Depends(get_current_user)):
+    """Cancel the current subscription."""
+    sub = get_user_subscription(user["user_id"])
+    if not sub or sub["status"] != "active":
+        raise HTTPException(status_code=404, detail="No active subscription")
+
+    if sub.get("mollie_customer_id") and sub.get("mollie_subscription_id"):
+        try:
+            cancel_mollie_subscription(sub["mollie_customer_id"], sub["mollie_subscription_id"])
+        except Exception as e:
+            LOG.error("Mollie cancel failed: %s", e)
+            raise HTTPException(status_code=502, detail="Failed to cancel with payment provider")
+
+    update_subscription(sub["id"], {"status": "canceled"})
+    LOG.info("Subscription %s canceled for user %s", sub["id"], user["user_id"])
+    return {"ok": True, "subscription_id": sub["id"]}

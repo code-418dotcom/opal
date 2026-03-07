@@ -10,7 +10,7 @@ from .models import (
     SceneTemplate, User,
     TokenTransaction, TokenTxType, TokenPackage, Payment, PaymentStatus,
     Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
-    AdminSetting,
+    AdminSetting, SubscriptionPlan, UserSubscription,
 )
 from datetime import datetime, timedelta
 import logging
@@ -372,6 +372,123 @@ def update_user_token_balance(user_id: str, delta: int) -> Optional[int]:
         row = result.fetchone()
         session.commit()
         return row[0] if row else None
+
+
+# ── Subscription CRUD ──────────────────────────────────────────────
+
+def list_subscription_plans(active_only: bool = True) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        q = session.query(SubscriptionPlan)
+        if active_only:
+            q = q.filter(SubscriptionPlan.active == True)
+        plans = q.order_by(SubscriptionPlan.price_cents).all()
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "tokens_per_month": p.tokens_per_month,
+                "price_cents": p.price_cents,
+                "currency": p.currency,
+                "interval": p.interval,
+                "active": p.active,
+            }
+            for p in plans
+        ]
+
+
+def get_subscription_plan(plan_id: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        p = session.get(SubscriptionPlan, plan_id)
+        if not p:
+            return None
+        return {
+            "id": p.id,
+            "name": p.name,
+            "tokens_per_month": p.tokens_per_month,
+            "price_cents": p.price_cents,
+            "currency": p.currency,
+            "interval": p.interval,
+            "active": p.active,
+        }
+
+
+def create_user_subscription(data: Dict[str, Any]) -> Dict[str, Any]:
+    with SessionLocal() as session:
+        sub = UserSubscription(
+            id=data["id"],
+            user_id=data["user_id"],
+            plan_id=data["plan_id"],
+            mollie_customer_id=data.get("mollie_customer_id"),
+            mollie_subscription_id=data.get("mollie_subscription_id"),
+            status=data.get("status", "pending"),
+            current_period_start=data.get("current_period_start"),
+            current_period_end=data.get("current_period_end"),
+        )
+        session.add(sub)
+        session.commit()
+        session.refresh(sub)
+        return _subscription_to_dict(sub)
+
+
+def get_user_subscription(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get active subscription for a user (only one active at a time)."""
+    with SessionLocal() as session:
+        sub = session.query(UserSubscription).filter(
+            UserSubscription.user_id == user_id,
+            UserSubscription.status.in_(["active", "pending"]),
+        ).order_by(UserSubscription.created_at.desc()).first()
+        return _subscription_to_dict(sub) if sub else None
+
+
+def get_subscription_by_mollie_id(mollie_subscription_id: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        sub = session.query(UserSubscription).filter(
+            UserSubscription.mollie_subscription_id == mollie_subscription_id,
+        ).first()
+        return _subscription_to_dict(sub) if sub else None
+
+
+def update_subscription(sub_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        sub = session.get(UserSubscription, sub_id)
+        if not sub:
+            return None
+        for key, value in updates.items():
+            if hasattr(sub, key):
+                setattr(sub, key, value)
+        sub.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(sub)
+        return _subscription_to_dict(sub)
+
+
+def set_user_mollie_customer_id(user_id: str, customer_id: str) -> None:
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        if user:
+            user.mollie_customer_id = customer_id
+            session.commit()
+
+
+def get_user_mollie_customer_id(user_id: str) -> Optional[str]:
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        return user.mollie_customer_id if user else None
+
+
+def _subscription_to_dict(sub: UserSubscription) -> Dict[str, Any]:
+    return {
+        "id": sub.id,
+        "user_id": sub.user_id,
+        "plan_id": sub.plan_id,
+        "mollie_customer_id": sub.mollie_customer_id,
+        "mollie_subscription_id": sub.mollie_subscription_id,
+        "status": sub.status,
+        "current_period_start": sub.current_period_start.isoformat() if sub.current_period_start else None,
+        "current_period_end": sub.current_period_end.isoformat() if sub.current_period_end else None,
+        "created_at": sub.created_at.isoformat() if sub.created_at else None,
+        "updated_at": sub.updated_at.isoformat() if sub.updated_at else None,
+    }
 
 
 # ── Brand Profile CRUD ──────────────────────────────────────────────

@@ -31,6 +31,7 @@ class User(Base):
     display_name = Column(String, nullable=True)
     token_balance = Column(Integer, nullable=False, default=0)
     is_admin = Column(Boolean, nullable=False, default=False)
+    mollie_customer_id = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -122,6 +123,34 @@ class BrandProfile(Base):
 
     def __repr__(self):
         return f'<BrandProfile {self.id} name={self.name}>'
+
+
+class SubscriptionPlan(Base):
+    __tablename__ = 'subscription_plans'
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    tokens_per_month = Column(Integer, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    currency = Column(String, nullable=False, default='EUR')
+    interval = Column(String, nullable=False, default='1 month')
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class UserSubscription(Base):
+    __tablename__ = 'user_subscriptions'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    plan_id = Column(String, ForeignKey('subscription_plans.id'), nullable=False)
+    mollie_customer_id = Column(String, nullable=True)
+    mollie_subscription_id = Column(String, nullable=True)
+    status = Column(String, nullable=False, default='pending')
+    current_period_start = Column(DateTime, nullable=True)
+    current_period_end = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class BrandReferenceImage(Base):

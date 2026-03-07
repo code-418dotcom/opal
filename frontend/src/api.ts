@@ -300,6 +300,30 @@ class ApiClient {
     return resp.transactions;
   }
 
+  // ── Subscriptions ──────────────────────────────────────────────────
+
+  async listSubscriptionPlans(): Promise<Array<{ id: string; name: string; tokens_per_month: number; price_cents: number; currency: string; interval: string }>> {
+    const resp = await this.request<{ plans: Array<{ id: string; name: string; tokens_per_month: number; price_cents: number; currency: string; interval: string }> }>(
+      '/v1/billing/subscription-plans'
+    );
+    return resp.plans;
+  }
+
+  async getSubscription(): Promise<{ subscription: { id: string; plan_id: string; status: string; plan?: { name: string; tokens_per_month: number; price_cents: number }; current_period_end?: string } | null }> {
+    return this.request('/v1/billing/subscription');
+  }
+
+  async subscribe(planId: string, redirectUrl: string): Promise<{ payment_url: string; subscription_id: string }> {
+    return this.request('/v1/billing/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ plan_id: planId, redirect_url: redirectUrl }),
+    });
+  }
+
+  async cancelSubscription(): Promise<{ ok: boolean }> {
+    return this.request('/v1/billing/subscription/cancel', { method: 'POST' });
+  }
+
   // ── Integrations ──────────────────────────────────────────────────
 
   async listIntegrations(provider?: string): Promise<Integration[]> {
