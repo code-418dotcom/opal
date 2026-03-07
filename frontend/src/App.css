@@ -717,6 +717,88 @@ body {
   font-size: 0.875rem;
 }
 
+/* Format Picker */
+.format-picker {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.format-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.format-picker-header h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.format-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.format-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: transparent;
+}
+
+.format-option:hover {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.format-option.selected {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.format-option input[type="checkbox"] {
+  display: none;
+}
+
+.format-option-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.format-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.format-size {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.format-check {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.format-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Processing Options */
 .processing-options {
   background: var(--color-surface);

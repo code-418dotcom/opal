@@ -9,6 +9,8 @@ import {
   AlertCircle,
   Archive,
   X,
+  Monitor,
+  Check,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
@@ -63,9 +65,25 @@ interface Props {
   jobId: string | null;
 }
 
+interface ExportPreset {
+  key: string;
+  name: string;
+  width: number;
+  height: number;
+}
+
 export default function ResultsGallery({ jobId }: Props) {
   const { t } = useTranslation();
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const [selectedFormats, setSelectedFormats] = useState<Set<string>>(new Set());
+  const [formatExportStatus, setFormatExportStatus] = useState<'idle' | 'loading' | 'queued'>('idle');
+
+  const { data: presets } = useQuery<ExportPreset[]>({
+    queryKey: ['export-presets'],
+    queryFn: () => api.getExportPresets(),
+    staleTime: Infinity,
+  });
 
   const { data: job, isLoading, error } = useQuery<Job>({
     queryKey: ['job-results', jobId],
@@ -109,6 +127,30 @@ export default function ResultsGallery({ jobId }: Props) {
       link.click();
     } catch {
       setDownloadError(t('results.exportFailed'));
+    }
+  };
+
+  const toggleFormat = (key: string) => {
+    setSelectedFormats((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleFormatExport = async () => {
+    if (!job || selectedFormats.size === 0) return;
+    try {
+      setFormatExportStatus('loading');
+      setDownloadError(null);
+      await api.requestFormatExport(job.job_id, Array.from(selectedFormats));
+      setFormatExportStatus('queued');
+      setShowFormatPicker(false);
+      setSelectedFormats(new Set());
+    } catch {
+      setDownloadError(t('results.exportFailed'));
+      setFormatExportStatus('idle');
     }
   };
 
@@ -183,10 +225,62 @@ export default function ResultsGallery({ jobId }: Props) {
                   {t('results.readyForDownload', { count: completedItems.length })}
                 </span>
               </div>
-              <button className="button-primary button-sm" onClick={handleDownloadZip}>
-                <Archive size={16} />
-                {t('results.downloadZip')}
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="button-secondary button-sm" onClick={() => setShowFormatPicker(!showFormatPicker)}>
+                  <Monitor size={16} />
+                  {t('results.exportFormats', { defaultValue: 'Export for Platform' })}
+                </button>
+                <button className="button-primary button-sm" onClick={handleDownloadZip}>
+                  <Archive size={16} />
+                  {t('results.downloadZip')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showFormatPicker && presets && (
+            <div className="format-picker">
+              <div className="format-picker-header">
+                <h4>{t('results.selectPlatforms', { defaultValue: 'Select platforms to export for' })}</h4>
+                <button className="button-icon" onClick={() => setShowFormatPicker(false)}>
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="format-grid">
+                {presets.map((preset) => (
+                  <label key={preset.key} className={`format-option ${selectedFormats.has(preset.key) ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedFormats.has(preset.key)}
+                      onChange={() => toggleFormat(preset.key)}
+                    />
+                    <div className="format-option-info">
+                      <span className="format-name">{preset.name}</span>
+                      <span className="format-size">{preset.width} × {preset.height}</span>
+                    </div>
+                    {selectedFormats.has(preset.key) && <Check size={16} className="format-check" />}
+                  </label>
+                ))}
+              </div>
+              <div className="format-picker-actions">
+                <button
+                  className="button-primary button-sm"
+                  disabled={selectedFormats.size === 0 || formatExportStatus === 'loading'}
+                  onClick={handleFormatExport}
+                >
+                  {formatExportStatus === 'loading' ? (
+                    <><Loader className="spinning" size={14} /> {t('common.processing', { defaultValue: 'Processing...' })}</>
+                  ) : (
+                    <><Download size={14} /> {t('results.exportSelected', { defaultValue: `Export ${selectedFormats.size} format(s)` })}</>
+                  )}
+                </button>
+              </div>
+              {formatExportStatus === 'queued' && (
+                <div className="success-box" style={{ marginTop: '0.5rem' }}>
+                  <Check size={16} />
+                  <span>{t('results.formatExportQueued', { defaultValue: 'Export queued! Your resized images will be ready shortly.' })}</span>
+                </div>
+              )}
             </div>
           )}
 

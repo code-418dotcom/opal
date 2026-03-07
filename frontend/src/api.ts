@@ -106,6 +106,20 @@ class ApiClient {
     return response.download_url;
   }
 
+  async getExportPresets(): Promise<Array<{ key: string; name: string; width: number; height: number }>> {
+    const resp = await this.request<{ presets: Array<{ key: string; name: string; width: number; height: number }> }>(
+      '/v1/export-presets'
+    );
+    return resp.presets;
+  }
+
+  async requestFormatExport(jobId: string, formatKeys: string[]): Promise<{ status: string; job_id: string; format_keys: string[] }> {
+    return this.request('/v1/downloads/jobs/' + jobId + '/export-formats', {
+      method: 'POST',
+      body: JSON.stringify({ format_keys: formatKeys }),
+    });
+  }
+
   async getJob(jobId: string): Promise<Job> {
     return this.request<Job>(`/v1/jobs/${jobId}`);
   }
