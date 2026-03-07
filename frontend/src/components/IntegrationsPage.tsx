@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Store, Link, Unlink, Image as ImageIcon, ArrowUpRight, Check, X, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Store, Link, Unlink, Image as ImageIcon, ArrowUpRight, Check, X, Loader2, ChevronRight, ChevronLeft, Layers } from 'lucide-react';
 import { api } from '../api';
 import type { Integration, ShopifyProduct, ShopifyImage } from '../types';
+import CatalogProcessor from './CatalogProcessor';
 
-type View = 'list' | 'products' | 'processing' | 'results';
+type View = 'list' | 'products' | 'processing' | 'results' | 'catalog';
 
 interface ProcessedItem {
   item_id: string;
@@ -211,7 +212,7 @@ export default function IntegrationsPage() {
       setProcessedItems([]);
       setPushBackResults([]);
       setSelectedProduct(null);
-    } else if (view === 'products') {
+    } else if (view === 'products' || view === 'catalog') {
       setView('list');
       setActiveIntegration(null);
     }
@@ -263,6 +264,14 @@ export default function IntegrationsPage() {
                     >
                       <ImageIcon size={14} />
                       {t('integrations.browseProducts')}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => { setActiveIntegration(integ); setView('catalog'); }}
+                      disabled={integ.status !== 'active'}
+                    >
+                      <Layers size={14} />
+                      Bulk Process
                     </button>
                     <button
                       className="btn btn-danger"
@@ -567,6 +576,13 @@ export default function IntegrationsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {view === 'catalog' && activeIntegration && (
+        <CatalogProcessor
+          integration={activeIntegration}
+          onBack={goBack}
+        />
       )}
     </div>
   );

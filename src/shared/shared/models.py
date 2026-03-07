@@ -247,6 +247,67 @@ class IntegrationCost(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class CatalogJobStatus(str, enum.Enum):
+    created = 'created'
+    processing = 'processing'
+    completed = 'completed'
+    failed = 'failed'
+    canceled = 'canceled'
+
+
+class CatalogProductStatus(str, enum.Enum):
+    pending = 'pending'
+    processing = 'processing'
+    completed = 'completed'
+    failed = 'failed'
+    skipped = 'skipped'
+
+
+class CatalogJob(Base):
+    __tablename__ = 'catalog_jobs'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    integration_id = Column(String, ForeignKey('integrations.id', ondelete='CASCADE'), nullable=False)
+    status = Column(SQLEnum(CatalogJobStatus), nullable=False, default=CatalogJobStatus.created, index=True)
+    total_products = Column(Integer, nullable=False, default=0)
+    processed_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    total_images = Column(Integer, nullable=False, default=0)
+    tokens_estimated = Column(Integer, nullable=False, default=0)
+    tokens_spent = Column(Integer, nullable=False, default=0)
+    settings = Column(JSON, nullable=True)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    products = relationship('CatalogJobProduct', back_populates='catalog_job', lazy='select')
+
+    def __repr__(self):
+        return f'<CatalogJob {self.id} status={self.status}>'
+
+
+class CatalogJobProduct(Base):
+    __tablename__ = 'catalog_job_products'
+
+    id = Column(String, primary_key=True)
+    catalog_job_id = Column(String, ForeignKey('catalog_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
+    product_id = Column(String, nullable=False)
+    product_title = Column(String, nullable=True)
+    job_id = Column(String, ForeignKey('jobs.id'), nullable=True)
+    image_count = Column(Integer, nullable=False, default=0)
+    status = Column(SQLEnum(CatalogProductStatus), nullable=False, default=CatalogProductStatus.pending, index=True)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    catalog_job = relationship('CatalogJob', back_populates='products')
+
+    def __repr__(self):
+        return f'<CatalogJobProduct {self.id} product={self.product_id}>'
+
+
 class JobItem(Base):
     __tablename__ = 'job_items'
 

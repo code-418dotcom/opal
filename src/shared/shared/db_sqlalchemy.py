@@ -11,6 +11,7 @@ from .models import (
     TokenTransaction, TokenTxType, TokenPackage, Payment, PaymentStatus,
     Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
     AdminSetting, SubscriptionPlan, UserSubscription,
+    CatalogJob, CatalogJobStatus, CatalogJobProduct, CatalogProductStatus,
 )
 from datetime import datetime, timedelta
 import logging
@@ -1646,3 +1647,144 @@ def delete_job_cascade(job_id: str) -> Dict[str, Any]:
             "job_deleted": bool(job_deleted),
             "blob_paths": blob_paths,
         }
+
+
+# ── Catalog Jobs ──────────────────────────────────────────────────────
+
+def _catalog_job_to_dict(cj: CatalogJob) -> Dict[str, Any]:
+    return {
+        "id": cj.id,
+        "user_id": cj.user_id,
+        "integration_id": cj.integration_id,
+        "status": cj.status.value if isinstance(cj.status, CatalogJobStatus) else cj.status,
+        "total_products": cj.total_products,
+        "processed_count": cj.processed_count,
+        "failed_count": cj.failed_count,
+        "skipped_count": cj.skipped_count,
+        "total_images": cj.total_images,
+        "tokens_estimated": cj.tokens_estimated,
+        "tokens_spent": cj.tokens_spent,
+        "settings": cj.settings or {},
+        "error_message": cj.error_message,
+        "created_at": cj.created_at.isoformat() if cj.created_at else None,
+        "updated_at": cj.updated_at.isoformat() if cj.updated_at else None,
+    }
+
+
+def _catalog_product_to_dict(cp: CatalogJobProduct) -> Dict[str, Any]:
+    return {
+        "id": cp.id,
+        "catalog_job_id": cp.catalog_job_id,
+        "product_id": cp.product_id,
+        "product_title": cp.product_title,
+        "job_id": cp.job_id,
+        "image_count": cp.image_count,
+        "status": cp.status.value if isinstance(cp.status, CatalogProductStatus) else cp.status,
+        "error_message": cp.error_message,
+        "created_at": cp.created_at.isoformat() if cp.created_at else None,
+        "updated_at": cp.updated_at.isoformat() if cp.updated_at else None,
+    }
+
+
+def create_catalog_job(data: Dict[str, Any]) -> Dict[str, Any]:
+    with SessionLocal() as session:
+        cj = CatalogJob(**data)
+        session.add(cj)
+        session.commit()
+        session.refresh(cj)
+        return _catalog_job_to_dict(cj)
+
+
+def get_catalog_job(catalog_job_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        cj = session.query(CatalogJob).filter(
+            CatalogJob.id == catalog_job_id,
+            CatalogJob.user_id == user_id,
+        ).first()
+        return _catalog_job_to_dict(cj) if cj else None
+
+
+def list_catalog_jobs(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        cjs = (
+            session.query(CatalogJob)
+            .filter(CatalogJob.user_id == user_id)
+            .order_by(CatalogJob.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [_catalog_job_to_dict(cj) for cj in cjs]
+
+
+def update_catalog_job(catalog_job_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        cj = session.query(CatalogJob).filter(CatalogJob.id == catalog_job_id).first()
+        if not cj:
+            return None
+        for k, v in updates.items():
+            setattr(cj, k, v)
+        cj.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(cj)
+        return _catalog_job_to_dict(cj)
+
+
+def increment_catalog_job_counts(catalog_job_id: str, processed: int = 0, failed: int = 0, skipped: int = 0, tokens: int = 0) -> None:
+    with SessionLocal() as session:
+        session.execute(
+            text(
+                "UPDATE catalog_jobs SET "
+                "processed_count = processed_count + :processed, "
+                "failed_count = failed_count + :failed, "
+                "skipped_count = skipped_count + :skipped, "
+                "tokens_spent = tokens_spent + :tokens, "
+                "updated_at = now() "
+                "WHERE id = :id"
+            ),
+            {"id": catalog_job_id, "processed": processed, "failed": failed, "skipped": skipped, "tokens": tokens},
+        )
+        session.commit()
+
+
+def create_catalog_job_products(items: List[Dict[str, Any]]) -> None:
+    with SessionLocal() as session:
+        for item in items:
+            session.add(CatalogJobProduct(**item))
+        session.commit()
+
+
+def get_catalog_job_products(catalog_job_id: str) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        products = (
+            session.query(CatalogJobProduct)
+            .filter(CatalogJobProduct.catalog_job_id == catalog_job_id)
+            .order_by(CatalogJobProduct.created_at.asc())
+            .all()
+        )
+        return [_catalog_product_to_dict(p) for p in products]
+
+
+def update_catalog_job_product(product_id: str, updates: Dict[str, Any]) -> None:
+    with SessionLocal() as session:
+        p = session.query(CatalogJobProduct).filter(CatalogJobProduct.id == product_id).first()
+        if p:
+            for k, v in updates.items():
+                setattr(p, k, v)
+            p.updated_at = datetime.utcnow()
+            session.commit()
+
+
+def get_pending_catalog_products(catalog_job_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Get next batch of pending products to process."""
+    with SessionLocal() as session:
+        products = (
+            session.query(CatalogJobProduct)
+            .filter(
+                CatalogJobProduct.catalog_job_id == catalog_job_id,
+                CatalogJobProduct.status == CatalogProductStatus.pending,
+            )
+            .order_by(CatalogJobProduct.created_at.asc())
+            .limit(limit)
+            .all()
+        )
+        return [_catalog_product_to_dict(p) for p in products]

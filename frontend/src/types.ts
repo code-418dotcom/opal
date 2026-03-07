@@ -127,6 +127,54 @@ export interface PushBackItem {
   mode: 'replace' | 'add';
 }
 
+export interface CatalogEstimateProduct {
+  id: string;
+  title: string;
+  image_count: number;
+}
+
+export interface CatalogEstimate {
+  total_products: number;
+  products_with_images: number;
+  total_images: number;
+  cost_per_image: number;
+  tokens_required: number;
+  products: CatalogEstimateProduct[];
+}
+
+export interface CatalogJob {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  status: 'created' | 'processing' | 'completed' | 'failed' | 'canceled';
+  total_products: number;
+  processed_count: number;
+  failed_count: number;
+  skipped_count: number;
+  total_images: number;
+  tokens_estimated: number;
+  tokens_spent: number;
+  settings: Record<string, unknown>;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogJobProduct {
+  id: string;
+  catalog_job_id: string;
+  product_id: string;
+  product_title?: string;
+  job_id?: string;
+  image_count: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
+  error_message?: string;
+}
+
+export interface CatalogJobDetail extends CatalogJob {
+  products: CatalogJobProduct[];
+}
+
 export interface AdminSetting {
   key: string;
   value: string;

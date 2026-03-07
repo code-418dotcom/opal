@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -430,6 +430,41 @@ class ApiClient {
     offset = 0
   ): Promise<{ listings: Array<{ listing_id: number; title: string; state: string; images: Array<{ listing_image_id: number; url_570xN: string; rank: number }> }>; count: number }> {
     return this.request(`/v1/integrations/${integrationId}/etsy-listings?limit=${limit}&offset=${offset}`);
+  }
+
+  // ── Catalog Processing ──────────────────────────────────────────
+
+  async estimateCatalog(integrationId: string): Promise<CatalogEstimate> {
+    return this.request(`/v1/catalog/${integrationId}/estimate`);
+  }
+
+  async startCatalogJob(
+    integrationId: string,
+    options: {
+      brand_profile_id?: string;
+      auto_push_back?: boolean;
+      product_ids?: string[];
+      processing_options?: { remove_background: boolean; generate_scene: boolean; upscale: boolean };
+    }
+  ): Promise<{ catalog_job_id: string; total_products: number; total_images: number; tokens_estimated: number }> {
+    return this.request(`/v1/catalog/${integrationId}/start`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  async listCatalogJobs(integrationId: string): Promise<{ catalog_jobs: CatalogJob[] }> {
+    return this.request(`/v1/catalog/${integrationId}/jobs`);
+  }
+
+  async getCatalogJobStatus(integrationId: string, catalogJobId: string): Promise<CatalogJobDetail> {
+    return this.request(`/v1/catalog/${integrationId}/jobs/${catalogJobId}`);
+  }
+
+  async cancelCatalogJob(integrationId: string, catalogJobId: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/catalog/${integrationId}/jobs/${catalogJobId}/cancel`, {
+      method: 'POST',
+    });
   }
 
   // ── Admin ─────────────────────────────────────────────────────────
