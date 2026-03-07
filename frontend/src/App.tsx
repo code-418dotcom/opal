@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { Upload, Activity, Image as ImageIcon, Palette, BookImage, CreditCard, LogOut, Coins, Store, Settings } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import Sidebar, { type Page } from './components/Sidebar';
+import Dashboard from './components/Dashboard';
+import OnboardingWizard from './components/OnboardingWizard';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import ResultsGallery from './components/ResultsGallery';
@@ -11,7 +12,6 @@ import BillingPage from './components/BillingPage';
 import IntegrationsPage from './components/IntegrationsPage';
 import AdminPage from './components/AdminPage';
 import LandingPage from './components/LandingPage';
-import LanguageSelector from './components/LanguageSelector';
 import { api } from './api';
 import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, login, logout } from './auth';
 import './App.css';
@@ -25,145 +25,178 @@ const queryClient = new QueryClient({
   },
 });
 
-type Tab = 'upload' | 'monitor' | 'results' | 'brands' | 'library' | 'integrations' | 'billing' | 'admin';
-
-function AppContent({ isAdmin }: { isAdmin: boolean }) {
-  const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
-    // Auto-switch to billing tab when returning from payment
+function AppContent({
+  isAdmin,
+  tokenBalance,
+  userEmail,
+  onLogout,
+}: {
+  isAdmin: boolean;
+  tokenBalance: number | null;
+  userEmail: string;
+  onLogout: () => void;
+}) {
+  const [activePage, setActivePage] = useState<Page>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('payment_id')) return 'billing';
-    // Auto-switch to integrations tab when returning from Shopify OAuth
     if (params.get('tab') === 'integrations') return 'integrations';
-    return 'upload';
+    return 'dashboard';
   });
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setSidebarCollapsed(true);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
     return localStorage.getItem('currentJobId');
   });
+  const [showMonitor, setShowMonitor] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
+    return localStorage.getItem('opal_onboarding_dismissed') === '1';
+  });
   const prevJobStatusRef = useRef<string | null>(null);
+
+  // Check if user needs onboarding (no brand profiles)
+  const { data: brands } = useQuery({
+    queryKey: ['brand-profiles'],
+    queryFn: () => api.listBrandProfiles(),
+  });
+
+  const { data: subData } = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => api.getSubscription(),
+  });
+
+  const hasSubscription = subData?.subscription?.status === 'active';
+  const showOnboarding = brands !== undefined && brands.length === 0 && !onboardingDismissed;
+
+  const handleOnboardingComplete = () => {
+    setOnboardingDismissed(true);
+    localStorage.setItem('opal_onboarding_dismissed', '1');
+  };
 
   const handleJobCreated = (jobId: string) => {
     setCurrentJobId(jobId);
     localStorage.setItem('currentJobId', jobId);
-    setActiveTab('monitor');
+    setShowMonitor(true);
   };
 
-  const allTabs = [
-    { id: 'upload' as Tab, label: t('app.tabs.upload'), icon: Upload },
-    { id: 'monitor' as Tab, label: t('app.tabs.monitor'), icon: Activity },
-    { id: 'results' as Tab, label: t('app.tabs.results'), icon: ImageIcon },
-    { id: 'brands' as Tab, label: t('app.tabs.brands'), icon: Palette },
-    { id: 'library' as Tab, label: t('app.tabs.library'), icon: BookImage },
-    { id: 'integrations' as Tab, label: t('app.tabs.integrations'), icon: Store },
-    { id: 'billing' as Tab, label: t('app.tabs.billing'), icon: CreditCard },
-    { id: 'admin' as Tab, label: t('app.tabs.admin'), icon: Settings, adminOnly: true },
-  ];
-
-  const tabs = allTabs.filter(t => !('adminOnly' in t) || isAdmin);
-
-  const { data: balance } = useQuery({
-    queryKey: ['balance'],
-    queryFn: () => api.getBalance(),
-    staleTime: 30000,
-  });
-
-  const { data: health } = useQuery({
-    queryKey: ['health'],
-    queryFn: () => api.checkHealth(),
-    refetchInterval: 30000,
-  });
-
-  const { data: currentJob } = useQuery({
+  useQuery({
     queryKey: ['job-nav', currentJobId],
-    queryFn: () => api.getJob(currentJobId!),
-    enabled: !!currentJobId && activeTab === 'monitor',
+    queryFn: async () => {
+      const job = await api.getJob(currentJobId!);
+      const prevStatus = prevJobStatusRef.current;
+      prevJobStatusRef.current = job.status;
+      if (
+        prevStatus === 'processing' &&
+        (job.status === 'completed' || job.status === 'failed' || job.status === 'partial')
+      ) {
+        // Use setTimeout to avoid setState during render
+        setTimeout(() => {
+          setShowMonitor(false);
+          setActivePage('results');
+        }, 0);
+      }
+      return job;
+    },
+    enabled: !!currentJobId && showMonitor,
     refetchInterval: 3000,
   });
 
-  useEffect(() => {
-    if (!currentJob) return;
-    const prevStatus = prevJobStatusRef.current;
-    const newStatus = currentJob.status;
-    prevJobStatusRef.current = newStatus;
-
-    if (
-      prevStatus === 'processing' &&
-      (newStatus === 'completed' || newStatus === 'failed' || newStatus === 'partial') &&
-      activeTab === 'monitor'
-    ) {
-      setActiveTab('results');
+  const handleNavigate = (page: Page) => {
+    setActivePage(page);
+    setShowMonitor(false);
+    // Auto-collapse sidebar on mobile
+    if (isMobile) {
+      setSidebarCollapsed(true);
     }
-  }, [currentJob, activeTab]);
-
-  const isHealthy = health?.status === 'ok';
+  };
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="container">
-          <div className="header-content">
-            <h1 className="logo">
-              <span className="logo-icon">&#9670;</span>
-              OPAL
-              <span className="logo-subtitle">{t('app.subtitle')}</span>
-            </h1>
-            <div className="header-info">
-              <span className="api-status">
-                <span className={`status-dot ${isHealthy ? '' : 'status-dot-error'}`}></span>
-                {isHealthy ? t('common.connected') : t('common.disconnected')}
-              </span>
+    <div className="app-layout">
+      <Sidebar
+        activePage={activePage}
+        onNavigate={handleNavigate}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+        isAdmin={isAdmin}
+        tokenBalance={tokenBalance}
+        userEmail={userEmail}
+        onLogout={onLogout}
+      />
+
+      <main className="app-main">
+        {isMobile && (
+          <div className="mobile-header">
+            <button className="mobile-menu-btn" onClick={() => setSidebarCollapsed(false)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <span className="mobile-logo">
+              <span className="mobile-logo-icon">&#9670;</span> OPAL
+            </span>
+            <span className="mobile-balance">{tokenBalance ?? '—'}</span>
+          </div>
+        )}
+        <div className="app-content">
+          {showOnboarding && (
+            <OnboardingWizard onComplete={handleOnboardingComplete} />
+          )}
+
+          {showMonitor && currentJobId && (
+            <div className="monitor-panel">
+              <JobMonitor jobId={currentJobId} />
             </div>
-          </div>
-        </div>
-      </header>
+          )}
 
-      <nav className="tabs">
-        <div className="container">
-          <div className="tabs-list">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <tab.icon size={18} />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
+          {activePage === 'dashboard' && (
+            <Dashboard
+              onNavigate={handleNavigate}
+              tokenBalance={tokenBalance}
+              hasSubscription={hasSubscription}
+            />
+          )}
 
-      <main className="main">
-        <div className="container">
-          {activeTab === 'upload' && (
+          {activePage === 'upload' && (
             <UploadSection onJobCreated={handleJobCreated} />
           )}
-          {activeTab === 'monitor' && (
-            <JobMonitor jobId={currentJobId} />
+
+          {activePage === 'results' && (
+            <ResultsGallery jobId={currentJobId} tokenBalance={tokenBalance} />
           )}
-          {activeTab === 'results' && (
-            <ResultsGallery jobId={currentJobId} tokenBalance={balance?.token_balance ?? null} />
+
+          {activePage === 'brands' && (
+            <div className="page-split">
+              <BrandProfiles />
+              <SceneLibrary />
+            </div>
           )}
-          {activeTab === 'brands' && <BrandProfiles />}
-          {activeTab === 'library' && <SceneLibrary />}
-          {activeTab === 'integrations' && <IntegrationsPage />}
-          {activeTab === 'billing' && <BillingPage />}
-          {activeTab === 'admin' && <AdminPage />}
+
+          {activePage === 'integrations' && <IntegrationsPage />}
+          {activePage === 'billing' && <BillingPage />}
+          {activePage === 'admin' && <AdminPage />}
         </div>
       </main>
 
-      <footer className="footer">
-        <div className="container">
-          <p>{t('app.footer')}</p>
-        </div>
-      </footer>
+      {/* Mobile sidebar overlay */}
+      {!sidebarCollapsed && isMobile && (
+        <div className="sidebar-overlay" onClick={() => setSidebarCollapsed(true)} />
+      )}
     </div>
   );
 }
 
 function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
-  const { t } = useTranslation();
   const { data: balance } = useQuery({
     queryKey: ['balance'],
     queryFn: () => api.getBalance(),
@@ -171,29 +204,15 @@ function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout
   });
 
   const isAdmin = balance?.is_admin ?? false;
+  const tokenBalance = balance?.token_balance ?? null;
 
   return (
-    <>
-      <div className="auth-bar">
-        <div className="container">
-          <div className="auth-bar-content">
-            <span className="auth-user-email">{userEmail}</span>
-            {balance && (
-              <span className="auth-token-balance">
-                <Coins size={14} />
-                {balance.token_balance} {t('common.tokens')}
-              </span>
-            )}
-            <LanguageSelector />
-            <button className="auth-logout-btn" onClick={onLogout}>
-              <LogOut size={14} />
-              {t('common.signOut')}
-            </button>
-          </div>
-        </div>
-      </div>
-      <AppContent isAdmin={isAdmin} />
-    </>
+    <AppContent
+      isAdmin={isAdmin}
+      tokenBalance={tokenBalance}
+      userEmail={userEmail}
+      onLogout={onLogout}
+    />
   );
 }
 
@@ -255,7 +274,6 @@ function App() {
 
   const handleGetStarted = useCallback(async () => {
     if (!authEnabled) {
-      // No auth configured — go straight to app
       setIsAuthenticated(true);
       return;
     }
@@ -272,11 +290,10 @@ function App() {
 
   if (!msalReady) {
     return (
-      <div className="app">
-        <div className="login-page">
-          <div className="login-card">
-            <p>Loading...</p>
-          </div>
+      <div className="app-loading">
+        <div className="app-loading-content">
+          <span className="app-loading-logo">&#9670;</span>
+          <p>Loading...</p>
         </div>
       </div>
     );
