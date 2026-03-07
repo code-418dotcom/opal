@@ -11,7 +11,7 @@ from .models import (
     Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
     AdminSetting,
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 log = logging.getLogger("opal")
@@ -1247,3 +1247,223 @@ def list_all_payments(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
             }
             for pay in payments
         ]
+
+
+# ── GDPR / AVG Data Subject Rights ─────────────────────────────────
+
+def export_user_data(user_id: str) -> Optional[Dict[str, Any]]:
+    """Export all personal data for a user (GDPR Art. 15 / AVG)."""
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        if not user:
+            return None
+
+        tenant_id = user.tenant_id
+
+        # User profile
+        profile = _user_to_dict(user)
+
+        # Jobs and items
+        jobs = session.query(Job).filter(Job.tenant_id == tenant_id).all()
+        jobs_data = []
+        for job in jobs:
+            items = session.query(JobItem).filter(JobItem.job_id == job.id).all()
+            jobs_data.append({
+                "id": job.id,
+                "status": job.status.value,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "items": [
+                    {
+                        "id": item.id,
+                        "filename": item.filename,
+                        "status": item.status.value,
+                        "raw_blob_path": item.raw_blob_path,
+                        "output_blob_path": item.output_blob_path,
+                    }
+                    for item in items
+                ],
+            })
+
+        # Transactions
+        txs = session.query(TokenTransaction).filter(
+            TokenTransaction.user_id == user_id
+        ).order_by(TokenTransaction.created_at.desc()).all()
+        transactions = [
+            {
+                "id": tx.id,
+                "amount": tx.amount,
+                "type": tx.type.value,
+                "description": tx.description,
+                "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            }
+            for tx in txs
+        ]
+
+        # Payments
+        pays = session.query(Payment).filter(Payment.user_id == user_id).all()
+        payments = [
+            {
+                "id": pay.id,
+                "amount_cents": pay.amount_cents,
+                "currency": pay.currency,
+                "status": pay.status.value,
+                "created_at": pay.created_at.isoformat() if pay.created_at else None,
+            }
+            for pay in pays
+        ]
+
+        # Brand profiles
+        bps = session.query(BrandProfile).filter(BrandProfile.tenant_id == tenant_id).all()
+        brand_profiles = [_brand_profile_to_dict(bp) for bp in bps]
+
+        # Integrations (without tokens)
+        integs = session.query(Integration).filter(Integration.user_id == user_id).all()
+        integrations = [
+            {
+                "id": i.id,
+                "provider": i.provider.value,
+                "store_url": i.store_url,
+                "status": i.status.value,
+                "created_at": i.created_at.isoformat() if i.created_at else None,
+            }
+            for i in integs
+        ]
+
+        return {
+            "user": profile,
+            "jobs": jobs_data,
+            "transactions": transactions,
+            "payments": payments,
+            "brand_profiles": brand_profiles,
+            "integrations": integrations,
+            "exported_at": datetime.utcnow().isoformat(),
+        }
+
+
+def delete_user_data(user_id: str) -> Dict[str, Any]:
+    """Delete all personal data for a user (GDPR Art. 17 / AVG).
+    Returns summary of what was deleted. Blob storage cleanup is separate."""
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        if not user:
+            return {"deleted": False, "reason": "User not found"}
+
+        tenant_id = user.tenant_id
+        summary = {"user_id": user_id, "deleted": True}
+
+        # Collect blob paths for storage cleanup
+        blob_paths = []
+        jobs = session.query(Job).filter(Job.tenant_id == tenant_id).all()
+        for job in jobs:
+            items = session.query(JobItem).filter(JobItem.job_id == job.id).all()
+            for item in items:
+                if item.raw_blob_path:
+                    blob_paths.append(("raw", item.raw_blob_path))
+                if item.output_blob_path:
+                    blob_paths.append(("outputs", item.output_blob_path))
+            if job.export_blob_path:
+                blob_paths.append(("exports", job.export_blob_path))
+
+        # Delete in dependency order
+        # 1. Job items
+        item_count = session.query(JobItem).filter(JobItem.tenant_id == tenant_id).delete()
+        summary["job_items_deleted"] = item_count
+
+        # 2. Jobs
+        job_count = session.query(Job).filter(Job.tenant_id == tenant_id).delete()
+        summary["jobs_deleted"] = job_count
+
+        # 3. Token transactions
+        tx_count = session.query(TokenTransaction).filter(
+            TokenTransaction.user_id == user_id
+        ).delete()
+        summary["transactions_deleted"] = tx_count
+
+        # 4. Payments
+        pay_count = session.query(Payment).filter(Payment.user_id == user_id).delete()
+        summary["payments_deleted"] = pay_count
+
+        # 5. Brand profiles + scene templates (cascade via tenant)
+        st_count = session.query(SceneTemplate).filter(
+            SceneTemplate.tenant_id == tenant_id
+        ).delete()
+        summary["scene_templates_deleted"] = st_count
+
+        bp_count = session.query(BrandProfile).filter(
+            BrandProfile.tenant_id == tenant_id
+        ).delete()
+        summary["brand_profiles_deleted"] = bp_count
+
+        # 6. Integrations
+        integ_count = session.query(Integration).filter(
+            Integration.user_id == user_id
+        ).delete()
+        summary["integrations_deleted"] = integ_count
+
+        # 7. Anonymize admin_settings updated_by references
+        session.query(AdminSetting).filter(
+            AdminSetting.updated_by == user_id
+        ).update({"updated_by": None})
+
+        # 8. Delete user
+        session.delete(user)
+        session.commit()
+
+        summary["blob_paths"] = blob_paths
+        return summary
+
+
+def delete_integrations_by_store(provider: str, store_url: str) -> int:
+    """Delete all integrations for a given store (Shopify GDPR shop/redact)."""
+    with SessionLocal() as session:
+        count = session.query(Integration).filter(
+            Integration.store_url == store_url,
+            Integration.provider == provider,
+        ).delete()
+        session.commit()
+        return count
+
+
+def get_jobs_older_than(days: int, limit: int = 100) -> List[Dict[str, Any]]:
+    """Get jobs older than N days for retention cleanup."""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    with SessionLocal() as session:
+        jobs = session.query(Job).filter(
+            Job.created_at < cutoff,
+        ).limit(limit).all()
+        return [
+            {
+                "id": job.id,
+                "tenant_id": job.tenant_id,
+                "status": job.status.value,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+            }
+            for job in jobs
+        ]
+
+
+def delete_job_cascade(job_id: str) -> Dict[str, Any]:
+    """Delete a job and all its items. Returns blob paths for storage cleanup."""
+    with SessionLocal() as session:
+        blob_paths = []
+        items = session.query(JobItem).filter(JobItem.job_id == job_id).all()
+        for item in items:
+            if item.raw_blob_path:
+                blob_paths.append(("raw", item.raw_blob_path))
+            if item.output_blob_path:
+                blob_paths.append(("outputs", item.output_blob_path))
+
+        job = session.query(Job).filter(Job.id == job_id).first()
+        if job and job.export_blob_path:
+            blob_paths.append(("exports", job.export_blob_path))
+
+        item_count = session.query(JobItem).filter(JobItem.job_id == job_id).delete()
+        job_deleted = session.query(Job).filter(Job.id == job_id).delete()
+        session.commit()
+
+        return {
+            "job_id": job_id,
+            "items_deleted": item_count,
+            "job_deleted": bool(job_deleted),
+            "blob_paths": blob_paths,
+        }

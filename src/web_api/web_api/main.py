@@ -12,6 +12,7 @@ from web_api.routes_scene_templates import router as scene_templates_router
 from web_api.routes_billing import router as billing_router, public_router as billing_public_router
 from web_api.routes_integrations import router as integrations_router, gdpr_router
 from web_api.routes_admin import router as admin_router
+from web_api.routes_gdpr import router as gdpr_privacy_router, public_router as gdpr_public_router
 from web_api.auth import get_current_user
 
 log = logging.getLogger("opal")
@@ -28,6 +29,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(billing_public_router)  # Public endpoints (no auth)
+app.include_router(gdpr_public_router)  # Public privacy info (no auth)
 app.include_router(jobs_router, dependencies=[Depends(get_current_user)])
 app.include_router(uploads_router, dependencies=[Depends(get_current_user)])
 app.include_router(downloads_router, dependencies=[Depends(get_current_user)])
@@ -35,5 +37,6 @@ app.include_router(brand_profiles_router, dependencies=[Depends(get_current_user
 app.include_router(scene_templates_router, dependencies=[Depends(get_current_user)])
 app.include_router(billing_router, dependencies=[Depends(get_current_user)])
 app.include_router(integrations_router, dependencies=[Depends(get_current_user)])
+app.include_router(gdpr_privacy_router, dependencies=[Depends(get_current_user)])  # GDPR user data rights
 app.include_router(admin_router)  # Admin routes have their own require_admin dependency
-app.include_router(gdpr_router)  # GDPR webhooks are unauthenticated (HMAC-verified)
+app.include_router(gdpr_router)  # Shopify GDPR webhooks are unauthenticated (HMAC-verified)

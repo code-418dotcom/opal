@@ -106,6 +106,17 @@ def download_blob(container: str, blob_path: str) -> bytes:
     return blob_client.download_blob().readall()
 
 
+def delete_blob(container: str, blob_path: str) -> bool:
+    """Delete a blob. Returns True if deleted, False if not found."""
+    client = get_blob_service_client()
+    blob_client = client.get_blob_client(container=container, blob=blob_path)
+    try:
+        blob_client.delete_blob()
+        return True
+    except Exception:
+        return False
+
+
 def upload_blob(container: str, blob_path: str, data: bytes, content_type: str = "application/octet-stream") -> None:
     """Upload data to a blob using managed identity."""
     client = get_blob_service_client()

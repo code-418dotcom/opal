@@ -117,7 +117,7 @@ async def _resolve_jwt_user(token: str) -> dict:
         user = get_user_by_email(email)
         if user:
             link_entra_subject(user["id"], subject)
-            LOG.info("Linked Entra subject to existing user: %s (%s)", user["id"], email)
+            LOG.info("Linked Entra subject to existing user: %s", user["id"])
     if not user:
         # First user ever gets admin automatically
         is_first = user_count() == 0
@@ -130,14 +130,14 @@ async def _resolve_jwt_user(token: str) -> dict:
             "token_balance": 50,
             "is_admin": is_first,
         })
-        LOG.info("JIT-provisioned user: %s (%s)%s", user["id"], email, " [ADMIN]" if is_first else "")
+        LOG.info("JIT-provisioned user: %s%s", user["id"], " [ADMIN]" if is_first else "")
 
     # Safety net: if no admin exists at all (e.g. users created before is_admin
     # column existed), promote the earliest user now.
     if not user.get("is_admin") and not admin_exists():
         promoted = promote_first_user_to_admin()
         if promoted:
-            LOG.info("Admin bootstrap: promoted %s (%s) to admin", promoted["id"], promoted["email"])
+            LOG.info("Admin bootstrap: promoted %s to admin", promoted["id"])
             # If we just promoted *this* user, update the dict
             if promoted["id"] == user["id"]:
                 user = promoted

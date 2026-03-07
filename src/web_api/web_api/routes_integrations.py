@@ -409,12 +409,18 @@ async def customer_data_request(request: Request):
 
 @gdpr_router.post("/customers/redact")
 async def customer_redact(request: Request):
-    """Shopify GDPR: Customer data erasure. Remove customer-related data."""
+    """Shopify GDPR: Customer data erasure. Remove customer-related data.
+    We don't store Shopify customer data directly — our integrations are
+    linked to the Opal user, not individual Shopify customers."""
     body = await request.body()
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not verify_webhook_hmac(body, hmac_header):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    LOG.info("Shopify GDPR customer redact received")
+
+    import json
+    data = json.loads(body)
+    shop_domain = data.get("shop_domain", "")
+    LOG.info("Shopify GDPR customer redact for shop %s — no customer PII stored", shop_domain)
     return {"ok": True}
 
 
@@ -431,10 +437,10 @@ async def shop_redact(request: Request):
     shop_domain = data.get("shop_domain", "")
     LOG.info("Shopify GDPR shop redact for %s", shop_domain)
 
-    # Delete all integrations for this shop
-    from shared.db_sqlalchemy import list_integrations as _list_all
-    # Note: shop redact removes all user integrations for this shop
-    # In a full implementation, query by store_url across all users
+    # Delete all integrations for this shop across all users
+    from shared.db_sqlalchemy import delete_integrations_by_store
+    deleted_count = delete_integrations_by_store("shopify", shop_domain)
+    LOG.info("Shopify GDPR shop redact: deleted %d integration(s) for %s", deleted_count, shop_domain)
     return {"ok": True}
 
 
