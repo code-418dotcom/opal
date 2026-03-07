@@ -12,6 +12,7 @@ from .models import (
     Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
     AdminSetting, SubscriptionPlan, UserSubscription,
     CatalogJob, CatalogJobStatus, CatalogJobProduct, CatalogProductStatus,
+    ABTest, ABTestStatus, ABTestMetric,
 )
 from datetime import datetime, timedelta
 import logging
@@ -1788,3 +1789,138 @@ def get_pending_catalog_products(catalog_job_id: str, limit: int = 10) -> List[D
             .all()
         )
         return [_catalog_product_to_dict(p) for p in products]
+
+
+# ── A/B Tests ─────────────────────────────────────────────────────────
+
+def _ab_test_to_dict(t: ABTest) -> Dict[str, Any]:
+    return {
+        "id": t.id,
+        "user_id": t.user_id,
+        "integration_id": t.integration_id,
+        "product_id": t.product_id,
+        "product_title": t.product_title,
+        "status": t.status.value if isinstance(t.status, ABTestStatus) else t.status,
+        "variant_a_job_item_id": t.variant_a_job_item_id,
+        "variant_b_job_item_id": t.variant_b_job_item_id,
+        "variant_a_label": t.variant_a_label,
+        "variant_b_label": t.variant_b_label,
+        "active_variant": t.active_variant,
+        "winner": t.winner,
+        "original_image_id": t.original_image_id,
+        "started_at": t.started_at.isoformat() if t.started_at else None,
+        "ended_at": t.ended_at.isoformat() if t.ended_at else None,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+        "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+    }
+
+
+def _ab_metric_to_dict(m: ABTestMetric) -> Dict[str, Any]:
+    return {
+        "id": m.id,
+        "ab_test_id": m.ab_test_id,
+        "variant": m.variant,
+        "date": m.date.isoformat() if m.date else None,
+        "views": m.views,
+        "clicks": m.clicks,
+        "add_to_carts": m.add_to_carts,
+        "conversions": m.conversions,
+        "revenue_cents": m.revenue_cents,
+    }
+
+
+def create_ab_test(data: Dict[str, Any]) -> Dict[str, Any]:
+    with SessionLocal() as session:
+        t = ABTest(**data)
+        session.add(t)
+        session.commit()
+        session.refresh(t)
+        return _ab_test_to_dict(t)
+
+
+def get_ab_test(test_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        t = session.query(ABTest).filter(
+            ABTest.id == test_id,
+            ABTest.user_id == user_id,
+        ).first()
+        return _ab_test_to_dict(t) if t else None
+
+
+def list_ab_tests(user_id: str, integration_id: Optional[str] = None, status: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        q = session.query(ABTest).filter(ABTest.user_id == user_id)
+        if integration_id:
+            q = q.filter(ABTest.integration_id == integration_id)
+        if status:
+            q = q.filter(ABTest.status == status)
+        tests = q.order_by(ABTest.created_at.desc()).limit(limit).all()
+        return [_ab_test_to_dict(t) for t in tests]
+
+
+def update_ab_test(test_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        t = session.query(ABTest).filter(ABTest.id == test_id).first()
+        if not t:
+            return None
+        for k, v in updates.items():
+            setattr(t, k, v)
+        t.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(t)
+        return _ab_test_to_dict(t)
+
+
+def get_ab_test_metrics(test_id: str) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        metrics = (
+            session.query(ABTestMetric)
+            .filter(ABTestMetric.ab_test_id == test_id)
+            .order_by(ABTestMetric.date.asc(), ABTestMetric.variant.asc())
+            .all()
+        )
+        return [_ab_metric_to_dict(m) for m in metrics]
+
+
+def upsert_ab_test_metric(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Insert or update a metric row (unique on test_id + variant + date)."""
+    with SessionLocal() as session:
+        existing = session.query(ABTestMetric).filter(
+            ABTestMetric.ab_test_id == data["ab_test_id"],
+            ABTestMetric.variant == data["variant"],
+            ABTestMetric.date == data["date"],
+        ).first()
+        if existing:
+            for k, v in data.items():
+                if k not in ("id", "ab_test_id", "variant", "date"):
+                    setattr(existing, k, v)
+            existing.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(existing)
+            return _ab_metric_to_dict(existing)
+        else:
+            m = ABTestMetric(**data)
+            session.add(m)
+            session.commit()
+            session.refresh(m)
+            return _ab_metric_to_dict(m)
+
+
+def get_ab_test_aggregated_metrics(test_id: str) -> Dict[str, Dict[str, int]]:
+    """Get totals per variant across all dates."""
+    with SessionLocal() as session:
+        metrics = (
+            session.query(ABTestMetric)
+            .filter(ABTestMetric.ab_test_id == test_id)
+            .all()
+        )
+        result: Dict[str, Dict[str, int]] = {}
+        for m in metrics:
+            if m.variant not in result:
+                result[m.variant] = {"views": 0, "clicks": 0, "add_to_carts": 0, "conversions": 0, "revenue_cents": 0}
+            result[m.variant]["views"] += m.views
+            result[m.variant]["clicks"] += m.clicks
+            result[m.variant]["add_to_carts"] += m.add_to_carts
+            result[m.variant]["conversions"] += m.conversions
+            result[m.variant]["revenue_cents"] += m.revenue_cents
+        return result

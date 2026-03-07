@@ -308,6 +308,61 @@ class CatalogJobProduct(Base):
         return f'<CatalogJobProduct {self.id} product={self.product_id}>'
 
 
+class ABTestStatus(str, enum.Enum):
+    created = 'created'
+    running = 'running'
+    concluded = 'concluded'
+    canceled = 'canceled'
+
+
+class ABTest(Base):
+    __tablename__ = 'ab_tests'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    integration_id = Column(String, ForeignKey('integrations.id', ondelete='CASCADE'), nullable=False)
+    product_id = Column(String, nullable=False)
+    product_title = Column(String, nullable=True)
+    status = Column(SQLEnum(ABTestStatus), nullable=False, default=ABTestStatus.created, index=True)
+    variant_a_job_item_id = Column(String, ForeignKey('job_items.id'), nullable=True)
+    variant_b_job_item_id = Column(String, ForeignKey('job_items.id'), nullable=True)
+    variant_a_label = Column(String, nullable=False, default='Original')
+    variant_b_label = Column(String, nullable=False, default='Variant B')
+    active_variant = Column(String, nullable=False, default='a')
+    winner = Column(String, nullable=True)
+    original_image_id = Column(String, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    metrics = relationship('ABTestMetric', back_populates='ab_test', lazy='select')
+
+    def __repr__(self):
+        return f'<ABTest {self.id} product={self.product_id} status={self.status}>'
+
+
+class ABTestMetric(Base):
+    __tablename__ = 'ab_test_metrics'
+
+    id = Column(String, primary_key=True)
+    ab_test_id = Column(String, ForeignKey('ab_tests.id', ondelete='CASCADE'), nullable=False, index=True)
+    variant = Column(String, nullable=False)
+    date = Column(DateTime, nullable=False)
+    views = Column(Integer, nullable=False, default=0)
+    clicks = Column(Integer, nullable=False, default=0)
+    add_to_carts = Column(Integer, nullable=False, default=0)
+    conversions = Column(Integer, nullable=False, default=0)
+    revenue_cents = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    ab_test = relationship('ABTest', back_populates='metrics')
+
+    def __repr__(self):
+        return f'<ABTestMetric {self.id} test={self.ab_test_id} variant={self.variant}>'
+
+
 class JobItem(Base):
     __tablename__ = 'job_items'
 

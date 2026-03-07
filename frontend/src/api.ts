@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -465,6 +465,74 @@ class ApiClient {
     return this.request(`/v1/catalog/${integrationId}/jobs/${catalogJobId}/cancel`, {
       method: 'POST',
     });
+  }
+
+  // ── A/B Tests ──────────────────────────────────────────────────────
+
+  async createABTest(data: {
+    integration_id: string;
+    product_id: string;
+    product_title?: string;
+    variant_a_job_item_id: string;
+    variant_b_job_item_id: string;
+    variant_a_label?: string;
+    variant_b_label?: string;
+    original_image_id?: string;
+  }): Promise<ABTest> {
+    return this.request('/v1/ab-tests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listABTests(integrationId?: string, status?: string): Promise<{ tests: ABTest[] }> {
+    const params = new URLSearchParams();
+    if (integrationId) params.set('integration_id', integrationId);
+    if (status) params.set('status', status);
+    const qs = params.toString();
+    return this.request(`/v1/ab-tests${qs ? '?' + qs : ''}`);
+  }
+
+  async getABTest(testId: string): Promise<ABTestDetail> {
+    return this.request(`/v1/ab-tests/${testId}`);
+  }
+
+  async startABTest(testId: string): Promise<{ ok: boolean; active_variant: string }> {
+    return this.request(`/v1/ab-tests/${testId}/start`, { method: 'POST' });
+  }
+
+  async swapABTestVariant(testId: string): Promise<{ ok: boolean; active_variant: string }> {
+    return this.request(`/v1/ab-tests/${testId}/swap`, { method: 'POST' });
+  }
+
+  async concludeABTest(testId: string, winner: string): Promise<{ ok: boolean; winner: string }> {
+    return this.request(`/v1/ab-tests/${testId}/conclude`, {
+      method: 'POST',
+      body: JSON.stringify({ winner }),
+    });
+  }
+
+  async cancelABTest(testId: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/ab-tests/${testId}/cancel`, { method: 'POST' });
+  }
+
+  async recordABTestMetric(testId: string, data: {
+    variant: string;
+    date: string;
+    views?: number;
+    clicks?: number;
+    add_to_carts?: number;
+    conversions?: number;
+    revenue_cents?: number;
+  }): Promise<ABTestMetric> {
+    return this.request(`/v1/ab-tests/${testId}/metrics`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getABTestMetrics(testId: string): Promise<{ daily: ABTestMetric[]; aggregated: Record<string, Record<string, number>>; significance: Record<string, unknown> }> {
+    return this.request(`/v1/ab-tests/${testId}/metrics`);
   }
 
   // ── Admin ─────────────────────────────────────────────────────────

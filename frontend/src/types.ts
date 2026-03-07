@@ -175,6 +175,54 @@ export interface CatalogJobDetail extends CatalogJob {
   products: CatalogJobProduct[];
 }
 
+export interface ABTest {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  product_id: string;
+  product_title?: string;
+  status: 'created' | 'running' | 'concluded' | 'canceled';
+  variant_a_job_item_id: string;
+  variant_b_job_item_id: string;
+  variant_a_label: string;
+  variant_b_label: string;
+  active_variant: 'a' | 'b';
+  winner?: string;
+  original_image_id?: string;
+  started_at?: string;
+  ended_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ABTestMetric {
+  id: string;
+  ab_test_id: string;
+  variant: string;
+  date: string;
+  views: number;
+  clicks: number;
+  add_to_carts: number;
+  conversions: number;
+  revenue_cents: number;
+}
+
+export interface ABTestSignificance {
+  confident: boolean;
+  message: string;
+  p_value: number | null;
+  lift_percent: number | null;
+  recommended_winner: string | null;
+  conversion_rate_a?: number;
+  conversion_rate_b?: number;
+}
+
+export interface ABTestDetail extends ABTest {
+  metrics: Record<string, { views: number; clicks: number; add_to_carts: number; conversions: number; revenue_cents: number }>;
+  daily_metrics: ABTestMetric[];
+  significance: ABTestSignificance;
+}
+
 export interface AdminSetting {
   key: string;
   value: string;

@@ -10,6 +10,7 @@ import BrandProfiles from './components/BrandProfiles';
 import SceneLibrary from './components/SceneLibrary';
 import BillingPage from './components/BillingPage';
 import IntegrationsPage from './components/IntegrationsPage';
+import ABTestPage from './components/ABTestPage';
 import AdminPage from './components/AdminPage';
 import LandingPage from './components/LandingPage';
 import { api } from './api';
@@ -183,6 +184,7 @@ function AppContent({
           )}
 
           {activePage === 'integrations' && <IntegrationsPage />}
+          {activePage === 'ab-tests' && <ABTestPage />}
           {activePage === 'billing' && <BillingPage />}
           {activePage === 'admin' && <AdminPage />}
         </div>
