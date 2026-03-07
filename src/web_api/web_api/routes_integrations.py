@@ -1,4 +1,4 @@
-"""Generic integration routes + Shopify-specific OAuth and product endpoints."""
+"""Generic integration routes + Shopify/WooCommerce/Etsy OAuth and product endpoints."""
 import logging
 import secrets
 import time
@@ -444,6 +444,189 @@ async def shop_redact(request: Request):
     return {"ok": True}
 
 
+# ── WooCommerce OAuth ────────────────────────────────────────────────
+
+class WooCommerceConnectIn(BaseModel):
+    store_url: str = Field(..., description="Full WooCommerce store URL, e.g. https://example.com")
+
+
+@router.post("/woocommerce/connect")
+async def woocommerce_connect(
+    body: WooCommerceConnectIn,
+    user: dict = Depends(get_current_user),
+):
+    """Start WooCommerce REST API key authorization flow."""
+    from shared.woocommerce_client import build_oauth_url as wc_build_oauth_url
+
+    state = secrets.token_urlsafe(32)
+    now = time.time()
+    _oauth_states[state] = {
+        "user_id": user["user_id"],
+        "tenant_id": user["tenant_id"],
+        "store_url": body.store_url.rstrip("/"),
+        "provider": "woocommerce",
+        "created_at": now,
+    }
+
+    redirect_uri = f"{get_setting('PUBLIC_BASE_URL')}/v1/integrations/woocommerce/callback"
+    auth_url = wc_build_oauth_url(body.store_url, state, redirect_uri)
+    return {"auth_url": auth_url}
+
+
+@router.post("/woocommerce/callback")
+async def woocommerce_callback(request: Request):
+    """Handle WooCommerce REST API key callback."""
+    data = await request.json()
+    user_id = data.get("user_id", "")  # WooCommerce returns this as our state
+    consumer_key = data.get("consumer_key", "")
+    consumer_secret = data.get("consumer_secret", "")
+
+    oauth_data = _oauth_states.pop(user_id, None)
+    if not oauth_data or oauth_data.get("provider") != "woocommerce":
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    if time.time() - oauth_data.get("created_at", 0) > _OAUTH_STATE_TTL:
+        raise HTTPException(status_code=400, detail="Expired OAuth state")
+
+    # Store both keys as encrypted JSON
+    import json
+    token_payload = json.dumps({"consumer_key": consumer_key, "consumer_secret": consumer_secret})
+
+    create_integration({
+        "id": new_id("integ"),
+        "user_id": oauth_data["user_id"],
+        "tenant_id": oauth_data["tenant_id"],
+        "provider": "woocommerce",
+        "store_url": oauth_data["store_url"],
+        "access_token_encrypted": encrypt(token_payload),
+        "scopes": "read_write",
+        "provider_metadata": {"store_url": oauth_data["store_url"]},
+    })
+
+    return {"ok": True}
+
+
+# ── WooCommerce Products ────────────────────────────────────────────
+
+@router.get("/{integration_id}/wc-products")
+async def list_wc_products(
+    integration_id: str,
+    per_page: int = Query(50, ge=1, le=100),
+    page: int = Query(1, ge=1),
+    user: dict = Depends(get_current_user),
+):
+    """List products from connected WooCommerce store."""
+    client = await _get_woocommerce_client(integration_id, user["user_id"])
+    return await client.get_products(per_page=per_page, page=page)
+
+
+@router.get("/{integration_id}/wc-products/{product_id}/images")
+async def list_wc_product_images(
+    integration_id: str,
+    product_id: int,
+    user: dict = Depends(get_current_user),
+):
+    """List images for a specific WooCommerce product."""
+    client = await _get_woocommerce_client(integration_id, user["user_id"])
+    images = await client.get_product_images(product_id)
+    return {"images": images}
+
+
+# ── Etsy OAuth ───────────────────────────────────────────────────────
+
+class EtsyConnectIn(BaseModel):
+    shop_id: str = Field(..., description="Etsy shop ID")
+
+
+@router.post("/etsy/connect")
+async def etsy_connect(
+    body: EtsyConnectIn,
+    user: dict = Depends(get_current_user),
+):
+    """Start Etsy OAuth2 PKCE flow."""
+    if not get_setting("ETSY_API_KEY"):
+        raise HTTPException(status_code=503, detail="Etsy integration not configured")
+
+    from shared.etsy_client import build_oauth_url as etsy_build_oauth_url
+
+    state = secrets.token_urlsafe(32)
+    now = time.time()
+    _oauth_states[state] = {
+        "user_id": user["user_id"],
+        "tenant_id": user["tenant_id"],
+        "shop_id": body.shop_id,
+        "provider": "etsy",
+        "created_at": now,
+    }
+
+    redirect_uri = f"{get_setting('PUBLIC_BASE_URL')}/v1/integrations/etsy/callback"
+    auth_url = etsy_build_oauth_url(state, redirect_uri)
+    return {"auth_url": auth_url}
+
+
+@router.get("/etsy/callback")
+async def etsy_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+):
+    """Handle Etsy OAuth2 callback."""
+    oauth_data = _oauth_states.pop(state, None)
+    if not oauth_data or oauth_data.get("provider") != "etsy":
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    if time.time() - oauth_data.get("created_at", 0) > _OAUTH_STATE_TTL:
+        raise HTTPException(status_code=400, detail="Expired OAuth state")
+
+    from shared.etsy_client import exchange_token as etsy_exchange_token
+
+    redirect_uri = f"{get_setting('PUBLIC_BASE_URL')}/v1/integrations/etsy/callback"
+    token_data = await etsy_exchange_token(code, redirect_uri, code_verifier=state)
+
+    import json
+    token_payload = json.dumps({
+        "access_token": token_data["access_token"],
+        "refresh_token": token_data.get("refresh_token", ""),
+    })
+
+    create_integration({
+        "id": new_id("integ"),
+        "user_id": oauth_data["user_id"],
+        "tenant_id": oauth_data["tenant_id"],
+        "provider": "etsy",
+        "store_url": oauth_data["shop_id"],
+        "access_token_encrypted": encrypt(token_payload),
+        "scopes": "listings_r listings_w images_r images_w",
+        "provider_metadata": {"shop_id": oauth_data["shop_id"]},
+    })
+
+    frontend_url = settings.CORS_ALLOWED_ORIGINS.split(",")[0].strip()
+    return _redirect_response(f"{frontend_url}?tab=integrations&etsy=connected")
+
+
+# ── Etsy Listings ────────────────────────────────────────────────────
+
+@router.get("/{integration_id}/etsy-listings")
+async def list_etsy_listings(
+    integration_id: str,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: dict = Depends(get_current_user),
+):
+    """List listings from connected Etsy shop."""
+    client = await _get_etsy_client(integration_id, user["user_id"])
+    return await client.get_listings(limit=limit, offset=offset)
+
+
+@router.get("/{integration_id}/etsy-listings/{listing_id}/images")
+async def list_etsy_listing_images(
+    integration_id: str,
+    listing_id: int,
+    user: dict = Depends(get_current_user),
+):
+    """List images for a specific Etsy listing."""
+    client = await _get_etsy_client(integration_id, user["user_id"])
+    images = await client.get_listing_images(listing_id)
+    return {"images": images}
+
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 async def _get_shopify_client(integration_id: str, user_id: str) -> ShopifyClient:
@@ -458,3 +641,41 @@ async def _get_shopify_client(integration_id: str, user_id: str) -> ShopifyClien
 
     access_token = decrypt(integ["access_token_encrypted"])
     return ShopifyClient(integ["store_url"], access_token)
+
+
+async def _get_woocommerce_client(integration_id: str, user_id: str):
+    """Get an authenticated WooCommerceClient for the given integration."""
+    from shared.woocommerce_client import WooCommerceClient
+
+    integ = get_integration_with_token(integration_id, user_id)
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    if integ["status"] != "active":
+        raise HTTPException(status_code=400, detail=f"Integration is {integ['status']}")
+    if integ["provider"] != "woocommerce":
+        raise HTTPException(status_code=400, detail="Not a WooCommerce integration")
+
+    import json
+    token_data = json.loads(decrypt(integ["access_token_encrypted"]))
+    return WooCommerceClient(
+        integ["store_url"],
+        token_data["consumer_key"],
+        token_data["consumer_secret"],
+    )
+
+
+async def _get_etsy_client(integration_id: str, user_id: str):
+    """Get an authenticated EtsyClient for the given integration."""
+    from shared.etsy_client import EtsyClient
+
+    integ = get_integration_with_token(integration_id, user_id)
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    if integ["status"] != "active":
+        raise HTTPException(status_code=400, detail=f"Integration is {integ['status']}")
+    if integ["provider"] != "etsy":
+        raise HTTPException(status_code=400, detail="Not an Etsy integration")
+
+    import json
+    token_data = json.loads(decrypt(integ["access_token_encrypted"]))
+    return EtsyClient(token_data["access_token"], integ["store_url"])

@@ -11,6 +11,7 @@ from shared.db_sqlalchemy import (
     platform_stats, list_all_jobs, list_all_integrations,
     list_all_token_packages, update_token_package, create_token_package, delete_token_package,
     list_all_transactions, list_all_payments,
+    get_jobs_older_than, delete_job_cascade,
 )
 from shared.util import new_id
 from web_api.auth import get_current_user
@@ -336,4 +337,58 @@ async def system_info(admin: dict = Depends(require_admin)):
         "has_fal_config": bool(get_setting('FAL_API_KEY')),
         "has_encryption_key": bool(get_setting('ENCRYPTION_KEY')),
         "public_base_url": get_setting('PUBLIC_BASE_URL'),
+    }
+
+
+# ── Data Retention Cleanup ──────────────────────────────────────────
+
+class CleanupRequest(BaseModel):
+    retention_days: int = Field(default=90, ge=7, le=730, description="Delete jobs older than N days")
+    dry_run: bool = Field(default=True, description="If true, only preview what would be deleted")
+    batch_size: int = Field(default=50, ge=1, le=500, description="Max jobs to delete per call")
+
+
+@router.post("/cleanup")
+async def cleanup_old_jobs(body: CleanupRequest, admin: dict = Depends(require_admin)):
+    """Delete old jobs and their blobs. Use dry_run=true to preview first."""
+    old_jobs = get_jobs_older_than(body.retention_days, limit=body.batch_size)
+
+    if body.dry_run:
+        return {
+            "dry_run": True,
+            "jobs_found": len(old_jobs),
+            "retention_days": body.retention_days,
+            "jobs": old_jobs,
+        }
+
+    deleted_count = 0
+    blobs_deleted = 0
+    errors = []
+
+    for job in old_jobs:
+        try:
+            result = delete_job_cascade(job["id"])
+            deleted_count += 1
+
+            # Delete associated blobs
+            for container, path in result.get("blob_paths", []):
+                try:
+                    from shared.storage import delete_blob
+                    delete_blob(container, path)
+                    blobs_deleted += 1
+                except Exception as e:
+                    LOG.warning("Failed to delete blob %s/%s: %s", container, path, e)
+        except Exception as e:
+            errors.append({"job_id": job["id"], "error": str(e)})
+            LOG.error("Cleanup failed for job %s: %s", job["id"], e)
+
+    LOG.info("Cleanup: deleted %d jobs, %d blobs (retention=%d days)",
+             deleted_count, blobs_deleted, body.retention_days)
+
+    return {
+        "dry_run": False,
+        "jobs_deleted": deleted_count,
+        "blobs_deleted": blobs_deleted,
+        "errors": errors,
+        "retention_days": body.retention_days,
     }

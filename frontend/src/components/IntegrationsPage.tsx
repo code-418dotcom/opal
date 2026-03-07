@@ -19,7 +19,9 @@ export default function IntegrationsPage() {
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>('list');
   const [shopDomain, setShopDomain] = useState('');
-  const [connecting, setConnecting] = useState(false);
+  const [wcStoreUrl, setWcStoreUrl] = useState('');
+  const [etsyShopId, setEtsyShopId] = useState('');
+  const [connecting, setConnecting] = useState<string | false>(false);
   const [activeIntegration, setActiveIntegration] = useState<Integration | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(new Set());
@@ -65,15 +67,41 @@ export default function IntegrationsPage() {
     }
   }
 
-  const handleConnect = async () => {
+  const handleConnectShopify = async () => {
     if (!shopDomain) return;
-    setConnecting(true);
+    setConnecting('shopify');
     setError(null);
     try {
       const shop = shopDomain.includes('.myshopify.com')
         ? shopDomain
         : `${shopDomain}.myshopify.com`;
       const result = await api.connectShopify(shop);
+      window.location.href = result.auth_url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('integrations.connectionFailed'));
+      setConnecting(false);
+    }
+  };
+
+  const handleConnectWooCommerce = async () => {
+    if (!wcStoreUrl) return;
+    setConnecting('woocommerce');
+    setError(null);
+    try {
+      const result = await api.connectWooCommerce(wcStoreUrl);
+      window.location.href = result.auth_url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('integrations.connectionFailed'));
+      setConnecting(false);
+    }
+  };
+
+  const handleConnectEtsy = async () => {
+    if (!etsyShopId) return;
+    setConnecting('etsy');
+    setError(null);
+    try {
+      const result = await api.connectEtsy(etsyShopId);
       window.location.href = result.auth_url;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('integrations.connectionFailed'));
@@ -255,35 +283,89 @@ export default function IntegrationsPage() {
           )}
 
           <h2 className="section-title" style={{ marginTop: '2rem' }}>{t('integrations.connectStore')}</h2>
-          <div className="connect-form">
-            <div className="connect-input-group">
-              <input
-                type="text"
-                placeholder={t('integrations.shopifyPlaceholder')}
-                value={shopDomain}
-                onChange={e => setShopDomain(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleConnect()}
-                className="connect-input"
-              />
-              <button
-                className="btn btn-primary"
-                onClick={handleConnect}
-                disabled={connecting || !shopDomain}
-              >
-                {connecting ? (
-                  <><Loader2 size={14} className="spin" /> {t('integrations.connecting')}</>
-                ) : (
-                  <><Link size={14} /> {t('integrations.connectShopify')}</>
-                )}
-              </button>
+          <div className="connect-providers">
+            <div className="connect-form">
+              <h4>Shopify</h4>
+              <div className="connect-input-group">
+                <input
+                  type="text"
+                  placeholder={t('integrations.shopifyPlaceholder')}
+                  value={shopDomain}
+                  onChange={e => setShopDomain(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleConnectShopify()}
+                  className="connect-input"
+                />
+                <button
+                  className="btn btn-primary"
+                  onClick={handleConnectShopify}
+                  disabled={!!connecting || !shopDomain}
+                >
+                  {connecting === 'shopify' ? (
+                    <><Loader2 size={14} className="spin" /> {t('integrations.connecting')}</>
+                  ) : (
+                    <><Link size={14} /> {t('common.connect', { defaultValue: 'Connect' })}</>
+                  )}
+                </button>
+              </div>
             </div>
-            {costs && (
-              <p className="connect-cost-info">
-                {t('integrations.costInfo', { process: costs.process_image })}
-                {costs.push_back > 0 ? t('integrations.costPushBack', { push: costs.push_back }) : t('integrations.costPushBackFree')}
-              </p>
-            )}
+
+            <div className="connect-form">
+              <h4>WooCommerce</h4>
+              <div className="connect-input-group">
+                <input
+                  type="text"
+                  placeholder={t('integrations.woocommercePlaceholder', { defaultValue: 'https://your-store.com' })}
+                  value={wcStoreUrl}
+                  onChange={e => setWcStoreUrl(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleConnectWooCommerce()}
+                  className="connect-input"
+                />
+                <button
+                  className="btn btn-primary"
+                  onClick={handleConnectWooCommerce}
+                  disabled={!!connecting || !wcStoreUrl}
+                >
+                  {connecting === 'woocommerce' ? (
+                    <><Loader2 size={14} className="spin" /> {t('integrations.connecting')}</>
+                  ) : (
+                    <><Link size={14} /> {t('common.connect', { defaultValue: 'Connect' })}</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="connect-form">
+              <h4>Etsy</h4>
+              <div className="connect-input-group">
+                <input
+                  type="text"
+                  placeholder={t('integrations.etsyPlaceholder', { defaultValue: 'Your Etsy Shop ID' })}
+                  value={etsyShopId}
+                  onChange={e => setEtsyShopId(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleConnectEtsy()}
+                  className="connect-input"
+                />
+                <button
+                  className="btn btn-primary"
+                  onClick={handleConnectEtsy}
+                  disabled={!!connecting || !etsyShopId}
+                >
+                  {connecting === 'etsy' ? (
+                    <><Loader2 size={14} className="spin" /> {t('integrations.connecting')}</>
+                  ) : (
+                    <><Link size={14} /> {t('common.connect', { defaultValue: 'Connect' })}</>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
+
+          {costs && (
+            <p className="connect-cost-info">
+              {t('integrations.costInfo', { process: costs.process_image })}
+              {costs.push_back > 0 ? t('integrations.costPushBack', { push: costs.push_back }) : t('integrations.costPushBackFree')}
+            </p>
+          )}
         </>
       )}
 

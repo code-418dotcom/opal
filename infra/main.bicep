@@ -200,6 +200,78 @@ resource aml 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   }
 }
 
+// ── Cost Management: Budget + Alert ──
+
+@description('Monthly budget amount in USD')
+param budgetAmount int = 100
+
+@description('Email address(es) for budget alerts (comma-separated)')
+param budgetAlertEmails array = []
+
+resource budgetActionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (!empty(budgetAlertEmails)) {
+  name: '${baseName}-budget-ag'
+  location: 'global'
+  properties: {
+    groupShortName: 'OpalBudget'
+    enabled: true
+    emailReceivers: [for (email, i) in budgetAlertEmails: {
+      name: 'budget-alert-${i}'
+      emailAddress: email
+      useCommonAlertSchema: true
+    }]
+  }
+}
+
+resource budget 'Microsoft.CostManagement/budgets@2023-11-01' = {
+  name: '${namePrefix}-${envName}-monthly'
+  scope: resourceGroup()
+  properties: {
+    category: 'Cost'
+    amount: budgetAmount
+    timeGrain: 'Monthly'
+    timePeriod: {
+      startDate: '2025-01-01'
+    }
+    filter: {
+      dimensions: {
+        name: 'ResourceGroupName'
+        operator: 'In'
+        values: [rgName]
+      }
+    }
+    notifications: {
+      actual50pct: {
+        enabled: true
+        operator: 'GreaterThanOrEqualTo'
+        threshold: 50
+        contactEmails: budgetAlertEmails
+        thresholdType: 'Actual'
+      }
+      actual75pct: {
+        enabled: true
+        operator: 'GreaterThanOrEqualTo'
+        threshold: 75
+        contactEmails: budgetAlertEmails
+        thresholdType: 'Actual'
+      }
+      actual100pct: {
+        enabled: true
+        operator: 'GreaterThanOrEqualTo'
+        threshold: 100
+        contactEmails: budgetAlertEmails
+        thresholdType: 'Actual'
+      }
+      forecast120pct: {
+        enabled: true
+        operator: 'GreaterThanOrEqualTo'
+        threshold: 120
+        contactEmails: budgetAlertEmails
+        thresholdType: 'Forecasted'
+      }
+    }
+  }
+}
+
 output containerAppsEnvironmentName string = containerAppsEnv.name
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name

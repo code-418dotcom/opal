@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     SHOPIFY_API_SECRET: str = Field(default='', env='SHOPIFY_API_SECRET')
     SHOPIFY_SCOPES: str = Field(default='read_products,write_products', env='SHOPIFY_SCOPES')
 
+    # Etsy Integration
+    ETSY_API_KEY: str = Field(default='', env='ETSY_API_KEY')
+
     # Encryption key for OAuth tokens at rest (Fernet, base64-encoded 32 bytes)
     ENCRYPTION_KEY: str = Field(default='', env='ENCRYPTION_KEY')
 

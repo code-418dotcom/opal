@@ -99,7 +99,22 @@ def execute_pipeline(
                 "plain flat surface, solid soft neutral background, single diffused light source, "
                 "shallow depth of field, completely bare scene, nothing on the surface"
             )
-            scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt)
+            # Pass runtime-configurable generation settings
+            gen_kwargs = {}
+            try:
+                from shared.settings_service import get_setting
+                steps = get_setting("SCENE_GEN_STEPS")
+                if steps:
+                    gen_kwargs["num_inference_steps"] = int(steps)
+                guidance = get_setting("SCENE_GEN_GUIDANCE")
+                if guidance:
+                    gen_kwargs["guidance_scale"] = float(guidance)
+                fal_ep = get_setting("FAL_ENDPOINT")
+                if fal_ep:
+                    gen_kwargs["fal_endpoint"] = fal_ep
+            except Exception:
+                pass
+            scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt, **gen_kwargs)
         current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes)
     else:
         LOG.info("Step 2/3: Scene generation — skipped")

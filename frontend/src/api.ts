@@ -398,6 +398,40 @@ class ApiClient {
     });
   }
 
+  // ── WooCommerce Integration ──────────────────────────────────────
+
+  async connectWooCommerce(storeUrl: string): Promise<{ auth_url: string }> {
+    return this.request('/v1/integrations/woocommerce/connect', {
+      method: 'POST',
+      body: JSON.stringify({ store_url: storeUrl }),
+    });
+  }
+
+  async listWooCommerceProducts(
+    integrationId: string,
+    perPage = 50,
+    page = 1
+  ): Promise<{ products: Array<{ id: number; name: string; status: string; images: Array<{ id: number; src: string; name: string; alt: string }> }>; total_pages: number; page: number }> {
+    return this.request(`/v1/integrations/${integrationId}/wc-products?per_page=${perPage}&page=${page}`);
+  }
+
+  // ── Etsy Integration ─────────────────────────────────────────────
+
+  async connectEtsy(shopId: string): Promise<{ auth_url: string }> {
+    return this.request('/v1/integrations/etsy/connect', {
+      method: 'POST',
+      body: JSON.stringify({ shop_id: shopId }),
+    });
+  }
+
+  async listEtsyListings(
+    integrationId: string,
+    limit = 25,
+    offset = 0
+  ): Promise<{ listings: Array<{ listing_id: number; title: string; state: string; images: Array<{ listing_image_id: number; url_570xN: string; rank: number }> }>; count: number }> {
+    return this.request(`/v1/integrations/${integrationId}/etsy-listings?limit=${limit}&offset=${offset}`);
+  }
+
   // ── Admin ─────────────────────────────────────────────────────────
 
   async getSystemInfo(): Promise<SystemInfo> {

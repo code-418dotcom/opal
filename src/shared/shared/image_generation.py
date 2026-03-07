@@ -43,14 +43,18 @@ class FalProvider(ImageGenerationProvider):
         """Generate with FLUX.1 [dev] via flux-lora endpoint (supports negative prompt)."""
         LOG.info(f"Generating with FAL.AI FLUX-dev: {prompt[:50]}...")
 
-        endpoint = f"{self.base_url}/flux-lora"
+        # Allow runtime config via settings_service or kwargs
+        num_steps = kwargs.get("num_inference_steps", 20)
+        guidance = kwargs.get("guidance_scale", 3.5)
+        model_endpoint = kwargs.get("fal_endpoint", "flux-lora")
+        endpoint = f"{self.base_url}/{model_endpoint}"
 
         payload = {
             "prompt": prompt,
             "negative_prompt": self.NEGATIVE_PROMPT,
             "image_size": "landscape_16_9",
-            "num_inference_steps": 28,
-            "guidance_scale": 3.5,
+            "num_inference_steps": num_steps,
+            "guidance_scale": guidance,
             "num_images": 1,
             "enable_safety_checker": False
         }

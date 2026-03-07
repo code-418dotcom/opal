@@ -2409,11 +2409,23 @@ body {
 }
 
 /* Connect form */
+.connect-providers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
 .connect-form {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 1.5rem;
+  padding: 1.25rem;
+}
+
+.connect-form h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
 }
 
 .connect-input-group {
