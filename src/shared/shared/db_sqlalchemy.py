@@ -308,34 +308,6 @@ def link_entra_subject(user_id: str, entra_subject_id: str) -> Optional[Dict[str
         return _user_to_dict(u)
 
 
-def user_count() -> int:
-    """Return total number of users."""
-    with SessionLocal() as session:
-        return session.query(func.count(User.id)).scalar() or 0
-
-
-def admin_exists() -> bool:
-    """Check if at least one admin user exists."""
-    with SessionLocal() as session:
-        return session.query(User).filter(User.is_admin == True).first() is not None
-
-
-def promote_first_user_to_admin() -> Optional[Dict[str, Any]]:
-    """If no admin exists, promote the earliest-created user. Returns promoted user or None."""
-    with SessionLocal() as session:
-        # Quick check — avoid write path if an admin already exists
-        has_admin = session.query(User).filter(User.is_admin == True).first()
-        if has_admin:
-            return None
-        first = session.query(User).order_by(User.created_at.asc()).first()
-        if not first:
-            return None
-        first.is_admin = True
-        first.updated_at = datetime.utcnow()
-        session.commit()
-        session.refresh(first)
-        return _user_to_dict(first)
-
 
 def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
     """Create user record. Called on first login (JIT provisioning)."""

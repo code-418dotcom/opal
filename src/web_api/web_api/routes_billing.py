@@ -147,12 +147,40 @@ def get_transactions(
 
 @router.get("/payments/{payment_id}")
 def get_payment_status(payment_id: str, user: dict = Depends(get_current_user)):
-    """Check payment status. Only the owning user can view their payment."""
+    """Check payment status. Only the owning user can view their payment.
+    If still pending, checks Mollie API directly (handles cases where webhook
+    hasn't arrived, e.g. local dev without public URL)."""
     payment = get_payment_by_id(payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     if payment["user_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Not your payment")
+
+    # If still pending, check Mollie directly and process if paid
+    if payment["status"] == "pending" and payment.get("mollie_payment_id"):
+        try:
+            mollie_payment = get_mollie_payment(payment["mollie_payment_id"])
+            mollie_status = mollie_payment["status"]
+            status_map = {"paid": "paid", "failed": "failed", "expired": "expired", "canceled": "expired"}
+            new_status = status_map.get(mollie_status)
+            if new_status:
+                update_payment_status(payment["id"], new_status)
+                if new_status == "paid":
+                    pkg = get_token_package(payment["package_id"])
+                    if pkg:
+                        credit_tokens(
+                            user_id=payment["user_id"],
+                            amount=pkg["tokens"],
+                            tx_type="purchase",
+                            description=f"Purchased {pkg['name']} package",
+                            reference_id=payment["mollie_payment_id"],
+                        )
+                        LOG.info("Credited %d tokens to user %s via poll fallback",
+                                 pkg["tokens"], payment["user_id"])
+                payment = get_payment_by_id(payment_id)
+        except Exception as e:
+            LOG.warning("Could not verify payment %s with Mollie: %s", payment_id, e)
+
     return payment
 
 

@@ -9,7 +9,7 @@ import jwt
 from shared.config import settings
 from shared.db_sqlalchemy import (
     get_user_by_entra_subject, get_user_by_email, link_entra_subject,
-    create_user, user_count, admin_exists, promote_first_user_to_admin,
+    create_user,
 )
 from shared.util import new_id
 
@@ -119,8 +119,6 @@ async def _resolve_jwt_user(token: str) -> dict:
             link_entra_subject(user["id"], subject)
             LOG.info("Linked Entra subject to existing user: %s", user["id"])
     if not user:
-        # First user ever gets admin automatically
-        is_first = user_count() == 0
         user = create_user({
             "id": new_id("user"),
             "entra_subject_id": subject,
@@ -128,19 +126,8 @@ async def _resolve_jwt_user(token: str) -> dict:
             "tenant_id": f"tenant_{subject[:8]}",
             "display_name": payload.get("name", ""),
             "token_balance": 50,
-            "is_admin": is_first,
         })
-        LOG.info("JIT-provisioned user: %s%s", user["id"], " [ADMIN]" if is_first else "")
-
-    # Safety net: if no admin exists at all (e.g. users created before is_admin
-    # column existed), promote the earliest user now.
-    if not user.get("is_admin") and not admin_exists():
-        promoted = promote_first_user_to_admin()
-        if promoted:
-            LOG.info("Admin bootstrap: promoted %s to admin", promoted["id"])
-            # If we just promoted *this* user, update the dict
-            if promoted["id"] == user["id"]:
-                user = promoted
+        LOG.info("JIT-provisioned user: %s", user["id"])
 
     return {
         "user_id": user["id"],
