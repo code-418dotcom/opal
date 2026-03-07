@@ -61,6 +61,12 @@ function AppContent({ isAdmin }: { isAdmin: boolean }) {
 
   const tabs = allTabs.filter(t => !('adminOnly' in t) || isAdmin);
 
+  const { data: balance } = useQuery({
+    queryKey: ['balance'],
+    queryFn: () => api.getBalance(),
+    staleTime: 30000,
+  });
+
   const { data: health } = useQuery({
     queryKey: ['health'],
     queryFn: () => api.checkHealth(),
@@ -137,7 +143,7 @@ function AppContent({ isAdmin }: { isAdmin: boolean }) {
             <JobMonitor jobId={currentJobId} />
           )}
           {activeTab === 'results' && (
-            <ResultsGallery jobId={currentJobId} />
+            <ResultsGallery jobId={currentJobId} tokenBalance={balance?.token_balance ?? null} />
           )}
           {activeTab === 'brands' && <BrandProfiles />}
           {activeTab === 'library' && <SceneLibrary />}

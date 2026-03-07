@@ -13,6 +13,7 @@ import {
   Check,
   Copy,
   FileText,
+  Crown,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
@@ -65,6 +66,7 @@ function ResultImage({ itemId }: { itemId: string }) {
 
 interface Props {
   jobId: string | null;
+  tokenBalance?: number | null;
 }
 
 interface ExportPreset {
@@ -74,7 +76,7 @@ interface ExportPreset {
   height: number;
 }
 
-export default function ResultsGallery({ jobId }: Props) {
+export default function ResultsGallery({ jobId, tokenBalance }: Props) {
   const { t } = useTranslation();
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showFormatPicker, setShowFormatPicker] = useState(false);
@@ -283,6 +285,16 @@ export default function ResultsGallery({ jobId }: Props) {
                   <span>{t('results.formatExportQueued', { defaultValue: 'Export queued! Your resized images will be ready shortly.' })}</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {tokenBalance !== undefined && tokenBalance !== null && tokenBalance <= 0 && (
+            <div className="watermark-upgrade-banner">
+              <Crown size={18} />
+              <div>
+                <strong>{t('results.watermarkNotice', { defaultValue: 'Preview images are watermarked' })}</strong>
+                <span>{t('results.watermarkUpgrade', { defaultValue: 'Purchase tokens or subscribe to get clean, unwatermarked images.' })}</span>
+              </div>
             </div>
           )}
 

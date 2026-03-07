@@ -15,11 +15,11 @@ from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 
 from shared.config import settings
 from shared.db import SessionLocal
-from shared.models import JobItem, ItemStatus
+from shared.models import JobItem, ItemStatus, User
 from shared.storage import build_output_blob_path
 from shared.pipeline import ProcessingOptions, finalize_job_status, mark_item_failed
 from shared.scene_types import SCENE_PROMPTS
-from shared.db_sqlalchemy import get_brand_profile, get_job_by_id as get_job_record, get_brand_style_context
+from shared.db_sqlalchemy import get_brand_profile, get_job_by_id as get_job_record, get_brand_style_context, get_user_subscription
 from shared.util import new_id
 
 from pipeline_worker.clients import (
@@ -127,6 +127,28 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
     return None
 
 
+def _should_watermark(data: dict) -> bool:
+    """Check if this job should get a watermark (free-tier user with no subscription)."""
+    tenant_id = data.get('tenant_id', '')
+    # Look up user by tenant_id to check subscription status
+    try:
+        with SessionLocal() as s:
+            user = s.query(User).filter(User.tenant_id == tenant_id).first()
+            if not user:
+                return False  # API key users or unknown — no watermark
+            # Users with active subscription skip watermark
+            sub = get_user_subscription(user.id)
+            if sub and sub.get('status') == 'active':
+                return False
+            # Users with meaningful token balance (purchased tokens) skip watermark
+            if user.token_balance > 0:
+                return False
+            return True
+    except Exception as e:
+        LOG.warning("Watermark check failed (skipping watermark): %s", e)
+        return False
+
+
 def process_message(data: dict) -> None:
     tenant_id = data['tenant_id']
     job_id = data['job_id']
@@ -195,12 +217,22 @@ def process_message(data: dict) -> None:
         saved_background_bytes=saved_background_bytes,
     )
 
+    # Apply watermark for free-tier users (no subscription, low balance)
+    output_bytes = result.output_bytes
+    if _should_watermark(data):
+        try:
+            from shared.watermark import apply_watermark
+            output_bytes = apply_watermark(output_bytes)
+            LOG.info("Watermark applied for free-tier user")
+        except Exception as e:
+            LOG.warning("Watermark failed (using original): %s", e)
+
     # Upload final output (single blob write)
     out_id = new_id('out')
     out_path = build_output_blob_path(tenant_id, job_id, item_id, f'{out_id}.png')
     out_sas = generate_write_sas(container='outputs', blob_path=out_path)
-    upload_blob(out_sas, result.output_bytes)
-    LOG.info('Uploaded final output: %s (%d bytes)', out_path, len(result.output_bytes))
+    upload_blob(out_sas, output_bytes)
+    LOG.info('Uploaded final output: %s (%d bytes)', out_path, len(output_bytes))
 
     # Generate SEO metadata (non-blocking — failures don't break the pipeline)
     seo_alt_text = None
@@ -216,7 +248,7 @@ def process_message(data: dict) -> None:
                 brand_name = bp.get("name")
                 product_category = bp.get("product_category")
         seo = generate_seo_metadata(
-            result.output_bytes,
+            output_bytes,
             data.get("filename", "product.jpg"),
             brand_name=brand_name,
             product_category=product_category,
