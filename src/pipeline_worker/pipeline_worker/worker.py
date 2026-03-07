@@ -198,12 +198,41 @@ def process_message(data: dict) -> None:
     upload_blob(out_sas, result.output_bytes)
     LOG.info('Uploaded final output: %s (%d bytes)', out_path, len(result.output_bytes))
 
+    # Generate SEO metadata (non-blocking — failures don't break the pipeline)
+    seo_alt_text = None
+    seo_filename = None
+    try:
+        from shared.seo_metadata import generate_seo_metadata
+        brand_name = None
+        product_category = None
+        job_record = get_job_record(job_id, tenant_id)
+        if job_record and job_record.get("brand_profile_id") and job_record["brand_profile_id"] != "default":
+            bp = get_brand_profile(job_record["brand_profile_id"], tenant_id)
+            if bp:
+                brand_name = bp.get("name")
+                product_category = bp.get("product_category")
+        seo = generate_seo_metadata(
+            result.output_bytes,
+            data.get("filename", "product.jpg"),
+            brand_name=brand_name,
+            product_category=product_category,
+        )
+        seo_alt_text = seo.get("alt_text")
+        seo_filename = seo.get("seo_filename")
+        LOG.info("SEO metadata generated: alt=%s file=%s", seo_alt_text[:50] if seo_alt_text else None, seo_filename)
+    except Exception as e:
+        LOG.warning("SEO metadata generation failed (non-fatal): %s", e)
+
     # Mark item completed
     with SessionLocal() as s:
         item = s.get(JobItem, item_id)
         if item:
             item.output_blob_path = out_path
             item.status = ItemStatus.completed
+            if seo_alt_text:
+                item.seo_alt_text = seo_alt_text
+            if seo_filename:
+                item.seo_filename = seo_filename
             s.commit()
             LOG.info('Item completed: %s', item_id)
 

@@ -9,6 +9,8 @@ export interface JobItem {
   scene_index?: number;
   scene_type?: string;
   saved_background_path?: string;
+  seo_alt_text?: string;
+  seo_filename?: string;
 }
 
 export interface Job {

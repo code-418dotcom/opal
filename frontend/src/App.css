@@ -799,6 +799,49 @@ body {
   justify-content: flex-end;
 }
 
+/* SEO Metadata */
+.seo-metadata {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: calc(var(--radius) - 4px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.seo-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.seo-label {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.seo-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seo-copy {
+  flex-shrink: 0;
+  padding: 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.seo-copy:hover {
+  opacity: 1;
+}
+
 /* Processing Options */
 .processing-options {
   background: var(--color-surface);

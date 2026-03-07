@@ -144,6 +144,8 @@ def get_job_item(item_id: str) -> Optional[Dict[str, Any]]:
             "scene_index": item.scene_index,
             "scene_type": item.scene_type,
             "saved_background_path": item.saved_background_path,
+            "seo_alt_text": item.seo_alt_text,
+            "seo_filename": item.seo_filename,
             "created_at": item.created_at.isoformat() if item.created_at else None,
             "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         }

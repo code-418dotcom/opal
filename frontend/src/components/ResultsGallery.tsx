@@ -11,6 +11,8 @@ import {
   X,
   Monitor,
   Check,
+  Copy,
+  FileText,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
@@ -301,6 +303,39 @@ export default function ResultsGallery({ jobId }: Props) {
                     )}
                   </h4>
 
+                  {(item.seo_alt_text || item.seo_filename) && (
+                    <div className="seo-metadata">
+                      {item.seo_alt_text && (
+                        <div className="seo-field">
+                          <FileText size={12} />
+                          <span className="seo-label">{t('results.altText', { defaultValue: 'Alt text' })}:</span>
+                          <span className="seo-value">{item.seo_alt_text}</span>
+                          <button
+                            className="button-icon seo-copy"
+                            title={t('common.copy', { defaultValue: 'Copy' })}
+                            onClick={() => navigator.clipboard.writeText(item.seo_alt_text!)}
+                          >
+                            <Copy size={12} />
+                          </button>
+                        </div>
+                      )}
+                      {item.seo_filename && (
+                        <div className="seo-field">
+                          <FileText size={12} />
+                          <span className="seo-label">{t('results.seoFilename', { defaultValue: 'SEO filename' })}:</span>
+                          <span className="seo-value">{item.seo_filename}</span>
+                          <button
+                            className="button-icon seo-copy"
+                            title={t('common.copy', { defaultValue: 'Copy' })}
+                            onClick={() => navigator.clipboard.writeText(item.seo_filename!)}
+                          >
+                            <Copy size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="result-actions">
                     <button
                       className="button-secondary button-sm"
@@ -311,7 +346,7 @@ export default function ResultsGallery({ jobId }: Props) {
                     </button>
                     <button
                       className="button-secondary button-sm"
-                      onClick={() => handleDownloadItem(item.item_id, item.filename)}
+                      onClick={() => handleDownloadItem(item.item_id, item.seo_filename || item.filename)}
                     >
                       <Download size={14} />
                       {t('common.download')}
