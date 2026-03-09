@@ -76,8 +76,9 @@ class TestCreateApiKey:
         assert len(h) == 64  # SHA-256 = 64 hex chars
         assert h == hashlib.sha256(b"opal_test123").hexdigest()
 
+    @patch("web_api.routes_api_keys.new_id", return_value="ak_test123")
     @patch("web_api.routes_api_keys.SessionLocal")
-    def test_create_key_returns_plain_key(self, mock_sl):
+    def test_create_key_returns_plain_key(self, mock_sl, _mock_new_id):
         """POST creates a key and returns the plain key once."""
         from web_api.routes_api_keys import create_api_key, CreateKeyIn
 
@@ -95,7 +96,7 @@ class TestCreateApiKey:
         assert result.key.startswith("opal_")
         assert result.prefix == result.key[:8]
         assert result.name == "My Store"
-        assert result.id  # not empty
+        assert result.id == "ak_test123"
         session.commit.assert_called_once()
 
     @patch("web_api.routes_api_keys.SessionLocal")

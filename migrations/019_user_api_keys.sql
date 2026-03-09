@@ -3,8 +3,8 @@
 -- Keys are stored as SHA-256 hashes; only the prefix is kept for display.
 
 CREATE TABLE IF NOT EXISTS user_api_keys (
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id              text PRIMARY KEY,
+    user_id         text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     key_hash        varchar(128) NOT NULL,   -- SHA-256 hex digest (never store plaintext)
     key_prefix      varchar(12)  NOT NULL,   -- first 8 chars for display ("opal_abc1...")
     name            varchar(100) NOT NULL DEFAULT '',  -- user label (e.g. "WooCommerce Store")

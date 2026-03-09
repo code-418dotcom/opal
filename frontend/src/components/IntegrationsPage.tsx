@@ -1,9 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Store, Link, Unlink, Image as ImageIcon, ArrowUpRight, Check, X, Loader2, ChevronRight, ChevronLeft, Layers } from 'lucide-react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import {
+  Store, Link, Unlink, Image as ImageIcon, ArrowUpRight, Check, X,
+  Loader2, ChevronRight, ChevronLeft, Layers, Download, Key, Plus,
+  Copy, Trash2, AlertTriangle, Puzzle,
+} from 'lucide-react';
 import { api } from '../api';
-import type { Integration, ShopifyProduct, ShopifyImage } from '../types';
+import type { Integration, ShopifyProduct, ShopifyImage, ApiKeyCreateResponse } from '../types';
 import CatalogProcessor from './CatalogProcessor';
 
 type View = 'list' | 'products' | 'processing' | 'results' | 'catalog';
@@ -13,6 +17,153 @@ interface ProcessedItem {
   filename: string;
   shopify_image_id: number;
   shopify_product_id: number;
+}
+
+function ApiKeysSection() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [newKeyName, setNewKeyName] = useState('');
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<ApiKeyCreateResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const { data: apiKeys, isLoading } = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => api.listApiKeys(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (name?: string) => api.createApiKey(name),
+    onSuccess: (data) => {
+      setNewlyCreatedKey(data);
+      setShowGenerateForm(false);
+      setNewKeyName('');
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+    onError: (err: Error) => {
+      alert(err.message || 'Failed to generate API key');
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (keyId: string) => api.revokeApiKey(keyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+
+  const handleCopy = async () => {
+    if (!newlyCreatedKey) return;
+    try {
+      await navigator.clipboard.writeText(newlyCreatedKey.key);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.querySelector('.apikey-reveal-input') as HTMLInputElement;
+      if (input) { input.select(); document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    }
+  };
+
+  return (
+    <div className="apikeys-section">
+      <h2 className="section-title" style={{ marginTop: '2rem' }}>
+        <Key size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+        {t('integrations.apiKeys.title', { defaultValue: 'API Keys' })}
+      </h2>
+      <p className="apikeys-description">{t('integrations.apiKeys.description', { defaultValue: 'Generate API keys to connect plugins and external integrations to your Opal account.' })}</p>
+
+      {newlyCreatedKey && (
+        <div className="apikey-reveal">
+          <div className="apikey-reveal-header">
+            <AlertTriangle size={18} />
+            <strong>{t('billing.apiKeys.newKeyTitle', { defaultValue: 'Your new API key' })}</strong>
+          </div>
+          <p className="apikey-reveal-warning">{t('billing.apiKeys.newKeyWarning', { defaultValue: 'Copy this key now. You won\'t be able to see it again.' })}</p>
+          <div className="apikey-reveal-box">
+            <input type="text" readOnly value={newlyCreatedKey.key} className="apikey-reveal-input" onClick={(e) => (e.target as HTMLInputElement).select()} />
+            <button className="btn btn-sm apikey-copy-btn" onClick={handleCopy}>
+              <Copy size={14} />
+              {copied ? t('billing.apiKeys.copied', { defaultValue: 'Copied!' }) : t('billing.apiKeys.copyKey', { defaultValue: 'Copy' })}
+            </button>
+          </div>
+          <button className="btn btn-sm apikey-done-btn" onClick={() => setNewlyCreatedKey(null)}>
+            {t('billing.apiKeys.done', { defaultValue: 'Done' })}
+          </button>
+        </div>
+      )}
+
+      {showGenerateForm && !newlyCreatedKey && (
+        <div className="apikey-generate-form">
+          <input
+            type="text"
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            placeholder={t('billing.apiKeys.namePlaceholder', { defaultValue: 'Key name (e.g. WooCommerce Store)' })}
+            className="apikey-name-input"
+          />
+          <div className="apikey-generate-actions">
+            <button className="btn btn-primary" onClick={() => createMutation.mutate(newKeyName || undefined)} disabled={createMutation.isPending}>
+              {createMutation.isPending ? t('billing.apiKeys.generating', { defaultValue: 'Generating...' }) : t('billing.apiKeys.generateNew', { defaultValue: 'Generate New' })}
+            </button>
+            <button className="btn btn-secondary" onClick={() => { setShowGenerateForm(false); setNewKeyName(''); }}>
+              {t('common.cancel', { defaultValue: 'Cancel' })}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showGenerateForm && !newlyCreatedKey && (
+        <button className="apikey-generate-btn" onClick={() => setShowGenerateForm(true)}>
+          <Plus size={16} />
+          {t('billing.apiKeys.generateNew', { defaultValue: 'Generate New' })}
+        </button>
+      )}
+
+      {isLoading ? (
+        <p style={{ color: 'rgba(200,205,224,0.6)', padding: '1rem 0' }}>{t('common.loading', { defaultValue: 'Loading...' })}</p>
+      ) : apiKeys && apiKeys.length > 0 ? (
+        <div className="billing-transactions">
+          <table className="billing-tx-table apikeys-table">
+            <thead>
+              <tr>
+                <th>{t('billing.apiKeys.name', { defaultValue: 'Name' })}</th>
+                <th>{t('billing.apiKeys.prefix', { defaultValue: 'Key' })}</th>
+                <th>{t('billing.apiKeys.created', { defaultValue: 'Created' })}</th>
+                <th>{t('billing.apiKeys.lastUsed', { defaultValue: 'Last Used' })}</th>
+                <th>{t('billing.apiKeys.actions', { defaultValue: 'Actions' })}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {apiKeys.map((key) => (
+                <tr key={key.id}>
+                  <td>{key.name || '—'}</td>
+                  <td><code className="apikey-prefix">{key.prefix}...</code></td>
+                  <td>{new Date(key.created_at).toLocaleDateString()}</td>
+                  <td>{key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : t('billing.apiKeys.never', { defaultValue: 'Never' })}</td>
+                  <td>
+                    <button
+                      className="apikey-revoke-btn"
+                      onClick={() => { if (confirm(t('billing.apiKeys.revokeConfirm', { defaultValue: 'Revoke this key? Any integrations using it will stop working.' }))) revokeMutation.mutate(key.id); }}
+                      disabled={revokeMutation.isPending}
+                    >
+                      <Trash2 size={14} />
+                      {t('billing.apiKeys.revoke', { defaultValue: 'Revoke' })}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state" style={{ marginTop: '1rem' }}>
+          <Key size={48} />
+          <p>{t('billing.apiKeys.noKeys', { defaultValue: 'No API keys yet' })}</p>
+          <p style={{ fontSize: '0.8rem', color: 'rgba(200,205,224,0.5)' }}>{t('billing.apiKeys.noKeysHint', { defaultValue: 'Generate a key to connect plugins and external integrations.' })}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function IntegrationsPage() {
@@ -375,6 +526,51 @@ export default function IntegrationsPage() {
               {costs.push_back > 0 ? t('integrations.costPushBack', { push: costs.push_back }) : t('integrations.costPushBackFree')}
             </p>
           )}
+
+          {/* Plugin Downloads */}
+          <h2 className="section-title" style={{ marginTop: '2rem' }}>
+            <Puzzle size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+            {t('integrations.plugins.title', { defaultValue: 'Plugins' })}
+          </h2>
+          <div className="integrations-grid">
+            <div className="integration-card plugin-card">
+              <div className="integration-card-header">
+                <Store size={20} />
+                <div>
+                  <div className="integration-store-name">WooCommerce Plugin</div>
+                  <div className="integration-store-url">{t('integrations.plugins.wcDescription', { defaultValue: 'AI-powered product image enhancement for WooCommerce — background removal, studio scenes, upscaling, and A/B testing.' })}</div>
+                </div>
+              </div>
+              <div className="integration-card-meta">
+                <span className="integration-provider">WordPress / WooCommerce</span>
+                <span className="integration-date">v1.0.0</span>
+              </div>
+              <div className="integration-card-actions">
+                <a
+                  href="https://github.com/code-418dotcom/opal/releases/latest/download/opal-ai-photography.zip"
+                  className="btn btn-primary"
+                  download
+                >
+                  <Download size={14} />
+                  {t('integrations.plugins.download', { defaultValue: 'Download Plugin' })}
+                </a>
+                <a
+                  href="https://github.com/code-418dotcom/opal/tree/main/plugins/woocommerce#readme"
+                  className="btn btn-secondary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('integrations.plugins.docs', { defaultValue: 'Documentation' })}
+                </a>
+              </div>
+              <div className="plugin-setup-hint">
+                <p>{t('integrations.plugins.wcSetup', { defaultValue: 'Upload the ZIP file via WordPress → Plugins → Add New → Upload Plugin. You\'ll need an API key (below) to connect it.' })}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* API Keys */}
+          <ApiKeysSection />
         </>
       )}
 

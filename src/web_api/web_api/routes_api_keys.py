@@ -2,7 +2,6 @@
 import hashlib
 import logging
 import secrets
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -11,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from shared.db import SessionLocal
+from shared.util import new_id
 from web_api.auth import get_current_user
 
 LOG = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ def create_api_key(body: CreateKeyIn, user: dict = Depends(get_current_user)):
         raw_key = KEY_PREFIX + secrets.token_urlsafe(32)
         key_hash = _hash_key(raw_key)
         prefix = raw_key[:8]
-        key_id = str(uuid.uuid4())
+        key_id = new_id("ak")
         now = datetime.now(timezone.utc)
 
         session.execute(

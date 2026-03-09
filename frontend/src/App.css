@@ -5816,6 +5816,37 @@ body {
   }
 }
 
+/* ── Plugin Cards ──────────────────────────────── */
+
+.plugin-card .integration-store-url {
+  font-size: 0.82rem;
+  color: rgba(200, 205, 224, 0.7);
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+
+.plugin-setup-hint {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.plugin-setup-hint p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(200, 205, 224, 0.8);
+  line-height: 1.4;
+}
+
+.integration-card-actions a.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+}
+
 /* ── API Keys Section ──────────────────────────────── */
 
 .apikeys-section {
