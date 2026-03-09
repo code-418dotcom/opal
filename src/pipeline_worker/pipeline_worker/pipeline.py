@@ -4,11 +4,16 @@ In-memory pipeline executor.
 Runs bg-removal -> scene-gen -> upscale in a single process with no
 intermediate blob storage or queue hops. Each step receives bytes and
 returns bytes.
+
+Scene generation has two modes:
+  • Legacy (FLUX-dev): generate background, then PIL-composite product on top
+  • Edit  (FLUX.2 Pro Edit): upload bg-removed product, let the model
+    composite it natively with realistic lighting / shadows
 """
 import logging
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Callable
 
 from PIL import Image
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -54,6 +59,21 @@ def _run_step(step_name: str, fn, *args, **kwargs):
         classify_and_raise(e)
 
 
+def _build_edit_prompt(scene_prompt: Optional[str]) -> str:
+    """Build a FLUX.2 Pro Edit prompt that instructs the model to place the
+    product from the reference image into the described scene."""
+    scene_desc = scene_prompt or (
+        "a clean, professional product photography setting with soft studio "
+        "lighting and a neutral background"
+    )
+    return (
+        f"Place the product from the image into {scene_desc}. "
+        "Create natural lighting, soft shadows and reflections. "
+        "Keep the product exactly as-is — do not alter its shape, color or details. "
+        "Professional e-commerce product photography style."
+    )
+
+
 @retry(
     retry=retry_if_exception_type(TransientError),
     stop=stop_after_attempt(3),
@@ -71,6 +91,7 @@ def execute_pipeline(
     upscale_provider=None,
     upscale_enabled: bool = True,
     saved_background_bytes: Optional[bytes] = None,
+    upload_tmp_image: Optional[Callable[[bytes], str]] = None,
 ) -> PipelineResult:
     """
     Execute the full image processing pipeline in-memory.
@@ -78,6 +99,12 @@ def execute_pipeline(
     Each enabled step transforms the image bytes sequentially.
     No intermediate blobs are stored — data stays in memory between steps.
     Retries automatically on transient errors (network, 5xx).
+
+    Args:
+        upload_tmp_image: Optional callback that uploads bytes to a
+            publicly-accessible URL and returns that URL. Required for
+            edit-mode providers (FLUX.2 Pro Edit) which need to receive
+            the product image as a URL.
     """
     current_bytes = raw_bytes
 
@@ -88,34 +115,60 @@ def execute_pipeline(
     else:
         LOG.info("Step 1/3: Background removal — skipped")
 
-    # Step 2: Scene generation + compositing
+    # Step 2: Scene generation
     if generate_scene and (img_gen_provider or saved_background_bytes):
-        if saved_background_bytes:
-            LOG.info("Step 2/3: Using saved background image (%d bytes)", len(saved_background_bytes))
-            scene_bytes = saved_background_bytes
-        else:
-            LOG.info("Step 2/3: Scene generation (%s)", img_gen_provider.name)
-            prompt = scene_prompt or (
-                "plain flat surface, solid soft neutral background, single diffused light source, "
-                "shallow depth of field, completely bare scene, nothing on the surface"
+        # --- Edit mode: provider composites the product natively ----------
+        use_edit = (
+            img_gen_provider
+            and getattr(img_gen_provider, "supports_edit", False)
+            and not saved_background_bytes
+        )
+
+        if use_edit:
+            LOG.info("Step 2/3: Scene edit (%s)", img_gen_provider.name)
+            edit_prompt = _build_edit_prompt(scene_prompt)
+
+            # Upload bg-removed product so the API can fetch it
+            if upload_tmp_image:
+                product_url = _run_step(
+                    "upload_product", upload_tmp_image, current_bytes,
+                )
+                gen_kwargs = {"image_urls": [product_url]}
+            else:
+                LOG.warning("No upload_tmp_image callback — edit mode without image reference")
+                gen_kwargs = {}
+
+            current_bytes = _run_step(
+                "scene_edit", img_gen_provider.generate, edit_prompt, **gen_kwargs,
             )
-            # Pass runtime-configurable generation settings
-            gen_kwargs = {}
-            try:
-                from shared.settings_service import get_setting
-                steps = get_setting("SCENE_GEN_STEPS")
-                if steps:
-                    gen_kwargs["num_inference_steps"] = int(steps)
-                guidance = get_setting("SCENE_GEN_GUIDANCE")
-                if guidance:
-                    gen_kwargs["guidance_scale"] = float(guidance)
-                fal_ep = get_setting("FAL_ENDPOINT")
-                if fal_ep:
-                    gen_kwargs["fal_endpoint"] = fal_ep
-            except Exception:
-                pass
-            scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt, **gen_kwargs)
-        current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes)
+        else:
+            # --- Legacy mode: generate background, then PIL composite -----
+            if saved_background_bytes:
+                LOG.info("Step 2/3: Using saved background image (%d bytes)", len(saved_background_bytes))
+                scene_bytes = saved_background_bytes
+            else:
+                LOG.info("Step 2/3: Scene generation (%s)", img_gen_provider.name)
+                prompt = scene_prompt or (
+                    "plain flat surface, solid soft neutral background, single diffused light source, "
+                    "shallow depth of field, completely bare scene, nothing on the surface"
+                )
+                # Pass runtime-configurable generation settings
+                gen_kwargs = {}
+                try:
+                    from shared.settings_service import get_setting
+                    steps = get_setting("SCENE_GEN_STEPS")
+                    if steps:
+                        gen_kwargs["num_inference_steps"] = int(steps)
+                    guidance = get_setting("SCENE_GEN_GUIDANCE")
+                    if guidance:
+                        gen_kwargs["guidance_scale"] = float(guidance)
+                    fal_ep = get_setting("FAL_ENDPOINT")
+                    if fal_ep:
+                        gen_kwargs["fal_endpoint"] = fal_ep
+                except Exception:
+                    pass
+                scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt, **gen_kwargs)
+            current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes)
     else:
         LOG.info("Step 2/3: Scene generation — skipped")
 

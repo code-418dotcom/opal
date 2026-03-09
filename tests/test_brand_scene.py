@@ -158,6 +158,7 @@ class TestSavedBackgroundPipeline:
 
         scene = MagicMock()
         scene.name = "mock-scene"
+        scene.supports_edit = False
         scene.generate.return_value = SCENE_BG
 
         upscale = MagicMock()

@@ -7,7 +7,7 @@ import pytest
 import httpx
 
 from pipeline_worker.retry import TransientError, PermanentError, classify_and_raise
-from pipeline_worker.pipeline import execute_pipeline, PipelineResult, composite_product_on_scene
+from pipeline_worker.pipeline import execute_pipeline, PipelineResult, composite_product_on_scene, _build_edit_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +97,7 @@ class TestPipelineSequencing:
 
         scene = MagicMock()
         scene.name = "mock-scene"
+        scene.supports_edit = False
         scene.generate.return_value = RGBA_PNG  # valid image for compositing
 
         upscale = MagicMock()
@@ -280,3 +281,148 @@ class TestCompositing:
         img = Image.open(BytesIO(result))
         assert img.format == 'PNG'
         assert img.size[0] > 0 and img.size[1] > 0
+
+
+# ---------------------------------------------------------------------------
+# 5. Edit-Mode Pipeline (FLUX.2 Pro Edit)
+# ---------------------------------------------------------------------------
+
+class TestEditModePipeline:
+    def _make_edit_provider(self):
+        provider = MagicMock()
+        provider.name = "fal.ai/flux2-pro-edit"
+        provider.supports_edit = True
+        provider.generate.return_value = RGBA_PNG
+        return provider
+
+    def _make_legacy_provider(self):
+        provider = MagicMock()
+        provider.name = "mock-scene"
+        provider.supports_edit = False
+        provider.generate.return_value = RGBA_PNG
+        return provider
+
+    def test_edit_mode_skips_compositing(self):
+        """Edit-mode provider generates the final composited image directly."""
+        bg = MagicMock()
+        bg.name = "mock-bg"
+        bg.remove_background.return_value = RGBA_PNG
+
+        edit_provider = self._make_edit_provider()
+        upload_fn = MagicMock(return_value="https://blob.test/product.png")
+
+        result = execute_pipeline(
+            raw_bytes=RAW_PNG,
+            remove_background=True, generate_scene=True, upscale=False,
+            scene_prompt="marble countertop",
+            bg_provider=bg, img_gen_provider=edit_provider,
+            upload_tmp_image=upload_fn,
+        )
+
+        # BG removal should run
+        bg.remove_background.assert_called_once()
+        # Product should be uploaded for the API
+        upload_fn.assert_called_once_with(RGBA_PNG)
+        # Edit provider should be called with the constructed prompt + image_urls
+        edit_provider.generate.assert_called_once()
+        call_kwargs = edit_provider.generate.call_args[1]
+        assert call_kwargs["image_urls"] == ["https://blob.test/product.png"]
+        # The prompt should mention "marble countertop"
+        call_prompt = edit_provider.generate.call_args[0][0]
+        assert "marble countertop" in call_prompt
+        # Result should be the edit provider output (no PIL composite)
+        assert result.output_bytes == RGBA_PNG
+
+    def test_edit_mode_without_upload_callback(self):
+        """Edit mode works without upload callback (no image reference)."""
+        edit_provider = self._make_edit_provider()
+
+        result = execute_pipeline(
+            raw_bytes=RGBA_PNG,
+            remove_background=False, generate_scene=True, upscale=False,
+            scene_prompt="wooden table",
+            img_gen_provider=edit_provider,
+            upload_tmp_image=None,
+        )
+
+        edit_provider.generate.assert_called_once()
+        # No image_urls when upload_tmp_image is not provided
+        call_kwargs = edit_provider.generate.call_args[1]
+        assert "image_urls" not in call_kwargs
+        assert result.output_bytes == RGBA_PNG
+
+    def test_edit_mode_with_saved_bg_falls_back_to_legacy(self):
+        """When saved_background_bytes is provided, even edit providers use legacy compositing."""
+        edit_provider = self._make_edit_provider()
+
+        result = execute_pipeline(
+            raw_bytes=RGBA_PNG,
+            remove_background=False, generate_scene=True, upscale=False,
+            scene_prompt="test",
+            img_gen_provider=edit_provider,
+            saved_background_bytes=RGBA_PNG,
+        )
+
+        # Should NOT call the edit provider — uses saved background + PIL composite
+        edit_provider.generate.assert_not_called()
+        # Result should be composited PNG bytes
+        assert len(result.output_bytes) > 0
+
+    def test_legacy_provider_uses_compositing(self):
+        """Legacy provider (supports_edit=False) uses PIL compositing as before."""
+        legacy = self._make_legacy_provider()
+        upscale = MagicMock()
+        upscale.name = "mock-upscale"
+        upscale.upscale.return_value = b"upscaled"
+
+        result = execute_pipeline(
+            raw_bytes=RGBA_PNG,
+            remove_background=False, generate_scene=True, upscale=True,
+            scene_prompt="test prompt",
+            img_gen_provider=legacy, upscale_provider=upscale,
+        )
+
+        legacy.generate.assert_called_once_with("test prompt")
+        upscale.upscale.assert_called_once()
+        assert result.output_bytes == b"upscaled"
+
+    def test_edit_mode_full_pipeline(self):
+        """Full pipeline with edit mode: bg-removal -> edit -> upscale."""
+        bg = MagicMock()
+        bg.name = "mock-bg"
+        bg.remove_background.return_value = RGBA_PNG
+
+        edit_provider = self._make_edit_provider()
+        edit_provider.generate.return_value = b"edited_scene"
+
+        upscale = MagicMock()
+        upscale.name = "mock-upscale"
+        upscale.upscale.return_value = b"final_output"
+
+        upload_fn = MagicMock(return_value="https://blob.test/product.png")
+
+        result = execute_pipeline(
+            raw_bytes=RAW_PNG,
+            remove_background=True, generate_scene=True, upscale=True,
+            scene_prompt="studio setting",
+            bg_provider=bg, img_gen_provider=edit_provider, upscale_provider=upscale,
+            upload_tmp_image=upload_fn,
+        )
+
+        bg.remove_background.assert_called_once()
+        upload_fn.assert_called_once()
+        edit_provider.generate.assert_called_once()
+        upscale.upscale.assert_called_once_with(b"edited_scene")
+        assert result.output_bytes == b"final_output"
+
+
+class TestBuildEditPrompt:
+    def test_default_prompt(self):
+        prompt = _build_edit_prompt(None)
+        assert "product" in prompt.lower()
+        assert "studio" in prompt.lower()
+
+    def test_custom_scene(self):
+        prompt = _build_edit_prompt("a rustic wooden table with warm candles")
+        assert "rustic wooden table" in prompt
+        assert "product" in prompt.lower()

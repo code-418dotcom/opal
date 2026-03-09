@@ -145,6 +145,20 @@ def _resolve_scene_prompt(item_scene_prompt, item_scene_type, job_id, tenant_id,
     return None
 
 
+def _upload_tmp_image(image_bytes: bytes) -> str:
+    """Upload image bytes to a temporary blob and return a SAS-signed read URL.
+
+    Used by edit-mode providers (FLUX.2 Pro Edit) that need a publicly
+    accessible URL for the product image.
+    """
+    blob_path = f"_tmp/{new_id('tmp')}.png"
+    write_url = generate_write_sas(container="outputs", blob_path=blob_path, expiry_minutes=15)
+    upload_blob(write_url, image_bytes)
+    read_url = generate_read_sas(container="outputs", blob_path=blob_path, expiry_minutes=15)
+    LOG.info("Uploaded tmp image for edit mode: %s", blob_path)
+    return read_url
+
+
 def _should_watermark(data: dict) -> bool:
     """Check if this job should get a watermark (free-tier user with no subscription)."""
     tenant_id = data.get('tenant_id', '')
@@ -233,6 +247,7 @@ def process_message(data: dict) -> None:
         upscale_provider=upscale_provider,
         upscale_enabled=settings.UPSCALE_ENABLED,
         saved_background_bytes=saved_background_bytes,
+        upload_tmp_image=_upload_tmp_image,
     )
 
     # Apply watermark for free-tier users (no subscription, low balance)
@@ -327,7 +342,12 @@ def _init_providers():
         from shared.image_generation import get_image_gen_provider
         from shared.settings_service import get_setting
         provider_name = settings.IMAGE_GEN_PROVIDER
-        api_key_attr = f'{provider_name.upper().replace(".", "_")}_API_KEY'
+        # fal-flux2 uses the same FAL_API_KEY as fal
+        api_key_map = {"fal-flux2": "FAL_API_KEY"}
+        api_key_attr = api_key_map.get(
+            provider_name,
+            f'{provider_name.upper().replace(".", "_")}_API_KEY',
+        )
         api_key = get_setting(api_key_attr)
         if api_key:
             img_gen_provider = get_image_gen_provider(provider_name, api_key=api_key)
