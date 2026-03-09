@@ -742,7 +742,7 @@ class Opal_AB_Tests {
 					<tr>
 						<td><?php echo esc_html__( 'Significant (p < 0.05)', 'opal-ai-photography' ); ?></td>
 						<td>
-							<strong style="color:<?php echo $sig['significant'] ? '#00a32a' : '#d63638'; ?>;">
+							<strong style="color:<?php echo esc_attr( $sig['significant'] ? '#00a32a' : '#d63638' ); ?>;">
 								<?php echo $sig['significant'] ? esc_html__( 'Yes', 'opal-ai-photography' ) : esc_html__( 'No', 'opal-ai-photography' ); ?>
 							</strong>
 						</td>
