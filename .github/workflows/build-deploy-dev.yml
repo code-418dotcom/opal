@@ -284,7 +284,7 @@ jobs:
           AML_ENDPOINT_URL="${{ secrets.AML_ENDPOINT_URL }}"
           AML_ENDPOINT_KEY="${{ secrets.AML_ENDPOINT_KEY }}"
 
-          BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'rembg' }}"
+          BACKGROUND_REMOVAL_PROVIDER="${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'birefnet' }}"
           IMAGE_GEN_PROVIDER="${{ secrets.IMAGE_GEN_PROVIDER || 'fal' }}"
           FAL_API_KEY="${{ secrets.FAL_API_KEY }}"
 
