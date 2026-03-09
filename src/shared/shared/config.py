@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     AZURE_VISION_KEY: str = Field(default='', env='AZURE_VISION_KEY')
     
     # Background Removal Provider
-    BACKGROUND_REMOVAL_PROVIDER: str = Field(default='rembg', env='BACKGROUND_REMOVAL_PROVIDER')
+    BACKGROUND_REMOVAL_PROVIDER: str = Field(default='birefnet', env='BACKGROUND_REMOVAL_PROVIDER')
     REMOVEBG_API_KEY: str = Field(default='', env='REMOVEBG_API_KEY')
     
     # Image Generation

@@ -1,6 +1,6 @@
 """
 Background removal service abstraction.
-Supports multiple providers: rembg (local), remove.bg (API), Azure AI Vision (future)
+Supports multiple providers: BiRefNet (local), rembg (local), remove.bg (API), Azure AI Vision
 """
 import logging
 from abc import ABC, abstractmethod
@@ -22,6 +22,65 @@ class BackgroundRemovalProvider(ABC):
     def name(self) -> str:
         """Provider name for logging"""
         pass
+
+
+class BiRefNetProvider(BackgroundRemovalProvider):
+    """Local background removal using BiRefNet (MIT license).
+
+    Produces 256-level alpha mattes with sharp edges — a significant quality
+    upgrade over rembg/u2net which only produces binary masks.
+    """
+
+    def __init__(self, model_id: str = "ZhengPeng7/BiRefNet", device: str = ""):
+        import torch
+        from torchvision import transforms
+        from transformers import AutoModelForImageSegmentation
+
+        self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        LOG.info("Loading BiRefNet model %s on %s …", model_id, self._device)
+        self._model = (
+            AutoModelForImageSegmentation.from_pretrained(model_id, trust_remote_code=True)
+            .eval()
+            .to(self._device)
+        )
+        self._transform = transforms.Compose([
+            transforms.Resize((1024, 1024)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        self._torch = torch
+        LOG.info("BiRefNet provider initialized (%s)", self._device)
+
+    def remove_background(self, image_bytes: bytes) -> bytes:
+        from io import BytesIO
+        from PIL import Image
+
+        LOG.info("Processing with BiRefNet (local)")
+
+        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+        orig_size = image.size
+
+        input_tensor = self._transform(image).unsqueeze(0).to(self._device)
+
+        with self._torch.no_grad():
+            preds = self._model(input_tensor)[-1].sigmoid().cpu()
+
+        mask = preds[0].squeeze()
+        mask_img = Image.fromarray((mask.numpy() * 255).astype("uint8"), mode="L")
+        mask_img = mask_img.resize(orig_size, Image.Resampling.LANCZOS)
+
+        result = image.convert("RGBA")
+        result.putalpha(mask_img)
+
+        buf = BytesIO()
+        result.save(buf, format="PNG")
+        LOG.info("BiRefNet background removal successful (%d bytes -> %d bytes)",
+                 len(image_bytes), buf.tell())
+        return buf.getvalue()
+
+    @property
+    def name(self) -> str:
+        return "birefnet"
 
 
 class RembgProvider(BackgroundRemovalProvider):
@@ -129,9 +188,10 @@ class AzureVisionProvider(BackgroundRemovalProvider):
         return "azure-vision"
 
 
-def get_provider(provider_name: str = "rembg", **kwargs) -> BackgroundRemovalProvider:
+def get_provider(provider_name: str = "birefnet", **kwargs) -> BackgroundRemovalProvider:
     """Factory function to get background removal provider"""
     providers = {
+        "birefnet": BiRefNetProvider,
         "rembg": RembgProvider,
         "remove.bg": RemoveBgProvider,
         "azure-vision": AzureVisionProvider,

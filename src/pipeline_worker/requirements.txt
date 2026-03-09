@@ -9,8 +9,10 @@ azure-servicebus==7.12.2
 httpx==0.27.2
 tenacity==8.2.3
 Pillow==10.2.0
-# Background removal (rembg with ONNX)
-rembg[gpu]==2.0.57
+# Background removal (BiRefNet via transformers)
+transformers>=4.40.0
+timm
+kornia
 
 # Upscaling (Real-ESRGAN with PyTorch)
 realesrgan==0.3.0

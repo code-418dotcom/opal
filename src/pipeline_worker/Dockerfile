@@ -1,12 +1,13 @@
 FROM python:3.11-slim
 
-# System deps: libgomp (rembg/onnxruntime), libgl1+libglib (opencv/Real-ESRGAN)
+# System deps: libgomp (onnxruntime), libgl1+libglib (opencv/Real-ESRGAN), git (HF downloads)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libgl1 \
     libglib2.0-0 \
     build-essential \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -28,9 +29,8 @@ RUN mkdir -p /app/models && \
     curl -L -o /app/models/RealESRGAN_x2plus.pth \
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth
 
-# Pre-bake u2net ONNX model for rembg (176MB, avoids cold-start download)
-RUN mkdir -p /root/.u2net && \
-    curl -L -o /root/.u2net/u2net.onnx \
-    https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx
+# Pre-bake BiRefNet model weights (avoids cold-start download from HuggingFace)
+RUN python -c "from transformers import AutoModelForImageSegmentation; \
+    AutoModelForImageSegmentation.from_pretrained('ZhengPeng7/BiRefNet', trust_remote_code=True)"
 
 CMD ["python", "-m", "pipeline_worker.worker"]
