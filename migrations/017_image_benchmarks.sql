@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS image_benchmarks (
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_benchmarks_user ON image_benchmarks(user_id);
-CREATE INDEX idx_benchmarks_integration ON image_benchmarks(integration_id);
+CREATE INDEX IF NOT EXISTS idx_benchmarks_user ON image_benchmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_benchmarks_integration ON image_benchmarks(integration_id);
 
 CREATE TABLE IF NOT EXISTS category_benchmarks (
     id VARCHAR PRIMARY KEY,
