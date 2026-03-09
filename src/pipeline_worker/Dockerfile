@@ -29,8 +29,8 @@ RUN mkdir -p /app/models && \
     curl -L -o /app/models/RealESRGAN_x2plus.pth \
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth
 
-# Pre-bake BiRefNet model weights (avoids cold-start download from HuggingFace)
+# Pre-bake BiRefNet_lite model weights (avoids cold-start download from HuggingFace)
 RUN python -c "from transformers import AutoModelForImageSegmentation; \
-    AutoModelForImageSegmentation.from_pretrained('ZhengPeng7/BiRefNet', trust_remote_code=True)"
+    AutoModelForImageSegmentation.from_pretrained('ZhengPeng7/BiRefNet_lite', trust_remote_code=True)"
 
 CMD ["python", "-m", "pipeline_worker.worker"]

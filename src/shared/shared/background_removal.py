@@ -31,20 +31,22 @@ class BiRefNetProvider(BackgroundRemovalProvider):
     upgrade over rembg/u2net which only produces binary masks.
     """
 
-    def __init__(self, model_id: str = "ZhengPeng7/BiRefNet", device: str = ""):
+    def __init__(self, model_id: str = "ZhengPeng7/BiRefNet_lite", device: str = "",
+                 resolution: int = 512):
         import torch
         from torchvision import transforms
         from transformers import AutoModelForImageSegmentation
 
         self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        LOG.info("Loading BiRefNet model %s on %s …", model_id, self._device)
+        LOG.info("Loading BiRefNet model %s on %s (resolution=%d) …",
+                 model_id, self._device, resolution)
         self._model = (
             AutoModelForImageSegmentation.from_pretrained(model_id, trust_remote_code=True)
             .eval()
             .to(self._device)
         )
         self._transform = transforms.Compose([
-            transforms.Resize((1024, 1024)),
+            transforms.Resize((resolution, resolution)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
