@@ -1,0 +1,968 @@
+/**
+ * Opal AI Product Photography — Admin Styles
+ *
+ * Branding: indigo/purple primary (#6366f1), dark accents.
+ * Designed to integrate cleanly within wp-admin / WooCommerce.
+ *
+ * @package OpalAIPhotography
+ */
+
+/* ==========================================================================
+   CSS Custom Properties
+   ========================================================================== */
+
+:root {
+	--opal-primary: #6366f1;
+	--opal-primary-dark: #4f46e5;
+	--opal-primary-light: #818cf8;
+	--opal-primary-bg: rgba(99, 102, 241, 0.08);
+	--opal-success: #22c55e;
+	--opal-success-bg: rgba(34, 197, 94, 0.1);
+	--opal-warning: #eab308;
+	--opal-warning-bg: rgba(234, 179, 8, 0.1);
+	--opal-error: #ef4444;
+	--opal-error-bg: rgba(239, 68, 68, 0.1);
+	--opal-gray-50: #f9fafb;
+	--opal-gray-100: #f3f4f6;
+	--opal-gray-200: #e5e7eb;
+	--opal-gray-300: #d1d5db;
+	--opal-gray-400: #9ca3af;
+	--opal-gray-500: #6b7280;
+	--opal-gray-600: #4b5563;
+	--opal-gray-700: #374151;
+	--opal-gray-800: #1f2937;
+	--opal-gray-900: #111827;
+	--opal-radius: 8px;
+	--opal-radius-sm: 4px;
+	--opal-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+	--opal-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+	--opal-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+	--opal-transition: 0.2s ease;
+}
+
+/* ==========================================================================
+   Main Wrapper
+   ========================================================================== */
+
+.opal-admin-wrap {
+	max-width: 1200px;
+	margin: 0;
+	padding: 0;
+}
+
+.opal-admin-wrap h1 {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 23px;
+	font-weight: 600;
+	color: var(--opal-gray-900);
+	padding: 9px 0 4px;
+}
+
+/* ==========================================================================
+   Tab Navigation
+   ========================================================================== */
+
+.opal-admin-wrap .nav-tab-wrapper {
+	border-bottom: 2px solid var(--opal-gray-200);
+	margin-bottom: 0;
+	padding: 0;
+}
+
+.opal-admin-wrap .nav-tab {
+	border: none;
+	border-bottom: 3px solid transparent;
+	background: transparent;
+	color: var(--opal-gray-500);
+	font-size: 14px;
+	font-weight: 500;
+	padding: 10px 16px;
+	margin-bottom: -2px;
+	transition: color var(--opal-transition), border-color var(--opal-transition);
+}
+
+.opal-admin-wrap .nav-tab:hover {
+	background: transparent;
+	color: var(--opal-primary);
+	border-bottom-color: var(--opal-primary-light);
+}
+
+.opal-admin-wrap .nav-tab-active,
+.opal-admin-wrap .nav-tab-active:hover,
+.opal-admin-wrap .nav-tab-active:focus {
+	background: transparent;
+	border-bottom-color: var(--opal-primary);
+	color: var(--opal-primary);
+	font-weight: 600;
+	box-shadow: none;
+}
+
+/* ==========================================================================
+   Tab Content
+   ========================================================================== */
+
+.opal-tab-content {
+	margin-top: 24px;
+}
+
+/* ==========================================================================
+   Card Component
+   ========================================================================== */
+
+.opal-card {
+	background: #fff;
+	border: 1px solid var(--opal-gray-200);
+	border-radius: var(--opal-radius);
+	padding: 24px;
+	box-shadow: var(--opal-shadow);
+	transition: box-shadow var(--opal-transition);
+}
+
+.opal-card:hover {
+	box-shadow: var(--opal-shadow-md);
+}
+
+.opal-card h3 {
+	margin: 0 0 16px;
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--opal-gray-800);
+}
+
+/* ==========================================================================
+   Balance Card
+   ========================================================================== */
+
+.opal-balance-card {
+	background: linear-gradient(135deg, var(--opal-primary) 0%, var(--opal-primary-dark) 100%);
+	color: #fff;
+	border: none;
+}
+
+.opal-balance-card h3 {
+	color: rgba(255, 255, 255, 0.85);
+	font-weight: 500;
+}
+
+.opal-balance-card .opal-balance-number {
+	font-size: 3em;
+	font-weight: 700;
+	line-height: 1.1;
+	margin: 8px 0;
+	letter-spacing: -1px;
+}
+
+.opal-balance-card .opal-balance-label {
+	font-size: 14px;
+	opacity: 0.8;
+}
+
+.opal-balance-card.opal-balance-error {
+	background: var(--opal-gray-100);
+	color: var(--opal-error);
+	border: 1px solid var(--opal-gray-200);
+}
+
+.opal-balance-card.opal-balance-error h3 {
+	color: var(--opal-gray-600);
+}
+
+/* ==========================================================================
+   Stats Grid
+   ========================================================================== */
+
+.opal-stats-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 16px;
+}
+
+.opal-stat {
+	background: #fff;
+	border: 1px solid var(--opal-gray-200);
+	border-radius: var(--opal-radius);
+	padding: 20px;
+	text-align: center;
+	box-shadow: var(--opal-shadow);
+}
+
+.opal-stat-value {
+	font-size: 2em;
+	font-weight: 700;
+	color: var(--opal-primary);
+	line-height: 1.2;
+}
+
+.opal-stat-label {
+	font-size: 13px;
+	color: var(--opal-gray-500);
+	margin-top: 4px;
+}
+
+/* ==========================================================================
+   Product Grid (Bulk Processing)
+   ========================================================================== */
+
+.opal-product-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	gap: 16px;
+	margin: 20px 0;
+}
+
+.opal-product-item {
+	position: relative;
+	background: #fff;
+	border: 2px solid var(--opal-gray-200);
+	border-radius: var(--opal-radius);
+	padding: 12px;
+	text-align: center;
+	cursor: pointer;
+	transition: border-color var(--opal-transition), box-shadow var(--opal-transition);
+}
+
+.opal-product-item:hover {
+	border-color: var(--opal-primary-light);
+	box-shadow: var(--opal-shadow-md);
+}
+
+.opal-product-item.selected {
+	border-color: var(--opal-primary);
+	background: var(--opal-primary-bg);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.opal-product-item input[type="checkbox"] {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	accent-color: var(--opal-primary);
+}
+
+.opal-product-item img {
+	width: 100%;
+	height: 120px;
+	object-fit: contain;
+	border-radius: var(--opal-radius-sm);
+	margin-bottom: 8px;
+	background: var(--opal-gray-50);
+}
+
+.opal-product-item .opal-product-title {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--opal-gray-700);
+	line-height: 1.3;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.opal-product-item .opal-product-status {
+	font-size: 11px;
+	color: var(--opal-gray-400);
+	margin-top: 4px;
+}
+
+/* ==========================================================================
+   Progress Bar
+   ========================================================================== */
+
+.opal-progress-bar {
+	background: var(--opal-gray-200);
+	border-radius: 12px;
+	height: 24px;
+	overflow: hidden;
+	position: relative;
+}
+
+.opal-progress-fill {
+	background: linear-gradient(90deg, var(--opal-primary) 0%, var(--opal-primary-light) 100%);
+	height: 100%;
+	width: 0%;
+	border-radius: 12px;
+	transition: width 0.4s ease;
+	position: relative;
+}
+
+.opal-progress-fill::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.2) 50%,
+		transparent 100%
+	);
+	animation: opal-progress-shimmer 2s infinite;
+}
+
+@keyframes opal-progress-shimmer {
+	0% { transform: translateX(-100%); }
+	100% { transform: translateX(100%); }
+}
+
+.opal-progress-text {
+	font-size: 13px;
+	color: var(--opal-gray-600);
+	margin-top: 8px;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.opal-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 8px 20px;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.4;
+	border: none;
+	border-radius: var(--opal-radius-sm);
+	cursor: pointer;
+	transition: all var(--opal-transition);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.opal-btn:focus {
+	outline: 2px solid var(--opal-primary-light);
+	outline-offset: 2px;
+}
+
+.opal-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.opal-btn-primary {
+	background: linear-gradient(135deg, var(--opal-primary) 0%, var(--opal-primary-dark) 100%);
+	color: #fff;
+	box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
+}
+
+.opal-btn-primary:hover:not(:disabled) {
+	background: linear-gradient(135deg, var(--opal-primary-dark) 0%, #4338ca 100%);
+	box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4);
+	color: #fff;
+}
+
+.opal-btn-secondary {
+	background: transparent;
+	color: var(--opal-primary);
+	border: 1px solid var(--opal-primary);
+}
+
+.opal-btn-secondary:hover:not(:disabled) {
+	background: var(--opal-primary-bg);
+	color: var(--opal-primary-dark);
+}
+
+.opal-btn-sm {
+	padding: 4px 12px;
+	font-size: 12px;
+}
+
+/* ==========================================================================
+   Badges
+   ========================================================================== */
+
+.opal-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
+	font-size: 12px;
+	font-weight: 600;
+	border-radius: 9999px;
+	letter-spacing: 0.3px;
+	text-transform: capitalize;
+}
+
+.opal-badge-success {
+	background: var(--opal-success-bg);
+	color: #16a34a;
+}
+
+.opal-badge-warning {
+	background: var(--opal-warning-bg);
+	color: #a16207;
+}
+
+.opal-badge-error {
+	background: var(--opal-error-bg);
+	color: #dc2626;
+}
+
+.opal-badge-info {
+	background: var(--opal-primary-bg);
+	color: var(--opal-primary);
+}
+
+/* Status badges used in the dashboard table */
+.opal-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	font-size: 12px;
+	font-weight: 500;
+	border-radius: 9999px;
+}
+
+.opal-status::before {
+	content: '';
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+}
+
+.opal-status--success { color: #16a34a; }
+.opal-status--success::before { background: #22c55e; }
+
+.opal-status--warning { color: #a16207; }
+.opal-status--warning::before { background: #eab308; }
+
+.opal-status--error { color: #dc2626; }
+.opal-status--error::before { background: #ef4444; }
+
+/* ==========================================================================
+   A/B Test Card
+   ========================================================================== */
+
+.opal-ab-test-card {
+	background: #fff;
+	border: 1px solid var(--opal-gray-200);
+	border-radius: var(--opal-radius);
+	padding: 24px;
+	box-shadow: var(--opal-shadow);
+	margin-bottom: 16px;
+}
+
+.opal-ab-test-card h3 {
+	margin: 0 0 12px;
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--opal-gray-800);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.opal-ab-variants {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 20px;
+	margin: 16px 0;
+}
+
+.opal-ab-variants .opal-variant {
+	text-align: center;
+	padding: 16px;
+	background: var(--opal-gray-50);
+	border-radius: var(--opal-radius);
+	border: 1px solid var(--opal-gray-200);
+}
+
+.opal-ab-variants .opal-variant h4 {
+	margin: 0 0 12px;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--opal-gray-700);
+}
+
+.opal-ab-variants .opal-variant.opal-variant-winner {
+	border-color: var(--opal-success);
+	background: var(--opal-success-bg);
+}
+
+.opal-ab-variants .opal-variant img {
+	max-width: 100%;
+	height: 200px;
+	object-fit: contain;
+	border-radius: var(--opal-radius-sm);
+	background: #fff;
+}
+
+.opal-ab-metrics {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 14px;
+	margin-top: 12px;
+}
+
+.opal-ab-metrics th,
+.opal-ab-metrics td {
+	padding: 10px 12px;
+	text-align: left;
+	border-bottom: 1px solid var(--opal-gray-200);
+}
+
+.opal-ab-metrics th {
+	font-weight: 600;
+	color: var(--opal-gray-600);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.opal-ab-metrics td {
+	color: var(--opal-gray-800);
+}
+
+.opal-ab-metrics .opal-metric-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.opal-ab-metrics .opal-metric-bar-track {
+	flex: 1;
+	height: 8px;
+	background: var(--opal-gray-200);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.opal-ab-metrics .opal-metric-bar-fill {
+	height: 100%;
+	background: var(--opal-primary);
+	border-radius: 4px;
+	transition: width 0.3s ease;
+}
+
+.opal-significance {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 14px;
+	border-radius: var(--opal-radius-sm);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.opal-significance.significant {
+	background: var(--opal-success-bg);
+	color: #16a34a;
+}
+
+.opal-significance.not-significant {
+	background: var(--opal-gray-100);
+	color: var(--opal-gray-500);
+}
+
+.opal-significance::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+.opal-significance.significant::before {
+	background: var(--opal-success);
+}
+
+.opal-significance.not-significant::before {
+	background: var(--opal-gray-400);
+}
+
+/* ==========================================================================
+   Product Editor Metabox
+   ========================================================================== */
+
+.opal-metabox .opal-metabox-section {
+	margin-bottom: 12px;
+}
+
+.opal-metabox .opal-metabox-section:last-child {
+	margin-bottom: 0;
+}
+
+#opal-metabox-wrap .opal-metabox-section {
+	margin-bottom: 12px;
+}
+
+#opal-metabox-wrap hr {
+	border: none;
+	border-top: 1px solid var(--opal-gray-200);
+	margin: 12px 0;
+}
+
+.opal-metabox-gallery {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.opal-metabox-gallery .opal-gallery-pair {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.opal-metabox-gallery img {
+	width: 60px;
+	height: 60px;
+	object-fit: cover;
+	border-radius: 3px;
+	border: 2px solid var(--opal-gray-300);
+}
+
+.opal-metabox-gallery img.opal-img-processed {
+	border-color: var(--opal-primary);
+}
+
+/* ==========================================================================
+   Settings Section
+   ========================================================================== */
+
+.opal-settings-section {
+	background: #fff;
+	border: 1px solid var(--opal-gray-200);
+	border-radius: var(--opal-radius);
+	padding: 24px;
+	margin-bottom: 20px;
+	box-shadow: var(--opal-shadow);
+}
+
+.opal-settings-section h2 {
+	margin: 0 0 8px;
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--opal-gray-800);
+}
+
+.opal-settings-section p.description {
+	color: var(--opal-gray-500);
+	font-size: 13px;
+}
+
+/* ==========================================================================
+   Connection Status
+   ========================================================================== */
+
+.opal-connection-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 16px;
+	border-radius: var(--opal-radius-sm);
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.opal-connection-status.connected {
+	background: var(--opal-success-bg);
+	color: #16a34a;
+}
+
+.opal-connection-status.disconnected {
+	background: var(--opal-error-bg);
+	color: #dc2626;
+}
+
+.opal-connection-status.testing {
+	background: var(--opal-primary-bg);
+	color: var(--opal-primary);
+}
+
+.opal-connection-status::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+.opal-connection-status.connected::before {
+	background: var(--opal-success);
+}
+
+.opal-connection-status.disconnected::before {
+	background: var(--opal-error);
+}
+
+.opal-connection-status.testing::before {
+	background: var(--opal-primary);
+	animation: opal-pulse 1s infinite;
+}
+
+/* ==========================================================================
+   Spinner
+   ========================================================================== */
+
+.opal-spinner {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	border: 3px solid var(--opal-gray-200);
+	border-top-color: var(--opal-primary);
+	border-radius: 50%;
+	animation: opal-spin 0.6s linear infinite;
+}
+
+.opal-spinner-sm {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+}
+
+.opal-spinner-lg {
+	width: 32px;
+	height: 32px;
+	border-width: 4px;
+}
+
+@keyframes opal-spin {
+	to { transform: rotate(360deg); }
+}
+
+@keyframes opal-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.4; }
+}
+
+/* ==========================================================================
+   Empty State
+   ========================================================================== */
+
+.opal-empty-state {
+	text-align: center;
+	padding: 60px 20px;
+	color: var(--opal-gray-500);
+}
+
+.opal-empty-state .opal-empty-icon {
+	font-size: 48px;
+	margin-bottom: 16px;
+	opacity: 0.4;
+}
+
+.opal-empty-state .opal-empty-icon .dashicons {
+	font-size: 48px;
+	width: 48px;
+	height: 48px;
+}
+
+.opal-empty-state h3 {
+	margin: 0 0 8px;
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--opal-gray-600);
+}
+
+.opal-empty-state p {
+	font-size: 14px;
+	max-width: 400px;
+	margin: 0 auto;
+	line-height: 1.5;
+}
+
+/* ==========================================================================
+   Toast Notification
+   ========================================================================== */
+
+.opal-toast {
+	position: fixed;
+	top: 40px;
+	right: 20px;
+	z-index: 100100;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 300px;
+	max-width: 450px;
+	padding: 14px 20px;
+	border-radius: var(--opal-radius);
+	box-shadow: var(--opal-shadow-lg);
+	font-size: 14px;
+	font-weight: 500;
+	transform: translateX(120%);
+	transition: transform 0.3s ease;
+	pointer-events: auto;
+}
+
+.opal-toast.visible {
+	transform: translateX(0);
+}
+
+.opal-toast-success {
+	background: #fff;
+	color: #16a34a;
+	border-left: 4px solid var(--opal-success);
+}
+
+.opal-toast-error {
+	background: #fff;
+	color: #dc2626;
+	border-left: 4px solid var(--opal-error);
+}
+
+.opal-toast-info {
+	background: #fff;
+	color: var(--opal-primary);
+	border-left: 4px solid var(--opal-primary);
+}
+
+.opal-toast-dismiss {
+	margin-left: auto;
+	background: none;
+	border: none;
+	color: var(--opal-gray-400);
+	cursor: pointer;
+	font-size: 18px;
+	line-height: 1;
+	padding: 0 0 0 10px;
+}
+
+.opal-toast-dismiss:hover {
+	color: var(--opal-gray-600);
+}
+
+/* ==========================================================================
+   Dashboard Grid
+   ========================================================================== */
+
+.opal-dashboard-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 20px;
+}
+
+.opal-dashboard-grid .opal-card-full {
+	grid-column: 1 / -1;
+}
+
+/* ==========================================================================
+   Bulk Processing Controls
+   ========================================================================== */
+
+.opal-bulk-controls {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 16px;
+	padding: 12px 16px;
+	background: var(--opal-gray-50);
+	border: 1px solid var(--opal-gray-200);
+	border-radius: var(--opal-radius);
+}
+
+.opal-bulk-controls label {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--opal-gray-600);
+}
+
+.opal-bulk-controls select {
+	padding: 6px 10px;
+	border: 1px solid var(--opal-gray-300);
+	border-radius: var(--opal-radius-sm);
+	font-size: 13px;
+}
+
+.opal-bulk-controls .opal-bulk-count {
+	margin-left: auto;
+	font-size: 13px;
+	color: var(--opal-gray-500);
+	font-weight: 500;
+}
+
+/* ==========================================================================
+   API Key Toggle
+   ========================================================================== */
+
+.opal-api-key-wrap {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.opal-api-key-wrap .opal-toggle-visibility {
+	background: none;
+	border: 1px solid var(--opal-gray-300);
+	border-radius: var(--opal-radius-sm);
+	padding: 4px 10px;
+	font-size: 12px;
+	color: var(--opal-gray-600);
+	cursor: pointer;
+}
+
+.opal-api-key-wrap .opal-toggle-visibility:hover {
+	background: var(--opal-gray-100);
+}
+
+/* ==========================================================================
+   WP Admin Overrides (within Opal context)
+   ========================================================================== */
+
+.opal-admin-wrap .widefat th,
+.opal-admin-wrap .widefat td {
+	vertical-align: middle;
+}
+
+.opal-admin-wrap .widefat {
+	border-radius: var(--opal-radius);
+	overflow: hidden;
+}
+
+.opal-admin-wrap .page-title-action {
+	background: var(--opal-primary);
+	color: #fff;
+	border: none;
+	border-radius: var(--opal-radius-sm);
+	padding: 6px 14px;
+	font-size: 13px;
+	text-decoration: none;
+}
+
+.opal-admin-wrap .page-title-action:hover {
+	background: var(--opal-primary-dark);
+	color: #fff;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media screen and (max-width: 782px) {
+	.opal-stats-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.opal-product-grid {
+		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+	}
+
+	.opal-ab-variants {
+		grid-template-columns: 1fr;
+	}
+
+	.opal-bulk-controls {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.opal-bulk-controls .opal-bulk-count {
+		margin-left: 0;
+	}
+
+	.opal-toast {
+		right: 10px;
+		left: 10px;
+		min-width: 0;
+	}
+}
