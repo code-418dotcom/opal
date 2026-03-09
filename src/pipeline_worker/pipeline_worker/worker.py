@@ -11,6 +11,26 @@ import logging
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# Shim: basicsr imports torchvision.transforms.functional_tensor which was
+# removed in torchvision 0.17+.  Re-export from functional to keep it working.
+try:
+    import torchvision.transforms.functional_tensor  # noqa: F401
+except ModuleNotFoundError:
+    import types, torchvision.transforms.functional as _F  # noqa: E401
+    torchvision = __import__("torchvision")
+    torchvision.transforms.functional_tensor = types.ModuleType(
+        "torchvision.transforms.functional_tensor"
+    )
+    import sys
+    sys.modules["torchvision.transforms.functional_tensor"] = (
+        torchvision.transforms.functional_tensor
+    )
+    # Copy commonly used functions that basicsr expects
+    for _name in ("rgb_to_grayscale", "normalize", "resize", "adjust_brightness",
+                  "adjust_contrast", "adjust_hue", "adjust_saturation"):
+        if hasattr(_F, _name):
+            setattr(torchvision.transforms.functional_tensor, _name, getattr(_F, _name))
+
 from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 
 from shared.config import settings
