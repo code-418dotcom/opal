@@ -4912,17 +4912,37 @@ body {
 
 .landing-stores-logos {
   display: flex;
-  gap: 1.25rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
 .landing-store-logo {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: rgba(200, 205, 224, 0.5);
-  font-weight: 500;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: rgba(200, 205, 224, 0.7);
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  background: rgba(200, 205, 224, 0.06);
+  border: 1px solid rgba(200, 205, 224, 0.1);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.landing-store-logo:hover {
+  color: rgba(200, 205, 224, 0.95);
+  background: rgba(200, 205, 224, 0.1);
+  border-color: rgba(200, 205, 224, 0.2);
+}
+
+.landing-store-logo svg {
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.landing-store-logo:hover svg {
+  opacity: 1;
 }
 
 /* Integration spotlight */
@@ -5604,4 +5624,88 @@ body {
   .ab-variants { grid-template-columns: 1fr; }
   .ab-vs { padding: 0.5rem 0; }
   .ab-form-row { grid-template-columns: 1fr; }
+}
+
+/* ── Benchmark Page ─────────────────────────────────────────────── */
+.bench-page { padding: 0; }
+.bench-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+.bench-header h2 { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 1.25rem; }
+.bench-header-actions { display: flex; gap: 0.5rem; }
+.bench-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; color: #ef4444; }
+
+/* Analyze view */
+.bench-analyze { display: flex; flex-direction: column; gap: 2rem; }
+.bench-upload-card { background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.12); border-radius: 12px; padding: 3rem 2rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+.bench-upload-icon { color: rgba(255,255,255,0.25); }
+.bench-upload-card h3 { margin: 0; font-size: 1.2rem; }
+.bench-upload-card p { margin: 0; color: rgba(255,255,255,0.5); max-width: 400px; }
+.bench-options { display: flex; gap: 1rem; align-items: end; }
+.bench-option { display: flex; flex-direction: column; gap: 0.25rem; position: relative; }
+.bench-option label { font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; }
+.bench-option select, .bench-option input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 0.5rem 0.75rem; color: #fff; font-size: 0.9rem; min-width: 140px; appearance: none; }
+.bench-select-icon { position: absolute; right: 8px; bottom: 10px; pointer-events: none; color: rgba(255,255,255,0.4); }
+.btn-lg { padding: 0.75rem 2rem; font-size: 1rem; }
+
+/* Category reference */
+.bench-categories-ref h4 { margin: 0 0 1rem; font-size: 0.9rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; }
+.bench-cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; }
+.bench-cat-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem 1rem; }
+.bench-cat-name { font-weight: 600; margin-bottom: 0.5rem; text-transform: capitalize; font-size: 0.85rem; }
+.bench-cat-scores { display: flex; flex-direction: column; gap: 0.2rem; }
+.bench-cat-score { display: flex; justify-content: space-between; font-size: 0.75rem; color: rgba(255,255,255,0.5); }
+
+/* Result view */
+.bench-result { display: flex; flex-direction: column; gap: 1.5rem; }
+.bench-result-top { display: flex; gap: 2rem; align-items: center; }
+.bench-result-preview { width: 200px; height: 200px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+.bench-result-preview img { width: 100%; height: 100%; object-fit: cover; }
+.bench-result-overview { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.bench-result-title { font-weight: 600; font-size: 1rem; }
+.bench-result-category { color: rgba(255,255,255,0.4); font-size: 0.85rem; text-transform: capitalize; }
+
+/* Overall gauge */
+.bench-gauge { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.bench-gauge-ring { width: 100px; height: 100px; border-radius: 50%; border: 4px solid; display: flex; align-items: center; justify-content: center; }
+.bench-gauge-score { font-size: 2rem; font-weight: 700; }
+.bench-gauge-label { font-size: 0.9rem; font-weight: 600; }
+
+/* Score bars */
+.bench-result-scores { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1.25rem; }
+.bench-result-scores h4 { margin: 0 0 1rem; font-size: 0.9rem; }
+.bench-score-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
+.bench-score-label { width: 140px; font-size: 0.85rem; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+.bench-score-bar-container { flex: 1; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; position: relative; overflow: visible; }
+.bench-score-bar { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.bench-score-avg-marker { position: absolute; top: -3px; width: 2px; height: 14px; background: rgba(255,255,255,0.5); border-radius: 1px; transform: translateX(-1px); }
+.bench-score-value { width: 30px; text-align: right; font-size: 0.85rem; font-weight: 600; }
+.bench-legend { margin-top: 0.75rem; display: flex; gap: 1rem; }
+.bench-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+.bench-legend-dot { width: 8px; height: 2px; border-radius: 1px; display: inline-block; }
+
+/* Suggestions */
+.bench-suggestions h4 { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 1rem; font-size: 0.9rem; }
+.bench-suggestion { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-left: 3px solid; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+.bench-suggestion-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
+.bench-suggestion-metric { font-weight: 600; font-size: 0.9rem; }
+.bench-suggestion-priority { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.bench-suggestion p { margin: 0 0 0.5rem; color: rgba(255,255,255,0.6); font-size: 0.85rem; }
+.btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+.bench-all-good { text-align: center; padding: 2rem; color: #22c55e; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+
+/* History view */
+.bench-history-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.bench-history-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+.bench-history-item:hover { background: rgba(255,255,255,0.06); }
+.bench-history-score { width: 44px; height: 44px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+.bench-history-info { flex: 1; min-width: 0; }
+.bench-history-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bench-history-meta { font-size: 0.8rem; color: rgba(255,255,255,0.4); }
+.bench-history-arrow { color: rgba(255,255,255,0.2); }
+.bench-empty { text-align: center; padding: 3rem; color: rgba(255,255,255,0.3); display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.bench-loading { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 2rem; color: rgba(255,255,255,0.5); }
+
+@media (max-width: 768px) {
+  .bench-result-top { flex-direction: column; }
+  .bench-options { flex-direction: column; }
+  .bench-cat-grid { grid-template-columns: 1fr; }
 }

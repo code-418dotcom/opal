@@ -223,6 +223,46 @@ export interface ABTestDetail extends ABTest {
   significance: ABTestSignificance;
 }
 
+export interface ImageBenchmarkScores {
+  resolution: number;
+  background: number;
+  lighting: number;
+  composition: number;
+  text_penalty: number;
+  image_count: number;
+}
+
+export interface BenchmarkSuggestion {
+  metric: string;
+  action: string;
+  message: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface ImageBenchmark {
+  id: string;
+  user_id: string;
+  integration_id?: string;
+  product_id?: string;
+  product_title?: string;
+  image_url?: string;
+  job_item_id?: string;
+  scores: ImageBenchmarkScores;
+  overall_score: number;
+  suggestions: BenchmarkSuggestion[];
+  category: string;
+  category_avg?: ImageBenchmarkScores;
+  created_at: string;
+}
+
+export interface CategoryBenchmark {
+  id: string;
+  category: string;
+  avg_scores: ImageBenchmarkScores;
+  sample_size: number;
+  updated_at: string;
+}
+
 export interface AdminSetting {
   key: string;
   value: string;

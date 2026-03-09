@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -533,6 +533,61 @@ class ApiClient {
 
   async getABTestMetrics(testId: string): Promise<{ daily: ABTestMetric[]; aggregated: Record<string, Record<string, number>>; significance: Record<string, unknown> }> {
     return this.request(`/v1/ab-tests/${testId}/metrics`);
+  }
+
+  // ── Benchmarks ──────────────────────────────────────────────────
+
+  async analyzeBenchmark(data: {
+    job_item_id?: string;
+    image_url?: string;
+    product_title?: string;
+    product_id?: string;
+    integration_id?: string;
+    category?: string;
+    image_count?: number;
+  }): Promise<ImageBenchmark> {
+    return this.request('/v1/benchmarks/analyze', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async analyzeBenchmarkFile(file: File, category = 'general', imageCount = 1): Promise<ImageBenchmark> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+    formData.append('image_count', String(imageCount));
+
+    const url = `${this.baseUrl}/v1/benchmarks/analyze-upload`;
+    const headers: Record<string, string> = {};
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    } else if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey;
+    }
+
+    const response = await fetch(url, { method: 'POST', body: formData, headers });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async listBenchmarks(integrationId?: string, category?: string): Promise<{ benchmarks: ImageBenchmark[] }> {
+    const params = new URLSearchParams();
+    if (integrationId) params.set('integration_id', integrationId);
+    if (category) params.set('category', category);
+    const qs = params.toString();
+    return this.request(`/v1/benchmarks${qs ? '?' + qs : ''}`);
+  }
+
+  async getBenchmark(benchmarkId: string): Promise<ImageBenchmark> {
+    return this.request(`/v1/benchmarks/${benchmarkId}`);
+  }
+
+  async listBenchmarkCategories(): Promise<{ categories: CategoryBenchmark[] }> {
+    return this.request('/v1/benchmarks/categories');
   }
 
   // ── Admin ─────────────────────────────────────────────────────────

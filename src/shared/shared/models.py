@@ -363,6 +363,39 @@ class ABTestMetric(Base):
         return f'<ABTestMetric {self.id} test={self.ab_test_id} variant={self.variant}>'
 
 
+class ImageBenchmark(Base):
+    __tablename__ = 'image_benchmarks'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False, index=True)
+    integration_id = Column(String, ForeignKey('integrations.id', ondelete='SET NULL'), nullable=True, index=True)
+    product_id = Column(String, nullable=True)
+    product_title = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    job_item_id = Column(String, ForeignKey('job_items.id', ondelete='SET NULL'), nullable=True)
+    scores = Column(JSON, nullable=False)
+    overall_score = Column(Integer, nullable=False)
+    suggestions = Column(JSON, nullable=True)
+    category = Column(String(100), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ImageBenchmark {self.id} score={self.overall_score}>'
+
+
+class CategoryBenchmark(Base):
+    __tablename__ = 'category_benchmarks'
+
+    id = Column(String, primary_key=True)
+    category = Column(String(100), nullable=False, unique=True)
+    avg_scores = Column(JSON, nullable=False)
+    sample_size = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<CategoryBenchmark {self.category}>'
+
+
 class JobItem(Base):
     __tablename__ = 'job_items'
 

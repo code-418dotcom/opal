@@ -1924,3 +1924,89 @@ def get_ab_test_aggregated_metrics(test_id: str) -> Dict[str, Dict[str, int]]:
             result[m.variant]["conversions"] += m.conversions
             result[m.variant]["revenue_cents"] += m.revenue_cents
         return result
+
+
+# ── Image Benchmarks ──────────────────────────────────────────────────
+
+def create_image_benchmark(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create an image benchmark record."""
+    from .models import ImageBenchmark
+    with SessionLocal() as session:
+        bm = ImageBenchmark(**data)
+        session.add(bm)
+        session.commit()
+        session.refresh(bm)
+        return _serialize_benchmark(bm)
+
+
+def get_image_benchmark(benchmark_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single benchmark by ID, scoped to user."""
+    from .models import ImageBenchmark
+    with SessionLocal() as session:
+        bm = session.query(ImageBenchmark).filter(
+            ImageBenchmark.id == benchmark_id,
+            ImageBenchmark.user_id == user_id,
+        ).first()
+        return _serialize_benchmark(bm) if bm else None
+
+
+def list_image_benchmarks(
+    user_id: str,
+    integration_id: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list:
+    """List benchmarks for a user with optional filters."""
+    from .models import ImageBenchmark
+    with SessionLocal() as session:
+        query = session.query(ImageBenchmark).filter(ImageBenchmark.user_id == user_id)
+        if integration_id:
+            query = query.filter(ImageBenchmark.integration_id == integration_id)
+        if category:
+            query = query.filter(ImageBenchmark.category == category)
+        benchmarks = query.order_by(ImageBenchmark.created_at.desc()).offset(offset).limit(limit).all()
+        return [_serialize_benchmark(b) for b in benchmarks]
+
+
+def get_category_benchmarks() -> list:
+    """Get all category benchmark averages."""
+    from .models import CategoryBenchmark
+    with SessionLocal() as session:
+        cats = session.query(CategoryBenchmark).order_by(CategoryBenchmark.category).all()
+        return [_serialize_category_benchmark(c) for c in cats]
+
+
+def get_category_benchmark(category: str) -> Optional[Dict[str, Any]]:
+    """Get benchmark averages for a specific category."""
+    from .models import CategoryBenchmark
+    with SessionLocal() as session:
+        cb = session.query(CategoryBenchmark).filter(CategoryBenchmark.category == category).first()
+        return _serialize_category_benchmark(cb) if cb else None
+
+
+def _serialize_benchmark(bm) -> Dict[str, Any]:
+    return {
+        "id": bm.id,
+        "user_id": bm.user_id,
+        "integration_id": bm.integration_id,
+        "product_id": bm.product_id,
+        "product_title": bm.product_title,
+        "image_url": bm.image_url,
+        "job_item_id": bm.job_item_id,
+        "scores": bm.scores,
+        "overall_score": bm.overall_score,
+        "suggestions": bm.suggestions,
+        "category": bm.category,
+        "created_at": bm.created_at.isoformat(),
+    }
+
+
+def _serialize_category_benchmark(cb) -> Dict[str, Any]:
+    return {
+        "id": cb.id,
+        "category": cb.category,
+        "avg_scores": cb.avg_scores,
+        "sample_size": cb.sample_size,
+        "updated_at": cb.updated_at.isoformat(),
+    }

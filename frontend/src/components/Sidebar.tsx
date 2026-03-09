@@ -6,6 +6,7 @@ import {
   Palette,
   Store,
   FlaskConical,
+  Target,
   CreditCard,
   Settings,
   ChevronLeft,
@@ -22,6 +23,7 @@ export type Page =
   | 'brands'
   | 'integrations'
   | 'ab-tests'
+  | 'benchmarks'
   | 'billing'
   | 'admin';
 
@@ -55,6 +57,7 @@ export default function Sidebar({
     { id: 'brands' as Page, icon: Palette, label: t('nav.brands', { defaultValue: 'Brands & Scenes' }) },
     { id: 'integrations' as Page, icon: Store, label: t('nav.integrations', { defaultValue: 'Integrations' }) },
     { id: 'ab-tests' as Page, icon: FlaskConical, label: t('nav.abTests', { defaultValue: 'A/B Tests' }) },
+    { id: 'benchmarks' as Page, icon: Target, label: t('nav.benchmarks', { defaultValue: 'Image Score' }) },
     { id: 'billing' as Page, icon: CreditCard, label: t('nav.billing', { defaultValue: 'Billing' }) },
     ...(isAdmin ? [{ id: 'admin' as Page, icon: Settings, label: t('nav.admin', { defaultValue: 'Admin' }) }] : []),
   ];
