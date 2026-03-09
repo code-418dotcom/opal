@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Eraser, Image, Maximize, ArrowRight, Check, Store, Sparkles,
   FlaskConical, Layers, Palette, ShoppingBag, Zap, TrendingUp,
-  Camera, BarChart3, Search, LayoutGrid,
+  Camera, BarChart3, Search, LayoutGrid, Repeat,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
@@ -11,6 +11,14 @@ interface TokenPackage {
   id: string;
   name: string;
   tokens: number;
+  price_cents: number;
+  currency: string;
+}
+
+interface SubPlan {
+  id: string;
+  name: string;
+  tokens_per_month: number;
   price_cents: number;
   currency: string;
 }
@@ -44,6 +52,8 @@ const EtsyLogo = () => (
 export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const { t } = useTranslation();
   const [packages, setPackages] = useState<TokenPackage[]>([]);
+  const [subPlans, setSubPlans] = useState<SubPlan[]>([]);
+  const [landingPriceTab, setLandingPriceTab] = useState<'subs' | 'packs'>('subs');
 
   // A/B variant system — use ?v=A or ?v=B to force, otherwise sticky random
   const variant = useMemo(() => {
@@ -65,6 +75,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
     fetch(`${API_URL}/v1/billing/packages`)
       .then(r => r.json())
       .then(data => setPackages(data.packages || []))
+      .catch(() => {});
+    fetch(`${API_URL}/v1/billing/subscription-plans`)
+      .then(r => r.json())
+      .then(data => setSubPlans(data.plans || []))
       .catch(() => {});
   }, []);
 
@@ -410,7 +424,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── Pricing ──────────────────────────────────────── */}
-      {packages.length > 0 && (
+      {(packages.length > 0 || subPlans.length > 0) && (
         <section className="landing-pricing" id="pricing" data-ab-section="pricing">
           <div className="landing-section-inner">
             <div className="landing-section-header">
@@ -422,42 +436,106 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               <p className="landing-section-sub">
                 {t('landing.pricingSub')}
               </p>
+
+              {/* Tab toggle */}
+              <div className="landing-price-toggle">
+                <button
+                  className={`landing-price-toggle-btn ${landingPriceTab === 'subs' ? 'active' : ''}`}
+                  onClick={() => setLandingPriceTab('subs')}
+                >
+                  <Repeat size={14} />
+                  {t('landing.monthlyPlans', { defaultValue: 'Monthly' })}
+                  <span className="landing-price-toggle-save">{t('landing.saveMore', { defaultValue: 'Save up to 35%' })}</span>
+                </button>
+                <button
+                  className={`landing-price-toggle-btn ${landingPriceTab === 'packs' ? 'active' : ''}`}
+                  onClick={() => setLandingPriceTab('packs')}
+                >
+                  <ShoppingBag size={14} />
+                  {t('landing.oneTimePacks', { defaultValue: 'One-time' })}
+                </button>
+              </div>
             </div>
-            <div className="landing-pricing-grid">
-              {packages.map((pkg, i) => {
-                const isPopular = i === 1;
-                const pricePerToken = pkg.price_cents / pkg.tokens / 100;
-                return (
-                  <div
-                    key={pkg.id}
-                    className={`landing-price-card ${isPopular ? 'landing-price-popular' : ''}`}
-                  >
-                    {isPopular && <div className="landing-price-badge">{t('landing.mostPopular')}</div>}
-                    <div className="landing-price-name">{pkg.name}</div>
-                    <div className="landing-price-amount">
-                      {formatPrice(pkg.price_cents, pkg.currency)}
-                    </div>
-                    <div className="landing-price-tokens">{pkg.tokens} {t('common.tokens')}</div>
-                    <div className="landing-price-per">
-                      {formatPrice(Math.round(pricePerToken * 100), pkg.currency)} {t('landing.perToken')}
-                    </div>
-                    <ul className="landing-price-features">
-                      <li><Check size={14} /> {t('landing.priceFeature1')}</li>
-                      <li><Check size={14} /> {t('landing.priceFeature2')}</li>
-                      <li><Check size={14} /> {t('landing.priceFeature3')}</li>
-                      {i >= 1 && <li><Check size={14} /> {t('landing.priceFeature4')}</li>}
-                      {i >= 2 && <li><Check size={14} /> {t('landing.priceFeature5')}</li>}
-                    </ul>
-                    <button
-                      className={`landing-price-btn ${isPopular ? 'landing-price-btn-primary' : ''}`}
-                      onClick={onGetStarted}
+
+            {/* Subscription Plans */}
+            {landingPriceTab === 'subs' && subPlans.length > 0 && (
+              <div className="landing-pricing-grid">
+                {subPlans.map((plan, i) => {
+                  const isPopular = i === 1;
+                  const perToken = plan.price_cents / plan.tokens_per_month / 100;
+                  return (
+                    <div
+                      key={plan.id}
+                      className={`landing-price-card ${isPopular ? 'landing-price-popular' : ''}`}
                     >
-                      {t('landing.getStarted')}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      {isPopular && <div className="landing-price-badge">{t('landing.mostPopular')}</div>}
+                      <div className="landing-price-name">{plan.name}</div>
+                      <div className="landing-price-amount">
+                        {formatPrice(plan.price_cents, plan.currency)}
+                        <span className="landing-price-interval">/mo</span>
+                      </div>
+                      <div className="landing-price-tokens">{plan.tokens_per_month} {t('common.tokens')}/mo</div>
+                      <div className="landing-price-per">
+                        {formatPrice(Math.round(perToken * 100), plan.currency)} {t('landing.perToken')}
+                      </div>
+                      <ul className="landing-price-features">
+                        <li><Check size={14} /> {t('landing.priceFeature1')}</li>
+                        <li><Check size={14} /> {t('landing.priceFeatureRollover', { defaultValue: 'Unused tokens roll over' })}</li>
+                        <li><Check size={14} /> {t('landing.priceFeature3')}</li>
+                        {plan.tokens_per_month >= 100 && <li><Check size={14} /> {t('landing.priceFeature4')}</li>}
+                        {plan.tokens_per_month >= 500 && <li><Check size={14} /> {t('landing.priceFeature5')}</li>}
+                        {plan.tokens_per_month >= 2000 && <li><Check size={14} /> {t('landing.priceFeatureDedicated', { defaultValue: 'Dedicated support' })}</li>}
+                      </ul>
+                      <button
+                        className={`landing-price-btn ${isPopular ? 'landing-price-btn-primary' : ''}`}
+                        onClick={onGetStarted}
+                      >
+                        {t('landing.getStarted')}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* One-time Token Packs */}
+            {landingPriceTab === 'packs' && packages.length > 0 && (
+              <div className="landing-pricing-grid">
+                {packages.map((pkg, i) => {
+                  const isPopular = i === 1;
+                  const perToken = pkg.price_cents / pkg.tokens / 100;
+                  return (
+                    <div
+                      key={pkg.id}
+                      className={`landing-price-card ${isPopular ? 'landing-price-popular' : ''}`}
+                    >
+                      {isPopular && <div className="landing-price-badge">{t('landing.mostPopular')}</div>}
+                      <div className="landing-price-name">{pkg.name}</div>
+                      <div className="landing-price-amount">
+                        {formatPrice(pkg.price_cents, pkg.currency)}
+                      </div>
+                      <div className="landing-price-tokens">{pkg.tokens} {t('common.tokens')}</div>
+                      <div className="landing-price-per">
+                        {formatPrice(Math.round(perToken * 100), pkg.currency)} {t('landing.perToken')}
+                      </div>
+                      <ul className="landing-price-features">
+                        <li><Check size={14} /> {t('landing.priceFeature1')}</li>
+                        <li><Check size={14} /> {t('landing.priceFeature2')}</li>
+                        <li><Check size={14} /> {t('landing.priceFeature3')}</li>
+                        {pkg.tokens >= 100 && <li><Check size={14} /> {t('landing.priceFeature4')}</li>}
+                        {pkg.tokens >= 2000 && <li><Check size={14} /> {t('landing.priceFeature5')}</li>}
+                      </ul>
+                      <button
+                        className={`landing-price-btn ${isPopular ? 'landing-price-btn-primary' : ''}`}
+                        onClick={onGetStarted}
+                      >
+                        {t('landing.getStarted')}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
       )}

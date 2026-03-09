@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw, CheckCircle, XCircle, Clock, Crown } from 'lucide-react';
+import {
+  Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw,
+  CheckCircle, XCircle, Clock, Crown, Check, Zap, Repeat,
+  ShoppingBag,
+} from 'lucide-react';
 import { api } from '../api';
 import type { TokenPackage, TokenTransaction } from '../types';
+
+type PricingTab = 'subscriptions' | 'packs';
 
 export default function BillingPage() {
   const { t } = useTranslation();
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const [paymentBanner, setPaymentBanner] = useState<{ status: string; message: string } | null>(null);
+  const [pricingTab, setPricingTab] = useState<PricingTab>('subscriptions');
   const queryClient = useQueryClient();
 
   // Check for payment return (payment_id in URL)
@@ -17,12 +24,10 @@ export default function BillingPage() {
     const paymentId = params.get('payment_id');
     if (!paymentId) return;
 
-    // Clean URL immediately
     const url = new URL(window.location.href);
     url.searchParams.delete('payment_id');
     window.history.replaceState({}, '', url.pathname + url.search);
 
-    // Poll payment status (Mollie webhook may not have arrived yet)
     let attempts = 0;
     const poll = async () => {
       try {
@@ -37,7 +42,6 @@ export default function BillingPage() {
           setPaymentBanner({ status: 'failed', message: t('billing.paymentFailed', { status: payment.status }) });
           return;
         }
-        // Still pending — retry up to 10 times (30s total)
         attempts++;
         if (attempts < 10) {
           setTimeout(poll, 3000);
@@ -109,7 +113,6 @@ export default function BillingPage() {
   const handlePurchase = async (pkg: TokenPackage) => {
     setPurchaseLoading(pkg.id);
     try {
-      // Backend appends payment_id to redirect_url automatically
       const redirectUrl = window.location.origin + window.location.pathname;
       const result = await api.purchaseTokens(pkg.id, redirectUrl);
       window.location.href = result.payment_url;
@@ -137,6 +140,12 @@ export default function BillingPage() {
     }
   };
 
+  const hasActiveSub = subData?.subscription?.status === 'active';
+
+  // Find recommended plan/pack (second item)
+  const recommendedPlanId = subPlans && subPlans.length > 1 ? subPlans[1].id : null;
+  const recommendedPkgId = packages && packages.length > 1 ? packages[1].id : null;
+
   return (
     <div className="billing-page">
       {/* Payment Status Banner */}
@@ -160,7 +169,7 @@ export default function BillingPage() {
       </div>
 
       {/* Active Subscription */}
-      {subData?.subscription && subData.subscription.status === 'active' && (
+      {hasActiveSub && subData?.subscription && (
         <div className="billing-sub-active">
           <div className="billing-sub-active-info">
             <Crown size={20} />
@@ -184,57 +193,136 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Subscription Plans */}
-      {(!subData?.subscription || subData.subscription.status !== 'active') && subPlans && subPlans.length > 0 && (
-        <>
-          <h2 className="billing-section-title">{t('billing.monthlyPlans', { defaultValue: 'Monthly Plans' })}</h2>
-          <div className="billing-packages-grid">
-            {subPlans.map((plan) => (
-              <div key={plan.id} className="billing-package-card billing-sub-card">
-                <div className="billing-sub-badge"><Crown size={12} /> Monthly</div>
-                <div className="billing-package-name">{plan.name}</div>
-                <div className="billing-package-tokens">{plan.tokens_per_month} tokens/month</div>
-                <div className="billing-package-price">{formatPrice(plan.price_cents, plan.currency)}/mo</div>
-                <div className="billing-package-per-token">
-                  {formatPrice(Math.round(plan.price_cents / plan.tokens_per_month), plan.currency)}{t('billing.perToken')}
-                </div>
-                <button
-                  className="btn btn-primary billing-buy-btn"
-                  onClick={() => handleSubscribe(plan.id)}
-                  disabled={subLoading === plan.id}
-                >
-                  {subLoading === plan.id ? t('billing.redirecting') : t('billing.subscribe', { defaultValue: 'Subscribe' })}
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* One-time Packages */}
-      <h2 className="billing-section-title">{t('billing.topUp')}</h2>
-      <div className="billing-packages-grid">
-        {packages?.map((pkg) => (
-          <div key={pkg.id} className="billing-package-card">
-            <div className="billing-package-name">{pkg.name}</div>
-            <div className="billing-package-tokens">{pkg.tokens} tokens</div>
-            <div className="billing-package-price">{formatPrice(pkg.price_cents, pkg.currency)}</div>
-            <div className="billing-package-per-token">
-              {formatPrice(Math.round(pkg.price_cents / pkg.tokens), pkg.currency)}{t('billing.perToken')}
-            </div>
-            <button
-              className="btn btn-primary billing-buy-btn"
-              onClick={() => handlePurchase(pkg)}
-              disabled={purchaseLoading === pkg.id}
-            >
-              {purchaseLoading === pkg.id ? t('billing.redirecting') : t('billing.buyNow')}
-            </button>
-          </div>
-        ))}
+      {/* Pricing Tab Toggle */}
+      <div className="billing-tab-toggle">
+        <button
+          className={`billing-tab-btn ${pricingTab === 'subscriptions' ? 'active' : ''}`}
+          onClick={() => setPricingTab('subscriptions')}
+        >
+          <Repeat size={15} />
+          {t('billing.monthlyPlans', { defaultValue: 'Monthly Plans' })}
+          <span className="billing-tab-save">{t('billing.saveBadge', { defaultValue: 'Save more' })}</span>
+        </button>
+        <button
+          className={`billing-tab-btn ${pricingTab === 'packs' ? 'active' : ''}`}
+          onClick={() => setPricingTab('packs')}
+        >
+          <ShoppingBag size={15} />
+          {t('billing.tokenPacks', { defaultValue: 'Token Packs' })}
+        </button>
       </div>
 
+      {/* Subscription Plans */}
+      {pricingTab === 'subscriptions' && subPlans && subPlans.length > 0 && (
+        <div className="billing-pricing-grid">
+          {subPlans.map((plan) => {
+            const isRecommended = plan.id === recommendedPlanId;
+            const perToken = plan.price_cents / plan.tokens_per_month / 100;
+            return (
+              <div
+                key={plan.id}
+                className={`billing-pricing-card ${isRecommended ? 'billing-pricing-recommended' : ''}`}
+              >
+                {isRecommended && (
+                  <div className="billing-pricing-badge">
+                    <Zap size={10} />
+                    {t('billing.recommended', { defaultValue: 'Best value' })}
+                  </div>
+                )}
+                <div className="billing-pricing-name">{plan.name}</div>
+                <div className="billing-pricing-price">
+                  {formatPrice(plan.price_cents, plan.currency)}
+                  <span className="billing-pricing-interval">/mo</span>
+                </div>
+                <div className="billing-pricing-tokens">
+                  {plan.tokens_per_month} {t('common.tokens')}
+                </div>
+                <div className="billing-pricing-per">
+                  {formatPrice(Math.round(perToken * 100), plan.currency)}{t('billing.perToken')}
+                </div>
+                <ul className="billing-pricing-features">
+                  <li><Check size={14} /> {t('billing.featureAllIncluded', { defaultValue: 'All features included' })}</li>
+                  <li><Check size={14} /> {t('billing.featureRollover', { defaultValue: 'Unused tokens roll over' })}</li>
+                  {plan.tokens_per_month >= 100 && (
+                    <li><Check size={14} /> {t('billing.featureBulk', { defaultValue: 'Bulk catalog processing' })}</li>
+                  )}
+                  {plan.tokens_per_month >= 500 && (
+                    <li><Check size={14} /> {t('billing.featurePriority', { defaultValue: 'Priority processing' })}</li>
+                  )}
+                  {plan.tokens_per_month >= 2000 && (
+                    <li><Check size={14} /> {t('billing.featureDedicated', { defaultValue: 'Dedicated support' })}</li>
+                  )}
+                </ul>
+                <button
+                  className={`billing-pricing-btn ${isRecommended ? 'billing-pricing-btn-primary' : ''}`}
+                  onClick={() => handleSubscribe(plan.id)}
+                  disabled={subLoading === plan.id || hasActiveSub}
+                >
+                  {subLoading === plan.id
+                    ? t('billing.redirecting')
+                    : hasActiveSub
+                      ? t('billing.currentPlan', { defaultValue: 'Active plan' })
+                      : t('billing.subscribe', { defaultValue: 'Subscribe' })}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* One-time Token Packs */}
+      {pricingTab === 'packs' && packages && packages.length > 0 && (
+        <div className="billing-pricing-grid">
+          {packages.map((pkg) => {
+            const isRecommended = pkg.id === recommendedPkgId;
+            const perToken = pkg.price_cents / pkg.tokens / 100;
+            return (
+              <div
+                key={pkg.id}
+                className={`billing-pricing-card ${isRecommended ? 'billing-pricing-recommended' : ''}`}
+              >
+                {isRecommended && (
+                  <div className="billing-pricing-badge">
+                    <Zap size={10} />
+                    {t('billing.recommended', { defaultValue: 'Best value' })}
+                  </div>
+                )}
+                <div className="billing-pricing-name">{pkg.name}</div>
+                <div className="billing-pricing-price">
+                  {formatPrice(pkg.price_cents, pkg.currency)}
+                </div>
+                <div className="billing-pricing-tokens">
+                  {pkg.tokens} {t('common.tokens')}
+                </div>
+                <div className="billing-pricing-per">
+                  {formatPrice(Math.round(perToken * 100), pkg.currency)}{t('billing.perToken')}
+                </div>
+                <ul className="billing-pricing-features">
+                  <li><Check size={14} /> {t('billing.featureAllIncluded', { defaultValue: 'All features included' })}</li>
+                  <li><Check size={14} /> {t('billing.featureNeverExpire', { defaultValue: 'Tokens never expire' })}</li>
+                  <li><Check size={14} /> {t('billing.featureIntegrations', { defaultValue: 'Shopify, Etsy & WooCommerce' })}</li>
+                  {pkg.tokens >= 100 && (
+                    <li><Check size={14} /> {t('billing.featureBulk', { defaultValue: 'Bulk catalog processing' })}</li>
+                  )}
+                  {pkg.tokens >= 2000 && (
+                    <li><Check size={14} /> {t('billing.featurePriority', { defaultValue: 'Priority processing' })}</li>
+                  )}
+                </ul>
+                <button
+                  className={`billing-pricing-btn ${isRecommended ? 'billing-pricing-btn-primary' : ''}`}
+                  onClick={() => handlePurchase(pkg)}
+                  disabled={purchaseLoading === pkg.id}
+                >
+                  {purchaseLoading === pkg.id ? t('billing.redirecting') : t('billing.buyNow')}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Transaction History */}
-      <h2 className="billing-section-title">{t('billing.transactionHistory')}</h2>
+      <h2 className="billing-section-title" style={{ marginTop: '2rem' }}>{t('billing.transactionHistory')}</h2>
       {transactions && transactions.length > 0 ? (
         <div className="billing-transactions">
           <table className="billing-tx-table">

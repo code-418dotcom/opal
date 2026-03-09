@@ -104,7 +104,7 @@ else
             SERVICEBUS_JOBS_QUEUE=jobs \
             FAL_API_KEY=secretref:fal-api-key \
             BACKGROUND_REMOVAL_PROVIDER=rembg \
-            IMAGE_GEN_PROVIDER=fal \
+            IMAGE_GEN_PROVIDER=fal-flux2 \
             UPSCALE_PROVIDER=realesrgan \
             UPSCALE_ENABLED=true \
             LOG_LEVEL=INFO \

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     REMOVEBG_API_KEY: str = Field(default='', env='REMOVEBG_API_KEY')
     
     # Image Generation
-    IMAGE_GEN_PROVIDER: str = Field(default='fal', env='IMAGE_GEN_PROVIDER')
+    IMAGE_GEN_PROVIDER: str = Field(default='fal-flux2', env='IMAGE_GEN_PROVIDER')
     FAL_API_KEY: str = Field(default='', env='FAL_API_KEY')
     REPLICATE_API_KEY: str = Field(default='', env='REPLICATE_API_KEY')
     HUGGINGFACE_API_KEY: str = Field(default='', env='HUGGINGFACE_API_KEY')
