@@ -17,6 +17,7 @@ torchvision==0.19.1
 transformers>=4.40.0
 timm
 kornia
+einops
 
 # Upscaling (Real-ESRGAN with PyTorch)
 realesrgan==0.3.0
