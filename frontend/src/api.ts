@@ -124,6 +124,10 @@ class ApiClient {
     return this.request<Job>(`/v1/jobs/${jobId}`);
   }
 
+  async listJobs(limit = 20, offset = 0): Promise<{ jobs: Job[]; limit: number; offset: number }> {
+    return this.request(`/v1/jobs?limit=${limit}&offset=${offset}`);
+  }
+
   async uploadDirect(jobId: string, itemId: string, file: File, processingOptions?: {
     remove_background: boolean;
     generate_scene: boolean;

@@ -298,6 +298,104 @@ body {
   font-size: 1rem;
 }
 
+.monitor-panel-controls {
+  display: flex;
+  gap: 0.25rem;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+}
+
+.monitor-toggle,
+.monitor-close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.monitor-toggle:hover,
+.monitor-close:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.monitor-minimized {
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.monitor-minimized .monitor-panel-controls {
+  position: static;
+  padding: 0.5rem 0.75rem;
+  justify-content: flex-end;
+}
+
+.monitor-mini-status {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.monitor-mini-status:hover {
+  color: var(--color-text);
+}
+
+/* ── Results Job Tabs ────────────────────────────────── */
+.results-job-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.results-job-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  min-width: 0;
+}
+
+.results-job-tab:hover {
+  border-color: var(--color-text-muted);
+}
+
+.results-job-tab.active {
+  border-color: var(--color-primary);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.results-job-tab-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.results-job-tab-count {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
 /* ── Page Split (Brands + Scenes) ─────────────────────── */
 .page-split {
   display: flex;

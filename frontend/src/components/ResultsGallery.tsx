@@ -82,6 +82,12 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
   const [showFormatPicker, setShowFormatPicker] = useState(false);
   const [selectedFormats, setSelectedFormats] = useState<Set<string>>(new Set());
   const [formatExportStatus, setFormatExportStatus] = useState<'idle' | 'loading' | 'queued'>('idle');
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(jobId);
+
+  // Update selectedJobId when jobId prop changes (new job created)
+  useEffect(() => {
+    if (jobId) setSelectedJobId(jobId);
+  }, [jobId]);
 
   const { data: presets } = useQuery<ExportPreset[]>({
     queryKey: ['export-presets'],
@@ -89,10 +95,20 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
     staleTime: Infinity,
   });
 
+  // Fetch all recent jobs
+  const { data: jobsData } = useQuery({
+    queryKey: ['all-jobs'],
+    queryFn: () => api.listJobs(20),
+  });
+
+  const recentJobs = jobsData?.jobs?.filter(
+    (j: Job) => j.items?.some((i) => i.status === 'completed')
+  ) || [];
+
   const { data: job, isLoading, error } = useQuery<Job>({
-    queryKey: ['job-results', jobId],
-    queryFn: () => api.getJob(jobId!),
-    enabled: !!jobId,
+    queryKey: ['job-results', selectedJobId],
+    queryFn: () => api.getJob(selectedJobId!),
+    enabled: !!selectedJobId,
   });
 
   const completedItems = job?.items.filter((item) => item.status === 'completed') || [];
@@ -158,7 +174,7 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
     }
   };
 
-  if (!jobId) {
+  if (!selectedJobId && recentJobs.length === 0) {
     return (
       <div className="results-gallery">
         <div className="section-header">
@@ -180,6 +196,25 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
         <h2>{t('results.title')}</h2>
         <p>{t('results.subtitle')}</p>
       </div>
+
+      {recentJobs.length > 1 && (
+        <div className="results-job-tabs">
+          {recentJobs.map((j: Job) => (
+            <button
+              key={j.job_id}
+              className={`results-job-tab ${selectedJobId === j.job_id ? 'active' : ''}`}
+              onClick={() => setSelectedJobId(j.job_id)}
+            >
+              <span className="results-job-tab-name">
+                {j.items?.[0]?.filename || j.job_id.slice(4, 16)}
+              </span>
+              <span className="results-job-tab-count">
+                {j.items?.filter((i) => i.status === 'completed').length} image{j.items?.filter((i) => i.status === 'completed').length !== 1 ? 's' : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {downloadError && (
         <div className="error-box" style={{ marginBottom: '1rem' }}>

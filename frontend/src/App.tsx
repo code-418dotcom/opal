@@ -60,6 +60,7 @@ function AppContent({
     return localStorage.getItem('currentJobId');
   });
   const [showMonitor, setShowMonitor] = useState(false);
+  const [monitorMinimized, setMonitorMinimized] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     return localStorage.getItem('opal_onboarding_dismissed') === '1';
   });
@@ -88,6 +89,7 @@ function AppContent({
     setCurrentJobId(jobId);
     localStorage.setItem('currentJobId', jobId);
     setShowMonitor(true);
+    setMonitorMinimized(false);
   };
 
   useQuery({
@@ -156,8 +158,30 @@ function AppContent({
           )}
 
           {showMonitor && currentJobId && (
-            <div className="monitor-panel">
-              <JobMonitor jobId={currentJobId} />
+            <div className={`monitor-panel ${monitorMinimized ? 'monitor-minimized' : ''}`}>
+              <div className="monitor-panel-controls">
+                <button
+                  className="btn btn-ghost btn-sm monitor-toggle"
+                  onClick={() => setMonitorMinimized(m => !m)}
+                  title={monitorMinimized ? 'Expand' : 'Minimize'}
+                >
+                  {monitorMinimized ? '▲' : '▼'}
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm monitor-close"
+                  onClick={() => setShowMonitor(false)}
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+              {monitorMinimized ? (
+                <div className="monitor-mini-status" onClick={() => setMonitorMinimized(false)}>
+                  Processing job...
+                </div>
+              ) : (
+                <JobMonitor jobId={currentJobId} />
+              )}
             </div>
           )}
 
