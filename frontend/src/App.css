@@ -4613,13 +4613,13 @@ body {
 }
 
 .landing-pipeline-label {
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: #e8ecf8;
 }
 
 .landing-pipeline-desc {
-  font-size: 0.8rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.8);
   line-height: 1.5;
 }
@@ -4650,7 +4650,7 @@ body {
 }
 
 .landing-section-sub {
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: rgba(200, 205, 224, 0.82);
   max-width: 520px;
   margin: 0 auto;
@@ -4687,7 +4687,7 @@ body {
 }
 
 .landing-pain-card p {
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1.6;
   color: rgba(200, 205, 224, 0.82);
   font-style: italic;
@@ -4824,7 +4824,7 @@ body {
 }
 
 .landing-feature-card p {
-  font-size: 0.875rem;
+  font-size: 1rem;
   line-height: 1.65;
   color: rgba(200, 205, 224, 0.82);
 }
@@ -4858,7 +4858,7 @@ body {
 }
 
 .landing-brand-text p {
-  font-size: 1rem;
+  font-size: 1.05rem;
   line-height: 1.7;
   color: rgba(200, 205, 224, 0.82);
   margin: 1rem 0 2rem;
@@ -4935,7 +4935,7 @@ body {
 }
 
 .landing-price-tokens {
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.72);
   margin: 0.4rem 0 0.25rem;
 }
@@ -4961,7 +4961,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.82rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.82);
 }
 
@@ -5128,6 +5128,7 @@ body {
 }
 
 .landing-spotlight-text p {
+  font-size: 1.05rem;
   color: rgba(200, 205, 224, 0.85);
   line-height: 1.7;
   margin: 1rem 0 1.5rem;
@@ -5146,7 +5147,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.88);
 }
 
@@ -5191,7 +5192,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.82);
 }
 
@@ -5242,7 +5243,7 @@ body {
 
 .landing-ab-step p {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.82);
   line-height: 1.6;
 }
@@ -5283,7 +5284,7 @@ body {
 }
 
 .landing-proof-label {
-  font-size: 0.8rem;
+  font-size: 1rem;
   color: rgba(200, 205, 224, 0.72);
 }
 
