@@ -223,7 +223,6 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 <div className="landing-pipeline-desc">{t('landing.step1Desc')}</div>
               </div>
             </div>
-            <div className="landing-pipeline-arrow">&#8594;</div>
             <div className="landing-pipeline-step">
               <div className="landing-pipeline-num">2</div>
               <div className="landing-pipeline-detail">
@@ -231,7 +230,6 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 <div className="landing-pipeline-desc">{t('landing.step2Desc')}</div>
               </div>
             </div>
-            <div className="landing-pipeline-arrow">&#8594;</div>
             <div className="landing-pipeline-step">
               <div className="landing-pipeline-num">3</div>
               <div className="landing-pipeline-detail">
@@ -239,7 +237,6 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 <div className="landing-pipeline-desc">{t('landing.step3Desc')}</div>
               </div>
             </div>
-            <div className="landing-pipeline-arrow">&#8594;</div>
             <div className="landing-pipeline-step">
               <div className="landing-pipeline-num">4</div>
               <div className="landing-pipeline-detail">
