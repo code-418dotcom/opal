@@ -276,11 +276,17 @@ def get_queue_stats(queue_name: str) -> Dict[str, int]:
 
 
 # Convenience functions for specific queues
-def send_job_message(payload: Dict[str, Any]) -> int:
-    """Send a message to the jobs queue"""
+def send_job_message(payload: Dict[str, Any]):
+    """Send a message to the jobs queue (routes via QUEUE_BACKEND setting)."""
+    if settings.QUEUE_BACKEND == 'azure':
+        from shared.servicebus import send_job_message as _sb_send
+        return _sb_send(payload)
     return send_message('jobs', payload)
 
 
-def send_export_message(payload: Dict[str, Any]) -> int:
-    """Send a message to the exports queue"""
+def send_export_message(payload: Dict[str, Any]):
+    """Send a message to the exports queue (routes via QUEUE_BACKEND setting)."""
+    if settings.QUEUE_BACKEND == 'azure':
+        from shared.servicebus import send_export_message as _sb_send
+        return _sb_send(payload)
     return send_message('exports', payload)

@@ -15,21 +15,19 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 # removed in torchvision 0.17+.  Re-export from functional to keep it working.
 try:
     import torchvision.transforms.functional_tensor  # noqa: F401
-except ModuleNotFoundError:
-    import types, torchvision.transforms.functional as _F  # noqa: E401
-    torchvision = __import__("torchvision")
-    torchvision.transforms.functional_tensor = types.ModuleType(
-        "torchvision.transforms.functional_tensor"
-    )
-    import sys
-    sys.modules["torchvision.transforms.functional_tensor"] = (
-        torchvision.transforms.functional_tensor
-    )
-    # Copy commonly used functions that basicsr expects
-    for _name in ("rgb_to_grayscale", "normalize", "resize", "adjust_brightness",
-                  "adjust_contrast", "adjust_hue", "adjust_saturation"):
-        if hasattr(_F, _name):
-            setattr(torchvision.transforms.functional_tensor, _name, getattr(_F, _name))
+except (ModuleNotFoundError, ImportError):
+    try:
+        import types, sys
+        import torchvision.transforms.functional as _F
+        _mod = types.ModuleType("torchvision.transforms.functional_tensor")
+        sys.modules["torchvision.transforms.functional_tensor"] = _mod
+        __import__("torchvision").transforms.functional_tensor = _mod
+        for _name in ("rgb_to_grayscale", "normalize", "resize", "adjust_brightness",
+                      "adjust_contrast", "adjust_hue", "adjust_saturation"):
+            if hasattr(_F, _name):
+                setattr(_mod, _name, getattr(_F, _name))
+    except ImportError:
+        pass  # torchvision not installed (e.g. test environment)
 
 from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 
