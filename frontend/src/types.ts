@@ -263,6 +263,22 @@ export interface CategoryBenchmark {
   updated_at: string;
 }
 
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ApiKeyCreateResponse {
+  id: string;
+  key: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+}
+
 export interface AdminSetting {
   key: string;
   value: string;

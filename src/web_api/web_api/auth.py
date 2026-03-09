@@ -1,12 +1,16 @@
+import hashlib
 import logging
 import secrets
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, Security, Depends, status
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 import jwt
+from sqlalchemy import text
 
 from shared.config import settings
+from shared.db import SessionLocal
 from shared.db_sqlalchemy import (
     get_user_by_entra_subject, get_user_by_email, link_entra_subject,
     create_user,
@@ -139,14 +143,45 @@ async def _resolve_jwt_user(token: str) -> dict:
 
 
 def _resolve_api_key_user(api_key: str) -> dict:
-    """Validate static API key (backward-compatible)."""
+    """Validate API key — check static keys first, then user-generated keys."""
+    # 1. Check static API_KEYS env var (admin / unlimited)
     valid_keys = get_valid_api_keys()
-    # Constant-time comparison to prevent timing attacks
-    if not any(secrets.compare_digest(api_key, key) for key in valid_keys):
-        raise HTTPException(status_code=403, detail="Invalid API key")
+    if any(secrets.compare_digest(api_key, key) for key in valid_keys):
+        tenant = api_key.split('_')[0] if '_' in api_key else "default"
+        return {"user_id": "apikey", "tenant_id": tenant, "email": "", "token_balance": 999999}
 
-    tenant = api_key.split('_')[0] if '_' in api_key else "default"
-    return {"user_id": "apikey", "tenant_id": tenant, "email": "", "token_balance": 999999}
+    # 2. Check user-generated API keys in DB
+    if not SessionLocal:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    with SessionLocal() as session:
+        row = session.execute(
+            text("""
+                SELECT ak.id AS key_id, ak.user_id,
+                       u.tenant_id, u.email, u.token_balance, u.is_admin
+                FROM user_api_keys ak
+                JOIN users u ON u.id = ak.user_id
+                WHERE ak.key_hash = :kh AND ak.is_active = TRUE
+            """),
+            {"kh": key_hash},
+        ).mappings().first()
+
+        if row:
+            # Update last_used_at
+            session.execute(
+                text("UPDATE user_api_keys SET last_used_at = :now WHERE id = :kid"),
+                {"now": datetime.now(timezone.utc), "kid": row["key_id"]},
+            )
+            session.commit()
+            return {
+                "user_id": row["user_id"],
+                "tenant_id": row["tenant_id"],
+                "email": row["email"] or "",
+                "token_balance": row["token_balance"],
+                "is_admin": row["is_admin"] or False,
+            }
+
+    raise HTTPException(status_code=403, detail="Invalid API key")
 
 
 # Backward-compatible dependency — existing routes use this name

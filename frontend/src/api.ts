@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -698,6 +698,24 @@ class ApiClient {
       `/v1/admin/payments?limit=${limit}&offset=${offset}`
     );
     return resp.payments;
+  }
+
+  // ── API Keys ──────────────────────────────────────────────────────
+
+  async listApiKeys(): Promise<ApiKey[]> {
+    const resp = await this.request<{ api_keys: ApiKey[] }>('/v1/account/api-keys');
+    return resp.api_keys;
+  }
+
+  async createApiKey(name?: string): Promise<ApiKeyCreateResponse> {
+    return this.request<ApiKeyCreateResponse>('/v1/account/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name: name || undefined }),
+    });
+  }
+
+  async revokeApiKey(keyId: string): Promise<void> {
+    await this.request(`/v1/account/api-keys/${keyId}`, { method: 'DELETE' });
   }
 }
 

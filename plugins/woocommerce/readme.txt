@@ -1,5 +1,5 @@
 === Opal AI Product Photography ===
-Contributors: opalapp
+Contributors: opaloptics
 Tags: woocommerce, product photography, ai, background removal, image enhancement
 Requires at least: 6.4
 Tested up to: 6.7
@@ -59,7 +59,7 @@ Test which product images convert better. Create split tests between original an
 
 = Getting an API Key =
 
-1. Visit [opal.app](https://opal.app) and create an account.
+1. Visit [opaloptics.com](https://opaloptics.com) and create an account.
 2. Navigate to your dashboard and generate an API key.
 3. Copy the key and paste it into the plugin settings.
 
@@ -136,7 +136,7 @@ Initial release. Install, configure your API key, and start enhancing your produ
 
 == External Services ==
 
-This plugin communicates with the **Opal API** (`https://opal.app`) to process product images. When you use the plugin, the following data is sent to the Opal service:
+This plugin communicates with the **Opal API** (`https://opaloptics.com`) to process product images. When you use the plugin, the following data is sent to the Opal service:
 
 * Product images (uploaded for processing)
 * Processing options (background removal, scene prompts, upscaling preferences)
@@ -146,7 +146,7 @@ No personal customer data, order information, or other WooCommerce data is trans
 
 **Service Terms:**
 
-* [Opal Terms of Service](https://opal.app/terms)
-* [Opal Privacy Policy](https://opal.app/privacy)
+* [Opal Terms of Service](https://opaloptics.com/terms)
+* [Opal Privacy Policy](https://opaloptics.com/privacy)
 
 By using this plugin, you agree to the Opal Terms of Service and Privacy Policy.

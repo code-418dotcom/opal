@@ -1,15 +1,15 @@
 <?php
 /**
  * Plugin Name: Opal AI Product Photography
- * Plugin URI: https://opal.app
+ * Plugin URI: https://opaloptics.com
  * Description: AI-powered product image enhancement for WooCommerce — background removal, studio scenes, upscaling, and A/B testing.
  * Version: 1.0.0
  * Requires at least: 6.4
  * Requires PHP: 8.0
  * WC requires at least: 8.0
  * WC tested up to: 9.5
- * Author: Opal
- * Author URI: https://opal.app
+ * Author: Opal Optics
+ * Author URI: https://opaloptics.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: opal-ai-photography

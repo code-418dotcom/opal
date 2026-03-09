@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Eraser, Image, Maximize, ArrowRight, Check, Store, Sparkles,
   FlaskConical, Layers, Palette, ShoppingBag, Zap, TrendingUp,
-  Camera, BarChart3, Search, LayoutGrid, Repeat,
+  Camera, BarChart3, Search, LayoutGrid, Repeat, ExternalLink,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
@@ -91,13 +91,25 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
     }).format(amount);
   };
 
+  // Scroll to hash on mount (for #terms, #privacy links)
+  const landingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const el = document.querySelector(hash);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    }
+  }, []);
+
   // Variant-aware content for A/B testing
   const heroTitle = variant === 'B' ? t('landing.heroTitleB') : t('landing.heroTitle');
   const heroAccent = variant === 'B' ? t('landing.heroAccentB') : t('landing.heroAccent');
   const heroCta = variant === 'B' ? t('landing.tryFreeB') : t('landing.tryFree');
 
   return (
-    <div className="landing" data-ab-variant={variant}>
+    <div className="landing" data-ab-variant={variant} ref={landingRef}>
       {/* Multi-layer opal background */}
       <div className="landing-glow" />
       <div className="landing-glow-2" />
@@ -123,6 +135,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             <a href="#how" className="landing-nav-link">{t('landing.nav.howItWorks')}</a>
             <a href="#features" className="landing-nav-link">{t('landing.nav.features')}</a>
             <a href="#pricing" className="landing-nav-link">{t('landing.nav.pricing')}</a>
+            <a href="#terms" className="landing-nav-link">{t('landing.nav.legal')}</a>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="landing-lang-selector">
@@ -554,16 +567,80 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </section>
 
+      {/* ── Terms of Service ──────────────────────────────── */}
+      <section className="landing-legal" id="terms">
+        <div className="landing-legal-inner">
+          <h2 className="landing-legal-title">{t('landing.terms.title')}</h2>
+          <p className="landing-legal-updated">{t('landing.terms.lastUpdated')}</p>
+          <p className="landing-legal-text">{t('landing.terms.intro')}</p>
+          {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+            <div key={n} className="landing-legal-section">
+              <h3>{t(`landing.terms.section${n}Title`)}</h3>
+              <p>{t(`landing.terms.section${n}`)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Privacy Policy ─────────────────────────────────── */}
+      <section className="landing-legal" id="privacy">
+        <div className="landing-legal-inner">
+          <h2 className="landing-legal-title">{t('landing.privacy.title')}</h2>
+          <p className="landing-legal-updated">{t('landing.privacy.lastUpdated')}</p>
+          <p className="landing-legal-text">{t('landing.privacy.intro')}</p>
+          <div className="landing-legal-section">
+            <h3>{t('landing.privacy.section1Title')}</h3>
+            <p>{t('landing.privacy.section1')}</p>
+          </div>
+          <div className="landing-legal-section">
+            <h3>{t('landing.privacy.section2Title')}</h3>
+            <ul className="landing-legal-list">
+              <li>{t('landing.privacy.section2a')}</li>
+              <li>{t('landing.privacy.section2b')}</li>
+              <li>{t('landing.privacy.section2c')}</li>
+              <li>{t('landing.privacy.section2d')}</li>
+              <li>{t('landing.privacy.section2e')}</li>
+            </ul>
+          </div>
+          {[3,4,5,6,7,8,9,10,11,12].map(n => (
+            <div key={n} className="landing-legal-section">
+              <h3>{t(`landing.privacy.section${n}Title`)}</h3>
+              <p>{t(`landing.privacy.section${n}`)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── Footer ───────────────────────────────────────── */}
       <footer className="landing-footer">
-        <div className="landing-footer-inner">
-          <div className="landing-footer-brand">
-            <span className="landing-nav-diamond">&#9670;</span>
-            OPAL
+        <div className="landing-footer-inner landing-footer-columns">
+          <div className="landing-footer-col landing-footer-col-brand">
+            <div className="landing-footer-brand">
+              <span className="landing-nav-diamond">&#9670;</span>
+              OPAL
+            </div>
+            <p className="landing-footer-text">{t('landing.footer.tagline')}</p>
           </div>
-          <div className="landing-footer-text">
-            {t('landing.footerTagline')}
+          <div className="landing-footer-col">
+            <h4 className="landing-footer-heading">{t('landing.footer.product')}</h4>
+            <a href="#features" className="landing-footer-link">{t('landing.footer.features')}</a>
+            <a href="#pricing" className="landing-footer-link">{t('landing.footer.pricing')}</a>
+            <a href="#how" className="landing-footer-link">{t('landing.footer.integrations')}</a>
           </div>
+          <div className="landing-footer-col">
+            <h4 className="landing-footer-heading">{t('landing.footer.legal')}</h4>
+            <a href="#terms" className="landing-footer-link">{t('landing.footer.terms')}</a>
+            <a href="#privacy" className="landing-footer-link">{t('landing.footer.privacy')}</a>
+          </div>
+          <div className="landing-footer-col">
+            <h4 className="landing-footer-heading">{t('landing.footer.company')}</h4>
+            <a href="https://opaloptics.com" target="_blank" rel="noopener noreferrer" className="landing-footer-link">
+              {t('landing.footer.website')} <ExternalLink size={12} />
+            </a>
+          </div>
+        </div>
+        <div className="landing-footer-bottom">
+          <span>&copy; {new Date().getFullYear()} {t('landing.footer.copyright')}</span>
         </div>
       </footer>
     </div>

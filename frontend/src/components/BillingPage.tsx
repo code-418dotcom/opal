@@ -1,15 +1,199 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw,
   CheckCircle, XCircle, Clock, Crown, Check, Zap, Repeat,
-  ShoppingBag,
+  ShoppingBag, Key, Plus, Copy, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { api } from '../api';
-import type { TokenPackage, TokenTransaction } from '../types';
+import type { TokenPackage, TokenTransaction, ApiKeyCreateResponse } from '../types';
 
 type PricingTab = 'subscriptions' | 'packs';
+
+function ApiKeysSection() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [newKeyName, setNewKeyName] = useState('');
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<ApiKeyCreateResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const { data: apiKeys, isLoading } = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => api.listApiKeys(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (name?: string) => api.createApiKey(name),
+    onSuccess: (data) => {
+      setNewlyCreatedKey(data);
+      setShowGenerateForm(false);
+      setNewKeyName('');
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+    onError: (err: Error) => {
+      alert(err.message || t('billing.apiKeys.generateFailed'));
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (keyId: string) => api.revokeApiKey(keyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+    onError: (err: Error) => {
+      alert(err.message || t('billing.apiKeys.revokeFailed'));
+    },
+  });
+
+  const handleGenerate = () => {
+    createMutation.mutate(newKeyName || undefined);
+  };
+
+  const handleRevoke = (keyId: string) => {
+    if (!confirm(t('billing.apiKeys.revokeConfirm'))) return;
+    revokeMutation.mutate(keyId);
+  };
+
+  const handleCopy = async () => {
+    if (!newlyCreatedKey) return;
+    try {
+      await navigator.clipboard.writeText(newlyCreatedKey.key);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback: select the text
+      const input = document.querySelector('.apikey-reveal-input') as HTMLInputElement;
+      if (input) { input.select(); document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    }
+  };
+
+  return (
+    <div className="apikeys-section">
+      <h2 className="billing-section-title" style={{ marginTop: '2rem' }}>
+        <Key size={20} />
+        {t('billing.apiKeys.title')}
+      </h2>
+      <p className="apikeys-description">{t('billing.apiKeys.description')}</p>
+
+      {/* Newly created key reveal */}
+      {newlyCreatedKey && (
+        <div className="apikey-reveal">
+          <div className="apikey-reveal-header">
+            <AlertTriangle size={18} />
+            <strong>{t('billing.apiKeys.newKeyTitle')}</strong>
+          </div>
+          <p className="apikey-reveal-warning">{t('billing.apiKeys.newKeyWarning')}</p>
+          <div className="apikey-reveal-box">
+            <input
+              type="text"
+              readOnly
+              value={newlyCreatedKey.key}
+              className="apikey-reveal-input"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <button className="btn btn-sm apikey-copy-btn" onClick={handleCopy}>
+              <Copy size={14} />
+              {copied ? t('billing.apiKeys.copied') : t('billing.apiKeys.copyKey')}
+            </button>
+          </div>
+          <button
+            className="btn btn-sm apikey-done-btn"
+            onClick={() => setNewlyCreatedKey(null)}
+          >
+            {t('billing.apiKeys.done')}
+          </button>
+        </div>
+      )}
+
+      {/* Generate form */}
+      {showGenerateForm && !newlyCreatedKey && (
+        <div className="apikey-generate-form">
+          <input
+            type="text"
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            placeholder={t('billing.apiKeys.namePlaceholder')}
+            className="apikey-name-input"
+          />
+          <div className="apikey-generate-actions">
+            <button
+              className="billing-pricing-btn billing-pricing-btn-primary"
+              onClick={handleGenerate}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? t('billing.apiKeys.generating') : t('billing.apiKeys.generateNew')}
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => { setShowGenerateForm(false); setNewKeyName(''); }}
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Generate button */}
+      {!showGenerateForm && !newlyCreatedKey && (
+        <button
+          className="apikey-generate-btn"
+          onClick={() => setShowGenerateForm(true)}
+        >
+          <Plus size={16} />
+          {t('billing.apiKeys.generateNew')}
+        </button>
+      )}
+
+      {/* Keys list */}
+      {isLoading ? (
+        <p style={{ color: 'rgba(200,205,224,0.6)', padding: '1rem 0' }}>{t('common.loading')}</p>
+      ) : apiKeys && apiKeys.length > 0 ? (
+        <div className="billing-transactions">
+          <table className="billing-tx-table apikeys-table">
+            <thead>
+              <tr>
+                <th>{t('billing.apiKeys.name')}</th>
+                <th>{t('billing.apiKeys.prefix')}</th>
+                <th>{t('billing.apiKeys.created')}</th>
+                <th>{t('billing.apiKeys.lastUsed')}</th>
+                <th>{t('billing.apiKeys.actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {apiKeys.map((key) => (
+                <tr key={key.id}>
+                  <td>{key.name || '—'}</td>
+                  <td><code className="apikey-prefix">{key.prefix}...</code></td>
+                  <td>{new Date(key.created_at).toLocaleDateString()}</td>
+                  <td>{key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : t('billing.apiKeys.never')}</td>
+                  <td>
+                    <button
+                      className="apikey-revoke-btn"
+                      onClick={() => handleRevoke(key.id)}
+                      disabled={revokeMutation.isPending}
+                      title={t('billing.apiKeys.revoke')}
+                    >
+                      <Trash2 size={14} />
+                      {t('billing.apiKeys.revoke')}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state" style={{ marginTop: '1rem' }}>
+          <Key size={48} />
+          <p>{t('billing.apiKeys.noKeys')}</p>
+          <p style={{ fontSize: '0.8rem', color: 'rgba(200,205,224,0.5)' }}>{t('billing.apiKeys.noKeysHint')}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function BillingPage() {
   const { t } = useTranslation();
@@ -357,6 +541,9 @@ export default function BillingPage() {
           <p>{t('billing.noTransactions')}</p>
         </div>
       )}
+
+      {/* API Keys Section */}
+      <ApiKeysSection />
     </div>
   );
 }
