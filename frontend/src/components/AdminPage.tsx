@@ -1063,6 +1063,8 @@ function IntegrationsPanel() {
 
 function SystemPanel() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [switching, setSwitching] = useState(false);
   const { data: system, isLoading } = useQuery({
     queryKey: ['admin-system'],
     queryFn: () => api.getSystemInfo(),
@@ -1074,11 +1076,36 @@ function SystemPanel() {
 
   if (!system) return null;
 
+  const isFlux2Pro = system.image_gen_provider === 'fal-flux2';
+
+  const handleToggleProvider = async () => {
+    setSwitching(true);
+    try {
+      const newProvider = isFlux2Pro ? 'fal' : 'fal-flux2';
+      await api.updateAdminSetting('IMAGE_GEN_PROVIDER', newProvider);
+      queryClient.invalidateQueries({ queryKey: ['admin-system'] });
+    } catch {
+      // setting may not exist yet — create it
+      try {
+        await api.createAdminSetting({
+          key: 'IMAGE_GEN_PROVIDER',
+          value: 'fal-flux2',
+          category: 'pipeline',
+          description: 'Scene generation provider (fal = FLUX-dev, fal-flux2 = FLUX.2 Pro Edit)',
+        });
+        queryClient.invalidateQueries({ queryKey: ['admin-system'] });
+      } catch (e2) {
+        console.error('Failed to set IMAGE_GEN_PROVIDER', e2);
+      }
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const configItems = [
     { label: t('admin.system.environment'), value: system.env_name },
     { label: t('admin.system.storageBackend'), value: system.storage_backend },
     { label: t('admin.system.queueBackend'), value: system.queue_backend },
-    { label: t('admin.system.imageGenProvider'), value: system.image_gen_provider },
     { label: t('admin.system.upscaleProvider'), value: system.upscale_provider },
     { label: t('admin.system.upscaleEnabled'), value: system.upscale_enabled ? t('admin.system.yes') : t('admin.system.no') },
     { label: t('admin.system.bgRemovalProvider'), value: system.bg_removal_provider },
@@ -1096,6 +1123,52 @@ function SystemPanel() {
   return (
     <div className="admin-system-panel">
       <h3 className="settings-category-title">{t('admin.system.configuration')}</h3>
+
+      {/* Scene Generation Provider Toggle */}
+      <div className="system-provider-toggle" style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '0.75rem',
+        padding: '1rem 1.25rem',
+        marginBottom: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1rem',
+      }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+            {t('admin.system.imageGenProvider')}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+            {isFlux2Pro
+              ? 'FLUX.2 Pro Edit — native compositing with realistic lighting & shadows'
+              : 'FLUX-dev — text-to-image with PIL compositing'}
+          </div>
+        </div>
+        <button
+          onClick={handleToggleProvider}
+          disabled={switching}
+          style={{
+            background: isFlux2Pro
+              ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)'
+              : 'rgba(255,255,255,0.08)',
+            color: '#fff',
+            border: isFlux2Pro ? 'none' : '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '0.5rem',
+            padding: '0.5rem 1rem',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            cursor: switching ? 'wait' : 'pointer',
+            whiteSpace: 'nowrap',
+            opacity: switching ? 0.6 : 1,
+            transition: 'all 0.2s',
+          }}
+        >
+          {switching ? <Loader2 size={14} className="spin" /> : isFlux2Pro ? 'Pro Edit ON' : 'Pro Edit OFF'}
+        </button>
+      </div>
+
       <div className="system-grid">
         {configItems.map(item => (
           <div key={item.label} className="system-item">

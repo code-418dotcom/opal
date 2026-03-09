@@ -327,7 +327,7 @@ async def system_info(admin: dict = Depends(require_admin)):
         "env_name": env_settings.ENV_NAME,
         "storage_backend": "azure",
         "queue_backend": env_settings.QUEUE_BACKEND,
-        "image_gen_provider": env_settings.IMAGE_GEN_PROVIDER,
+        "image_gen_provider": get_setting("IMAGE_GEN_PROVIDER") or env_settings.IMAGE_GEN_PROVIDER,
         "upscale_provider": env_settings.UPSCALE_PROVIDER,
         "upscale_enabled": env_settings.UPSCALE_ENABLED,
         "bg_removal_provider": env_settings.BACKGROUND_REMOVAL_PROVIDER,

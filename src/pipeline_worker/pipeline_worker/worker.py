@@ -235,6 +235,9 @@ def process_message(data: dict) -> None:
         saved_background_bytes = download_blob(bg_sas)
         LOG.info('Downloaded saved background: %d bytes', len(saved_background_bytes))
 
+    # Resolve scene-gen provider per-job (admin toggle can change at runtime)
+    active_img_gen = _resolve_img_gen_provider()
+
     # Execute full pipeline in-memory
     result = execute_pipeline(
         raw_bytes=raw_bytes,
@@ -243,7 +246,7 @@ def process_message(data: dict) -> None:
         upscale=opts.upscale,
         scene_prompt=scene_prompt,
         bg_provider=bg_provider,
-        img_gen_provider=img_gen_provider,
+        img_gen_provider=active_img_gen,
         upscale_provider=upscale_provider,
         upscale_enabled=settings.UPSCALE_ENABLED,
         saved_background_bytes=saved_background_bytes,
@@ -319,6 +322,31 @@ def process_message(data: dict) -> None:
         LOG.error('Export message failed: %s', e)
 
 
+def _resolve_img_gen_provider():
+    """Resolve scene-gen provider per-job, checking admin DB setting first."""
+    try:
+        from shared.image_generation import get_image_gen_provider
+        from shared.settings_service import get_setting
+
+        # Admin DB setting overrides env var
+        provider_name = get_setting("IMAGE_GEN_PROVIDER") or settings.IMAGE_GEN_PROVIDER
+        api_key_map = {"fal-flux2": "FAL_API_KEY"}
+        api_key_attr = api_key_map.get(
+            provider_name,
+            f'{provider_name.upper().replace(".", "_")}_API_KEY',
+        )
+        api_key = get_setting(api_key_attr)
+        if api_key:
+            provider = get_image_gen_provider(provider_name, api_key=api_key)
+            LOG.debug('Scene gen provider (per-job): %s', provider.name)
+            return provider
+        LOG.warning('No API key for %s — scene gen disabled', provider_name)
+    except Exception as e:
+        LOG.error('Failed to resolve scene gen provider: %s', e)
+    # Fall back to startup-initialized provider
+    return img_gen_provider
+
+
 def _init_providers():
     """Initialize ML/API providers once at startup."""
     global bg_provider, img_gen_provider, upscale_provider
@@ -337,11 +365,11 @@ def _init_providers():
     except Exception as e:
         LOG.error('Failed to init bg provider: %s', e)
 
-    # Scene generation
+    # Scene generation (initial — can be overridden per-job via admin setting)
     try:
         from shared.image_generation import get_image_gen_provider
         from shared.settings_service import get_setting
-        provider_name = settings.IMAGE_GEN_PROVIDER
+        provider_name = get_setting("IMAGE_GEN_PROVIDER") or settings.IMAGE_GEN_PROVIDER
         # fal-flux2 uses the same FAL_API_KEY as fal
         api_key_map = {"fal-flux2": "FAL_API_KEY"}
         api_key_attr = api_key_map.get(
