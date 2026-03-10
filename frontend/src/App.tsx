@@ -13,7 +13,10 @@ import IntegrationsPage from './components/IntegrationsPage';
 import ABTestPage from './components/ABTestPage';
 import BenchmarkPage from './components/BenchmarkPage';
 import AdminPage from './components/AdminPage';
+import SettingsPage from './components/SettingsPage';
 import LandingPage from './components/LandingPage';
+import TipsBar from './components/TipsBar';
+import { PreferencesProvider } from './components/PreferencesContext';
 import { api } from './api';
 import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, login, logout } from './auth';
 import './App.css';
@@ -153,6 +156,8 @@ function AppContent({
           </div>
         )}
         <div className="app-content">
+          <TipsBar activePage={activePage} />
+
           {showOnboarding && (
             <OnboardingWizard onComplete={handleOnboardingComplete} />
           )}
@@ -212,6 +217,7 @@ function AppContent({
           {activePage === 'ab-tests' && <ABTestPage />}
           {activePage === 'benchmarks' && <BenchmarkPage />}
           {activePage === 'billing' && <BillingPage />}
+          {activePage === 'settings' && <SettingsPage />}
           {activePage === 'admin' && <AdminPage />}
         </div>
       </main>
@@ -235,12 +241,14 @@ function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout
   const tokenBalance = balance?.token_balance ?? null;
 
   return (
-    <AppContent
-      isAdmin={isAdmin}
-      tokenBalance={tokenBalance}
-      userEmail={userEmail}
-      onLogout={onLogout}
-    />
+    <PreferencesProvider>
+      <AppContent
+        isAdmin={isAdmin}
+        tokenBalance={tokenBalance}
+        userEmail={userEmail}
+        onLogout={onLogout}
+      />
+    </PreferencesProvider>
   );
 }
 

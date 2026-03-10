@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus, ChevronDown, ChevronUp, Image as ImageIcon, RotateCw } from 'lucide-react';
 import { api } from '../api';
 import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
+import HelpTooltip from './HelpTooltip';
+import CostPreview from './CostPreview';
 
 interface Props {
   onJobCreated: (jobId: string) => void;
@@ -273,7 +275,10 @@ export default function UploadSection({ onJobCreated }: Props) {
         <>
           {brandProfiles.length > 0 && (
             <div className="brand-selector">
-              <label className="form-label">{t('upload.brandProfile')}</label>
+              <label className="form-label">
+                {t('upload.brandProfile')}
+                <HelpTooltip text={t('help.brandProfile', 'Select a brand profile to apply consistent colors, mood, and style to all generated scenes.')} />
+              </label>
               <select
                 className="input"
                 value={selectedBrandId}
@@ -299,7 +304,10 @@ export default function UploadSection({ onJobCreated }: Props) {
           {processingOptions.generate_scene && (
             <>
             <div className="scene-count-section">
-              <label className="scene-count-label">{t('upload.scenesPerImage')}</label>
+              <label className="scene-count-label">
+                {t('upload.scenesPerImage')}
+                <HelpTooltip text={t('help.scenesPerImage', 'Generate multiple different scene variations for each product image. More scenes = more options to choose from.')} />
+              </label>
               <div className="scene-count-stepper">
                 <button
                   className="stepper-btn"
@@ -329,6 +337,7 @@ export default function UploadSection({ onJobCreated }: Props) {
                 <RotateCw size={16} />
                 <label className="form-label" style={{ margin: 0 }}>
                   {t('upload.multiAngle', 'Multi-Angle Views')}
+                  <HelpTooltip text={t('help.multiAngle', 'Generate your product from different camera angles — great for showing all sides in your listing.')} />
                 </label>
               </div>
               <p className="angle-picker-hint">
@@ -413,6 +422,13 @@ export default function UploadSection({ onJobCreated }: Props) {
             )}
           </>
           )}
+
+          <CostPreview
+            fileCount={files.length}
+            options={processingOptions}
+            sceneCount={processingOptions.generate_scene ? sceneCount : 1}
+            angleCount={processingOptions.generate_scene ? selectedAngles.length : 0}
+          />
 
           <button className="button-primary" onClick={uploadFiles}>
             {t('upload.uploadProcess', { count: files.length })}

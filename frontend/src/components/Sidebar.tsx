@@ -9,6 +9,7 @@ import {
   Target,
   CreditCard,
   Settings,
+  SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -25,6 +26,7 @@ export type Page =
   | 'ab-tests'
   | 'benchmarks'
   | 'billing'
+  | 'settings'
   | 'admin';
 
 interface Props {
@@ -59,6 +61,7 @@ export default function Sidebar({
     { id: 'ab-tests' as Page, icon: FlaskConical, label: t('nav.abTests', { defaultValue: 'A/B Tests' }) },
     { id: 'benchmarks' as Page, icon: Target, label: t('nav.benchmarks', { defaultValue: 'Image Score' }) },
     { id: 'billing' as Page, icon: CreditCard, label: t('nav.billing', { defaultValue: 'Billing' }) },
+    { id: 'settings' as Page, icon: SlidersHorizontal, label: t('nav.settings', { defaultValue: 'Settings' }) },
     ...(isAdmin ? [{ id: 'admin' as Page, icon: Settings, label: t('nav.admin', { defaultValue: 'Admin' }) }] : []),
   ];
 

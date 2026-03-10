@@ -5,6 +5,7 @@ import {
   Check, X, AlertTriangle, TrendingUp, BarChart3, Plus,
 } from 'lucide-react';
 import { api } from '../api';
+import HelpTooltip from './HelpTooltip';
 
 
 type ABView = 'list' | 'detail' | 'create' | 'metrics';
@@ -147,7 +148,7 @@ export default function ABTestPage() {
   return (
     <div className="ab-test-page">
       <div className="ab-header">
-        <h2><FlaskConical size={20} /> A/B Image Tests</h2>
+        <h2><FlaskConical size={20} /> A/B Image Tests <HelpTooltip text="Test two different product images on your live store to see which one gets more clicks and sales." /></h2>
         {view !== 'list' && (
           <button className="btn btn-ghost" onClick={() => { setView('list'); setActiveTestId(null); }}>
             Back to list

@@ -239,6 +239,8 @@
     "useExactBackground": "Use exact background",
     "uploadProcess": "Upload & Process {{count}} Image(s)",
     "scenesEach": " ({{count}} scenes each)",
+    "costEstimate": "Estimated cost: {{count}} token(s)",
+    "outputsEach": "output(s) each",
     "uploading": "Uploading and processing...",
     "uploadFailed": "Upload failed",
     "createJobFailed": "Failed to create job"
@@ -436,7 +438,15 @@
     "sceneGeneration": "AI Scene Generation",
     "sceneGenerationDesc": "Place your product in a professional setting",
     "hdUpscale": "HD Upscale",
-    "hdUpscaleDesc": "Enhance image resolution for print-ready quality"
+    "hdUpscaleDesc": "Enhance image resolution for print-ready quality",
+    "presetFull": "Full Enhancement",
+    "presetFullDesc": "Background removal + AI scene + HD upscale — best results",
+    "presetBgOnly": "Background Only",
+    "presetBgOnlyDesc": "Just remove the background, keep everything else",
+    "presetCustom": "Custom",
+    "presetCustomDesc": "Pick exactly which steps to run",
+    "customize": "Customize",
+    "hideCustom": "Hide options"
   },
   "admin": {
     "tabs": {
@@ -561,5 +571,52 @@
       "yes": "Yes",
       "no": "No"
     }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "process": "Process Images",
+    "results": "Results",
+    "brands": "Brands & Scenes",
+    "integrations": "Integrations",
+    "abTests": "A/B Tests",
+    "benchmarks": "Image Score",
+    "billing": "Billing",
+    "settings": "Settings",
+    "admin": "Admin"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Customize your Opal experience",
+    "helpGuidance": "Help & Guidance",
+    "helpTooltips": "Help Tooltips",
+    "helpTooltipsDesc": "Show hoverable question marks that explain what each option does",
+    "tipsBar": "Tips Bar",
+    "tipsBarDesc": "Show contextual tips and suggestions at the top of each page"
+  },
+  "tips": {
+    "dashboardWelcome": "Start by uploading product images — Opal handles the rest!",
+    "uploadDrag": "Drag & drop multiple images at once for batch processing.",
+    "uploadPreset": "Use \"Full Enhancement\" for the best results — it combines all three processing steps.",
+    "uploadBrand": "Select a brand profile to keep all your product images consistent.",
+    "resultsExport": "Download all images as a ZIP, or export in platform-specific sizes.",
+    "brandsTip": "Brand profiles save your preferred style — colors, mood, and scenes are reused automatically.",
+    "integrationsTip": "Connect your store to process and push images back without re-uploading.",
+    "abTestsTip": "A/B test different product images on your live store to find what converts best.",
+    "benchmarksTip": "Upload an image to get an instant quality score and improvement suggestions.",
+    "billingTip": "Monthly plans save up to 35% compared to one-time packs."
+  },
+  "help": {
+    "processingPipeline": "Choose how your images are processed. Full Enhancement gives the best results for product listings.",
+    "removeBackground": "Removes the background from your product image, leaving a clean cutout on a transparent background.",
+    "sceneGeneration": "Places your product in a professional AI-generated setting — like a marble countertop or lifestyle scene.",
+    "hdUpscale": "Sharpens and upscales your image to HD quality, making it look crisp on any device.",
+    "brandProfile": "Select a brand profile to apply consistent colors, mood, and style to all generated scenes.",
+    "scenesPerImage": "Generate multiple different scene variations for each product image. More scenes = more options to choose from.",
+    "multiAngle": "Generate your product from different camera angles — great for showing all sides in your listing.",
+    "brandProfiles": "Brand profiles save your preferred style settings — colors, mood, and scenes — so every product image looks consistent.",
+    "connectedStores": "Your linked webshops. Opal can pull product images, process them, and push them back automatically.",
+    "connectStore": "Connect your Shopify, Etsy, or WooCommerce store in a few clicks. Opal never accesses customer or payment data.",
+    "abTests": "Test two different product images on your live store to see which one gets more clicks and sales.",
+    "imageScore": "Upload any product image to get an instant quality score. See how it compares to your category and get improvement suggestions."
   }
 }

@@ -396,6 +396,17 @@ class CategoryBenchmark(Base):
         return f'<CategoryBenchmark {self.category}>'
 
 
+class UserPreference(Base):
+    __tablename__ = 'user_preferences'
+
+    user_id = Column(String, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    preferences = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<UserPreference user={self.user_id}>'
+
+
 class JobItem(Base):
     __tablename__ = 'job_items'
 

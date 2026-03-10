@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import type { ImageBenchmark, ImageBenchmarkScores, BenchmarkSuggestion, CategoryBenchmark } from '../types';
+import HelpTooltip from './HelpTooltip';
 
 type BenchView = 'analyze' | 'result' | 'history';
 
@@ -110,7 +111,7 @@ export default function BenchmarkPage() {
   return (
     <div className="bench-page">
       <div className="bench-header">
-        <h2><Target size={20} /> Image Quality Score</h2>
+        <h2><Target size={20} /> Image Quality Score <HelpTooltip text="Upload any product image to get an instant quality score. See how it compares to your category and get improvement suggestions." /></h2>
         <div className="bench-header-actions">
           {view !== 'analyze' && (
             <button className="btn btn-ghost" onClick={() => { setView('analyze'); setCurrentResult(null); setPreviewUrl(null); }}>

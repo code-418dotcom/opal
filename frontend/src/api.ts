@@ -721,6 +721,19 @@ class ApiClient {
   async revokeApiKey(keyId: string): Promise<void> {
     await this.request(`/v1/account/api-keys/${keyId}`, { method: 'DELETE' });
   }
+
+  // ── Preferences ──────────────────────────────────────────────────
+
+  async getPreferences(): Promise<{ preferences: Record<string, unknown> }> {
+    return this.request('/v1/account/preferences');
+  }
+
+  async updatePreferences(prefs: Record<string, unknown>): Promise<{ preferences: Record<string, unknown> }> {
+    return this.request('/v1/account/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    });
+  }
 }
 
 export const api = new ApiClient();

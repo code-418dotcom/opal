@@ -9,6 +9,7 @@ import {
 import { api } from '../api';
 import type { Integration, ShopifyProduct, ShopifyImage, ApiKeyCreateResponse } from '../types';
 import CatalogProcessor from './CatalogProcessor';
+import HelpTooltip from './HelpTooltip';
 
 type View = 'list' | 'products' | 'processing' | 'results' | 'catalog';
 
@@ -381,7 +382,7 @@ export default function IntegrationsPage() {
 
       {view === 'list' && (
         <>
-          <h2 className="section-title">{t('integrations.connectedStores')}</h2>
+          <h2 className="section-title">{t('integrations.connectedStores')} <HelpTooltip text={t('help.connectedStores', 'Your linked webshops. Opal can pull product images, process them, and push them back automatically.')} /></h2>
 
           {isLoading ? (
             <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>
@@ -442,7 +443,7 @@ export default function IntegrationsPage() {
             </div>
           )}
 
-          <h2 className="section-title" style={{ marginTop: '2rem' }}>{t('integrations.connectStore')}</h2>
+          <h2 className="section-title" style={{ marginTop: '2rem' }}>{t('integrations.connectStore')} <HelpTooltip text={t('help.connectStore', 'Connect your Shopify, Etsy, or WooCommerce store in a few clicks. Opal never accesses customer or payment data.')} /></h2>
           <div className="connect-providers">
             <div className="connect-form">
               <h4>Shopify</h4>

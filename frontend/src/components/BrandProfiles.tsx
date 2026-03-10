@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import type { BrandProfile } from '../types';
+import HelpTooltip from './HelpTooltip';
 
 const MOODS = ['modern', 'rustic', 'luxury', 'minimal', 'playful', 'professional'] as const;
 
@@ -257,7 +258,7 @@ export default function BrandProfiles() {
       <div className="section-header">
         <div className="section-header-row">
           <div>
-            <h2>{t('brands.title')}</h2>
+            <h2>{t('brands.title')} <HelpTooltip text={t('help.brandProfiles', 'Brand profiles save your preferred style settings — colors, mood, and scenes — so every product image looks consistent.')} /></h2>
             <p>{t('brands.subtitle')}</p>
           </div>
           <button className="button-primary button-sm" onClick={openCreate}>
