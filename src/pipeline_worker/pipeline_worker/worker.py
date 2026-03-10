@@ -481,11 +481,11 @@ def main():
                             pass
                         receiver.abandon_message(m)
 
-                    finally:
-                        try:
-                            renewer.close()
-                        except Exception:
-                            pass
+                # Close renewer after all messages in the batch are done
+                try:
+                    renewer.close()
+                except Exception:
+                    pass
 
         except Exception as e:
             LOG.exception('Worker loop error: %s', e)
