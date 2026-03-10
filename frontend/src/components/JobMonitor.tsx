@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle,
-  Copy, Check, Scissors, Sparkles, ArrowUpFromDot, Timer,
+  Copy, Check, Scissors, Sparkles, ArrowUpFromDot, Timer, Ban,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
@@ -106,12 +106,28 @@ function getStepExplanation(
 export default function JobMonitor({ jobId }: Props) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelResult, setCancelResult] = useState<{ cancelled_items: number; refunded_tokens: number } | null>(null);
 
   const copyJobId = (id: string) => {
     navigator.clipboard.writeText(id).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+  };
+
+  const handleCancel = async () => {
+    if (!jobId || cancelling) return;
+    setCancelling(true);
+    try {
+      const result = await api.cancelJob(jobId);
+      setCancelResult(result);
+      refetch();
+    } catch (err) {
+      console.error('Cancel failed:', err);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const { data: job, isLoading, error, refetch } = useQuery<Job>({
@@ -195,14 +211,26 @@ export default function JobMonitor({ jobId }: Props) {
             <h2>{t('monitor.title')}</h2>
             <p>{t('monitor.trackingSubtitle')}</p>
           </div>
-          <button
-            className="button-secondary"
-            onClick={() => refetch()}
-            disabled={isLoading}
-          >
-            <RefreshCw size={16} className={isLoading ? 'spinning' : ''} />
-            {t('common.refresh')}
-          </button>
+          <div className="monitor-actions">
+            {isRunning && (
+              <button
+                className="button-danger"
+                onClick={handleCancel}
+                disabled={cancelling}
+              >
+                <Ban size={16} className={cancelling ? 'spinning' : ''} />
+                {t('monitor.cancelJob', 'Cancel Job')}
+              </button>
+            )}
+            <button
+              className="button-secondary"
+              onClick={() => refetch()}
+              disabled={isLoading}
+            >
+              <RefreshCw size={16} className={isLoading ? 'spinning' : ''} />
+              {t('common.refresh')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -288,6 +316,19 @@ export default function JobMonitor({ jobId }: Props) {
               <span className="stat-total">{getProgressStats(job).total} {t('monitor.total')}</span>
             </div>
           </div>
+
+          {cancelResult && cancelResult.refunded_tokens > 0 && (
+            <div className="refund-notice">
+              <CheckCircle size={16} />
+              <span>
+                {t('monitor.refunded', {
+                  tokens: cancelResult.refunded_tokens,
+                  items: cancelResult.cancelled_items,
+                  defaultValue: '{{tokens}} token(s) refunded for {{items}} cancelled item(s)',
+                })}
+              </span>
+            </div>
+          )}
 
           <div className="items-section">
             <h4>{t('monitor.items')} ({job.items.length})</h4>

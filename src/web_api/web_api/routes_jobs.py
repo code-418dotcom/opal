@@ -9,10 +9,12 @@ from shared.db_sqlalchemy import (
     get_job_by_id,
     get_job_items,
     update_job_status,
+    update_job_item,
     list_jobs,
     get_brand_profile,
     get_scene_template,
     debit_tokens,
+    credit_tokens,
 )
 from shared.util import new_id, new_correlation_id
 from shared.queue_database import send_job_message
@@ -295,5 +297,62 @@ def enqueue_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
 
     return {"ok": True}
 
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(
+    job_id: str,
+    tenant_id: str = Depends(get_tenant_from_api_key),
+    user: dict = Depends(get_current_user),
+):
+    """Cancel a job. Unfinished items are marked failed and unused tokens are refunded."""
+    job = get_job_by_id(job_id, tenant_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job["status"] in ("completed", "failed"):
+        raise HTTPException(status_code=400, detail=f"Cannot cancel job in '{job['status']}' state")
+
+    items = get_job_items(job_id)
+    completed_count = 0
+    cancelled_count = 0
+
+    for item in items:
+        if item["status"] == "completed":
+            completed_count += 1
+        elif item["status"] != "failed":
+            update_job_item(item["id"], {"status": "failed", "error_message": "Cancelled by user"})
+            cancelled_count += 1
+
+    # Determine final job status
+    if completed_count > 0:
+        update_job_status(job_id, "partial")
+    else:
+        update_job_status(job_id, "failed")
+
+    # Refund tokens for non-completed items
+    refunded = 0
+    if cancelled_count > 0 and user["user_id"] != "apikey":
+        opts = job.get("processing_options") or {}
+        steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", True)])
+        if steps_enabled <= 1:
+            refund_amount = max(1, -(-cancelled_count // 2))
+        else:
+            refund_amount = cancelled_count
+        credit_tokens(
+            user_id=user["user_id"],
+            amount=refund_amount,
+            tx_type="refund",
+            description=f"Cancelled job {job_id}: {cancelled_count} item(s)",
+            reference_id=job_id,
+        )
+        refunded = refund_amount
+
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "cancelled_items": cancelled_count,
+        "completed_items": completed_count,
+        "refunded_tokens": refunded,
+    }
 
 

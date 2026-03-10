@@ -181,6 +181,10 @@ class ApiClient {
     console.log('[API Client] Job auto-enqueued on upload completion');
   }
 
+  async cancelJob(jobId: string): Promise<{ cancelled_items: number; completed_items: number; refunded_tokens: number }> {
+    return this.request(`/v1/jobs/${jobId}/cancel`, { method: 'POST' });
+  }
+
   async getDownloadUrl(itemId: string, _bucket: string = 'outputs'): Promise<string> {
     const response = await this.request<{ download_url: string }>(
       `/v1/downloads/${itemId}`
