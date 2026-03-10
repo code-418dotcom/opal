@@ -30,3 +30,14 @@ start_backend_local.sh
 *.secret
 *.key
 *.pem
+
+# Claude Code / workflow local state
+.agents/
+.claude/
+.workflow/
+skills-lock.json
+CLAUDE.md.bak
+
+# Test artifacts
+scripts/smoke_output/
+scripts/test_image.png

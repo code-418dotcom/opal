@@ -1,11 +1,7 @@
 import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse } from './types';
 
-const API_URL = import.meta.env.VITE_API_URL as string;
+const API_URL = (import.meta.env.VITE_API_URL as string) || '';
 const API_KEY = import.meta.env.VITE_API_KEY as string;
-
-if (!API_URL) {
-  console.warn('VITE_API_URL not set. API calls will fail.');
-}
 
 if (import.meta.env.DEV) {
   console.log('[API Client] Configuration:', {
