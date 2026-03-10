@@ -613,7 +613,7 @@
     "hdUpscale": "Sharpens and upscales your image to HD quality, making it look crisp on any device.",
     "brandProfile": "Select a brand profile to apply consistent colors, mood, and style to all generated scenes.",
     "scenesPerImage": "Generate multiple different scene variations for each product image. More scenes = more options to choose from.",
-    "multiAngle": "Generate your product from different camera angles — great for showing all sides in your listing.",
+    "lightingStyles": "Generate extra variations with different lighting and composition styles — dramatic side-lit, warm golden hour, overhead flat-lay, and more.",
     "brandProfiles": "Brand profiles save your preferred style settings — colors, mood, and scenes — so every product image looks consistent.",
     "connectedStores": "Your linked webshops. Opal can pull product images, process them, and push them back automatically.",
     "connectStore": "Connect your Shopify, Etsy, or WooCommerce store in a few clicks. Opal never accesses customer or payment data.",

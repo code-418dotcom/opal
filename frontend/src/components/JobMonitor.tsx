@@ -320,7 +320,7 @@ export default function JobMonitor({ jobId }: Props) {
                                 <span className="item-variant-label">
                                   {item.angle_type && (
                                     <span className="item-angle-tag">
-                                      {item.angle_type === '3/4' ? '3/4 Angle' : item.angle_type.charAt(0).toUpperCase() + item.angle_type.slice(1)}
+                                      {item.angle_type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                                     </span>
                                   )}
                                   {item.scene_type && (
@@ -336,7 +336,7 @@ export default function JobMonitor({ jobId }: Props) {
                               )}
                               {isSingle && item.angle_type && (
                                 <span className="item-angle-tag">
-                                  {item.angle_type === '3/4' ? '3/4 Angle' : item.angle_type.charAt(0).toUpperCase() + item.angle_type.slice(1)}
+                                  {item.angle_type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                                 </span>
                               )}
                               {isSingle && item.scene_type && (

@@ -37,12 +37,12 @@ export default function UploadSection({ onJobCreated }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ANGLE_OPTIONS = [
-    { value: 'front', label: t('upload.angleFront', 'Front') },
-    { value: '3/4', label: t('upload.angle34', '3/4 Angle') },
-    { value: 'left', label: t('upload.angleLeft', 'Left Side') },
-    { value: 'right', label: t('upload.angleRight', 'Right Side') },
-    { value: 'back', label: t('upload.angleBack', 'Back') },
-    { value: 'top', label: t('upload.angleTop', 'Top Down') },
+    { value: 'eye-level', label: t('upload.angleEyeLevel', 'Eye Level') },
+    { value: 'low-angle', label: t('upload.angleLowAngle', 'Low Angle') },
+    { value: 'overhead', label: t('upload.angleOverhead', 'Overhead') },
+    { value: 'side-lit', label: t('upload.angleSideLit', 'Side Lit') },
+    { value: 'backlit', label: t('upload.angleBacklit', 'Backlit') },
+    { value: 'golden', label: t('upload.angleGolden', 'Golden Hour') },
   ];
 
   const { data: brandProfiles = [] } = useQuery({
@@ -336,12 +336,12 @@ export default function UploadSection({ onJobCreated }: Props) {
               <div className="angle-picker-header">
                 <RotateCw size={16} />
                 <label className="form-label" style={{ margin: 0 }}>
-                  {t('upload.multiAngle', 'Multi-Angle Views')}
-                  <HelpTooltip text={t('help.multiAngle', 'Generate your product from different camera angles — great for showing all sides in your listing.')} />
+                  {t('upload.lightingStyles', 'Lighting & Perspective')}
+                  <HelpTooltip text={t('help.lightingStyles', 'Generate extra variations with different lighting and composition styles — dramatic side-lit, warm golden hour, overhead flat-lay, and more.')} />
                 </label>
               </div>
               <p className="angle-picker-hint">
-                {t('upload.multiAngleHint', 'Generate your product from different camera angles')}
+                {t('upload.lightingStylesHint', 'Add lighting and composition variations to each scene')}
               </p>
               <div className="angle-picker-chips">
                 {ANGLE_OPTIONS.map(opt => {
@@ -363,7 +363,7 @@ export default function UploadSection({ onJobCreated }: Props) {
               </div>
               {selectedAngles.length > 0 && (
                 <span className="angle-picker-count">
-                  {t('upload.anglesSelected', '{{count}} angle(s) selected', { count: selectedAngles.length })}
+                  {t('upload.stylesSelected', '{{count}} style(s) selected', { count: selectedAngles.length })}
                   {sceneCount > 1 && ` × ${sceneCount} ${t('upload.scenes', 'scenes')} = ${selectedAngles.length * sceneCount} ${t('upload.images', 'images')}`}
                 </span>
               )}
@@ -433,7 +433,7 @@ export default function UploadSection({ onJobCreated }: Props) {
           <button className="button-primary" onClick={uploadFiles}>
             {t('upload.uploadProcess', { count: files.length })}
             {sceneCount > 1 && processingOptions.generate_scene && t('upload.scenesEach', { count: sceneCount })}
-            {selectedAngles.length > 0 && processingOptions.generate_scene && ` · ${selectedAngles.length} ${t('upload.angles', 'angles')}`}
+            {selectedAngles.length > 0 && processingOptions.generate_scene && ` · ${selectedAngles.length} ${t('upload.styles', 'styles')}`}
           </button>
         </>
       )}

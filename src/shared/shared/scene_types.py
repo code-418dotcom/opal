@@ -24,24 +24,24 @@ DEFAULT_SCENE_TYPES: list[str] = [
     "nature",
 ]
 
-# ── Multi-angle product photography ──────────────────────────────
-# Angle instructions injected into the FLUX.2 Pro Edit prompt to
-# render the product from different camera viewpoints.
+# ── Scene perspective & lighting styles ──────────────────────────
+# Perspective instructions injected into the FLUX.2 Pro Edit prompt
+# to vary the lighting, composition, and camera feel per image.
 
 ANGLE_PROMPTS: dict[str, str] = {
-    "front": "straight-on front view of the product, camera at eye level facing the front",
-    "back": "back view of the product, camera positioned behind showing the rear side",
-    "left": "left side profile view of the product, camera positioned to the left",
-    "right": "right side profile view of the product, camera positioned to the right",
-    "3/4": "three-quarter angle view of the product, camera positioned at 45 degrees showing front and side",
-    "top": "overhead top-down view of the product, camera positioned directly above looking straight down",
+    "eye-level": "straight-on eye-level shot, even balanced lighting from both sides, clean symmetrical composition",
+    "low-angle": "dramatic low-angle perspective looking slightly upward, product appears bold and prominent, subtle upward lighting",
+    "overhead": "overhead flat-lay composition, camera directly above, soft even diffused lighting, clean top-down view",
+    "side-lit": "strong directional side lighting from the left, dramatic shadows and highlights, moody contrast, depth and texture",
+    "backlit": "soft warm backlighting creating a gentle glow and rim light around the product, dreamy halo effect, silhouette edges",
+    "golden": "warm golden hour lighting, long soft shadows, rich amber tones, inviting and natural warmth",
 }
 
 DEFAULT_ANGLE_TYPES: list[str] = [
-    "front",
-    "3/4",
-    "left",
-    "right",
-    "back",
-    "top",
+    "eye-level",
+    "low-angle",
+    "overhead",
+    "side-lit",
+    "backlit",
+    "golden",
 ]
