@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Optional, Callable
 
-from PIL import Image
+from PIL import Image, ImageFilter
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from pipeline_worker.retry import TransientError, PermanentError, classify_and_raise
@@ -45,6 +45,36 @@ def composite_product_on_scene(product_png: bytes, scene_jpg: bytes) -> bytes:
 
     output = BytesIO()
     scene_img.convert('RGB').save(output, format='PNG', optimize=True)
+    return output.getvalue()
+
+
+def _preserve_product_details(product_rgba_bytes: bytes, scene_bytes: bytes,
+                               erode_px: int = 8) -> bytes:
+    """Composite original product pixels back onto the AI-generated scene.
+
+    FLUX.2 Pro Edit produces great scenes but can corrupt fine details like
+    text, logos, and patterns on the product surface. This function pastes
+    the original product pixels back using an eroded alpha mask, so:
+      - The product interior (text, labels, patterns) is pixel-perfect
+      - Edge pixels (where FLUX added lighting/shadows) are kept from the scene
+    """
+    product = Image.open(BytesIO(product_rgba_bytes)).convert("RGBA")
+    scene = Image.open(BytesIO(scene_bytes)).convert("RGBA")
+
+    # Resize product to match scene dimensions (FLUX may change size)
+    if product.size != scene.size:
+        product = product.resize(scene.size, Image.Resampling.LANCZOS)
+
+    # Extract and erode the alpha mask — shrink edges so FLUX's lighting
+    # bleeds through at the boundary, but interior stays original
+    alpha = product.split()[3]
+    eroded_alpha = alpha.filter(ImageFilter.MinFilter(size=erode_px * 2 + 1))
+
+    # Composite: scene as base, original product pixels pasted using eroded mask
+    scene.paste(product, (0, 0), eroded_alpha)
+
+    output = BytesIO()
+    scene.convert("RGB").save(output, format="PNG", optimize=True)
     return output.getvalue()
 
 
@@ -80,7 +110,8 @@ def _build_edit_prompt(scene_prompt: Optional[str], angle_type: Optional[str] = 
         f"Place the product from the image into {scene_desc}."
         f"{angle_instruction} "
         "Create natural lighting, soft shadows and reflections. "
-        "Keep the product exactly as-is — do not alter its shape, color or details. "
+        "Keep the product exactly as-is — do not alter its shape, color, text, labels, or any details. "
+        "Preserve all text and writing on the product without any changes. "
         "Professional e-commerce product photography style."
     )
 
@@ -140,6 +171,9 @@ def execute_pipeline(
             LOG.info("Step 2/3: Scene edit (%s) angle=%s", img_gen_provider.name, angle_type)
             edit_prompt = _build_edit_prompt(scene_prompt, angle_type=angle_type)
 
+            # Save bg-removed product for detail preservation after scene gen
+            product_rgba_bytes = current_bytes
+
             # Upload bg-removed product so the API can fetch it
             if upload_tmp_image:
                 product_url = _run_step(
@@ -152,6 +186,13 @@ def execute_pipeline(
 
             current_bytes = _run_step(
                 "scene_edit", img_gen_provider.generate, edit_prompt, **gen_kwargs,
+            )
+
+            # Composite original product pixels back to preserve text/labels/details
+            LOG.info("Step 2.5/3: Preserving product details (text, labels, patterns)")
+            current_bytes = _run_step(
+                "preserve_details", _preserve_product_details,
+                product_rgba_bytes, current_bytes,
             )
         else:
             # --- Legacy mode: generate background, then PIL composite -----

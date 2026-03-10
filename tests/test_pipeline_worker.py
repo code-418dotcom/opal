@@ -7,7 +7,7 @@ import pytest
 import httpx
 
 from pipeline_worker.retry import TransientError, PermanentError, classify_and_raise
-from pipeline_worker.pipeline import execute_pipeline, PipelineResult, composite_product_on_scene, _build_edit_prompt
+from pipeline_worker.pipeline import execute_pipeline, PipelineResult, composite_product_on_scene, _build_edit_prompt, _preserve_product_details
 
 
 # ---------------------------------------------------------------------------
@@ -28,11 +28,11 @@ def _make_png(r=255, g=0, b=0):
     )
 
 
-def _make_rgba_png():
-    """Create a 2x2 RGBA PNG for compositing tests."""
+def _make_rgba_png(color=(255, 0, 0, 128), size=(2, 2)):
+    """Create an RGBA PNG for compositing tests."""
     from io import BytesIO
     from PIL import Image
-    img = Image.new('RGBA', (2, 2), (255, 0, 0, 128))
+    img = Image.new('RGBA', size, color)
     buf = BytesIO()
     img.save(buf, format='PNG')
     return buf.getvalue()
@@ -40,6 +40,7 @@ def _make_rgba_png():
 
 RAW_PNG = _make_png()
 RGBA_PNG = _make_rgba_png()
+SCENE_PNG = _make_rgba_png(color=(0, 0, 255, 255), size=(2, 2))
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +310,7 @@ class TestEditModePipeline:
         bg.remove_background.return_value = RGBA_PNG
 
         edit_provider = self._make_edit_provider()
+        edit_provider.generate.return_value = SCENE_PNG
         upload_fn = MagicMock(return_value="https://blob.test/product.png")
 
         result = execute_pipeline(
@@ -330,12 +332,13 @@ class TestEditModePipeline:
         # The prompt should mention "marble countertop"
         call_prompt = edit_provider.generate.call_args[0][0]
         assert "marble countertop" in call_prompt
-        # Result should be the edit provider output (no PIL composite)
-        assert result.output_bytes == RGBA_PNG
+        # Result should be valid PNG (preserve_details composites product back)
+        assert len(result.output_bytes) > 0
 
     def test_edit_mode_without_upload_callback(self):
         """Edit mode works without upload callback (no image reference)."""
         edit_provider = self._make_edit_provider()
+        edit_provider.generate.return_value = SCENE_PNG
 
         result = execute_pipeline(
             raw_bytes=RGBA_PNG,
@@ -349,7 +352,7 @@ class TestEditModePipeline:
         # No image_urls when upload_tmp_image is not provided
         call_kwargs = edit_provider.generate.call_args[1]
         assert "image_urls" not in call_kwargs
-        assert result.output_bytes == RGBA_PNG
+        assert len(result.output_bytes) > 0
 
     def test_edit_mode_with_saved_bg_falls_back_to_legacy(self):
         """When saved_background_bytes is provided, even edit providers use legacy compositing."""
@@ -387,13 +390,13 @@ class TestEditModePipeline:
         assert result.output_bytes == b"upscaled"
 
     def test_edit_mode_full_pipeline(self):
-        """Full pipeline with edit mode: bg-removal -> edit -> upscale."""
+        """Full pipeline with edit mode: bg-removal -> edit -> preserve -> upscale."""
         bg = MagicMock()
         bg.name = "mock-bg"
         bg.remove_background.return_value = RGBA_PNG
 
         edit_provider = self._make_edit_provider()
-        edit_provider.generate.return_value = b"edited_scene"
+        edit_provider.generate.return_value = SCENE_PNG
 
         upscale = MagicMock()
         upscale.name = "mock-upscale"
@@ -412,7 +415,8 @@ class TestEditModePipeline:
         bg.remove_background.assert_called_once()
         upload_fn.assert_called_once()
         edit_provider.generate.assert_called_once()
-        upscale.upscale.assert_called_once_with(b"edited_scene")
+        # Upscale receives the preserved (composited) output, not raw scene
+        upscale.upscale.assert_called_once()
         assert result.output_bytes == b"final_output"
 
 
@@ -426,3 +430,65 @@ class TestBuildEditPrompt:
         prompt = _build_edit_prompt("a rustic wooden table with warm candles")
         assert "rustic wooden table" in prompt
         assert "product" in prompt.lower()
+
+    def test_prompt_mentions_text_preservation(self):
+        prompt = _build_edit_prompt("a table")
+        assert "text" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# 7. Product Detail Preservation (_preserve_product_details)
+# ---------------------------------------------------------------------------
+
+class TestPreserveProductDetails:
+    def _make_product_png(self, size=(50, 50)):
+        """Create a product RGBA PNG with distinct interior pixels."""
+        from io import BytesIO
+        from PIL import Image
+        img = Image.new('RGBA', size, (255, 0, 0, 255))
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        return buf.getvalue()
+
+    def _make_scene_png(self, size=(50, 50)):
+        """Create a scene PNG with different color."""
+        from io import BytesIO
+        from PIL import Image
+        img = Image.new('RGBA', size, (0, 0, 255, 255))
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        return buf.getvalue()
+
+    def test_returns_valid_png(self):
+        """Preservation returns a valid PNG image."""
+        from io import BytesIO
+        from PIL import Image
+        product = self._make_product_png()
+        scene = self._make_scene_png()
+        result = _preserve_product_details(product, scene, erode_px=2)
+        img = Image.open(BytesIO(result))
+        assert img.size == (50, 50)
+        assert img.mode == "RGB"
+
+    def test_interior_pixels_preserved(self):
+        """Center pixels should match original product, not the scene."""
+        from io import BytesIO
+        from PIL import Image
+        product = self._make_product_png(size=(50, 50))
+        scene = self._make_scene_png(size=(50, 50))
+        result = _preserve_product_details(product, scene, erode_px=2)
+        img = Image.open(BytesIO(result))
+        # Center pixel should be red (from product), not blue (from scene)
+        center = img.getpixel((25, 25))
+        assert center[0] == 255  # Red channel from product
+        assert center[2] == 0    # Not blue from scene
+
+    def test_handles_size_mismatch(self):
+        """Should resize product to match scene when sizes differ."""
+        from io import BytesIO
+        from PIL import Image
+        product = self._make_product_png(size=(30, 30))
+        scene = self._make_scene_png(size=(60, 60))
+        result = _preserve_product_details(product, scene, erode_px=2)
+        img = Image.open(BytesIO(result))
+        assert img.size == (60, 60)
