@@ -184,7 +184,7 @@ export default function JobMonitor({ jobId, onSelectJob }: Props) {
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { icon: typeof Clock; cls: string; label: string }> = {
       created: { icon: Clock, cls: 'badge-default', label: t('monitor.status.queued') },
-      uploaded: { icon: Clock, cls: 'badge-default', label: t('monitor.status.uploaded') },
+      uploaded: { icon: CheckCircle, cls: 'badge-info', label: t('monitor.status.uploaded') },
       processing: { icon: Loader, cls: 'badge-processing', label: t('monitor.status.processing') },
       completed: { icon: CheckCircle, cls: 'badge-success', label: t('monitor.status.completed') },
       failed: { icon: XCircle, cls: 'badge-error', label: t('monitor.status.failed') },

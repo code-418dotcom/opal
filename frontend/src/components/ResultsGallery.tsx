@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,11 +14,13 @@ import {
   Copy,
   FileText,
   Crown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { api } from '../api';
-import type { Job } from '../types';
+import type { Job, JobItem } from '../types';
 
-function ResultImage({ itemId }: { itemId: string }) {
+function ResultImage({ itemId, onClick }: { itemId: string; onClick?: () => void }) {
   const { t } = useTranslation();
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -60,9 +62,136 @@ function ResultImage({ itemId }: { itemId: string }) {
   }
 
   return (
-    <img className="result-image" src={src} alt={t('results.processedResult')} onError={() => setError(true)} />
+    <img
+      className="result-image"
+      src={src}
+      alt={t('results.processedResult')}
+      onError={() => setError(true)}
+      onClick={onClick}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+    />
   );
 }
+
+// ── Lightbox ─────────────────────────────────────────────────────
+
+function Lightbox({
+  items,
+  startIndex,
+  onClose,
+}: {
+  items: JobItem[];
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [index, setIndex] = useState(startIndex);
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const item = items[index];
+  const hasNext = index < items.length - 1;
+  const hasPrev = index > 0;
+
+  const goNext = useCallback(() => { if (hasNext) setIndex(i => i + 1); }, [hasNext]);
+  const goPrev = useCallback(() => { if (hasPrev) setIndex(i => i - 1); }, [hasPrev]);
+
+  // Fetch image URL when index changes
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setSrc(null);
+    api.getDownloadUrl(item.item_id, 'outputs')
+      .then(url => { if (!cancelled) setSrc(url); })
+      .catch(() => { if (!cancelled) setSrc(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [item.item_id]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goNext();
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goPrev();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose, goNext, goPrev]);
+
+  // Prevent body scroll while lightbox is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  const handleDownload = async () => {
+    try {
+      const url = await api.getDownloadUrl(item.item_id, 'outputs');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.seo_filename || item.filename;
+      link.click();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="lightbox-overlay" onClick={onClose}>
+      <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+        {/* Close button */}
+        <button className="lightbox-close" onClick={onClose}>
+          <X size={20} />
+        </button>
+
+        {/* Navigation */}
+        {hasPrev && (
+          <button className="lightbox-nav lightbox-prev" onClick={goPrev}>
+            <ChevronLeft size={32} />
+          </button>
+        )}
+        {hasNext && (
+          <button className="lightbox-nav lightbox-next" onClick={goNext}>
+            <ChevronRight size={32} />
+          </button>
+        )}
+
+        {/* Image */}
+        <div className="lightbox-image-container">
+          {loading ? (
+            <Loader className="spinning" size={48} />
+          ) : src ? (
+            <img className="lightbox-image" src={src} alt={item.seo_alt_text || item.filename} />
+          ) : (
+            <div className="lightbox-error">
+              <ImageIcon size={48} />
+              <p>{t('results.previewUnavailable')}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="lightbox-footer">
+          <div className="lightbox-info">
+            <span className="lightbox-filename">{item.filename}</span>
+            {item.scene_type && (
+              <span className="result-scene-tag">{item.scene_type.charAt(0).toUpperCase() + item.scene_type.slice(1)}</span>
+            )}
+            {item.angle_type && (
+              <span className="item-angle-tag">{item.angle_type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+            )}
+            <span className="lightbox-counter">{index + 1} / {items.length}</span>
+          </div>
+          <button className="button-secondary button-sm" onClick={handleDownload}>
+            <Download size={14} />
+            {t('common.download')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────
 
 interface Props {
   jobId: string | null;
@@ -83,6 +212,7 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
   const [selectedFormats, setSelectedFormats] = useState<Set<string>>(new Set());
   const [formatExportStatus, setFormatExportStatus] = useState<'idle' | 'loading' | 'queued'>('idle');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(jobId);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Update selectedJobId when jobId prop changes (new job created)
   useEffect(() => {
@@ -123,16 +253,6 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
       link.click();
     } catch {
       setDownloadError(t('results.downloadFailed'));
-    }
-  };
-
-  const handleViewItem = async (itemId: string) => {
-    try {
-      setDownloadError(null);
-      const url = await api.getDownloadUrl(itemId, 'outputs');
-      window.open(url, '_blank');
-    } catch {
-      setDownloadError(t('results.previewFailed'));
     }
   };
 
@@ -334,10 +454,10 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
           )}
 
           <div className="results-grid">
-            {completedItems.map((item) => (
+            {completedItems.map((item, idx) => (
               <div key={item.item_id} className="result-card">
-                <div className="result-preview">
-                  <ResultImage itemId={item.item_id} />
+                <div className="result-preview" onClick={() => setLightboxIndex(idx)}>
+                  <ResultImage itemId={item.item_id} onClick={() => setLightboxIndex(idx)} />
                 </div>
 
                 <div className="result-info">
@@ -386,7 +506,7 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
                   <div className="result-actions">
                     <button
                       className="button-secondary button-sm"
-                      onClick={() => handleViewItem(item.item_id)}
+                      onClick={() => setLightboxIndex(idx)}
                     >
                       <ExternalLink size={14} />
                       {t('common.view')}
@@ -409,6 +529,15 @@ export default function ResultsGallery({ jobId, tokenBalance }: Props) {
               {t('results.completedOf', { completed: completedItems.length, total: job.items.length })}
             </p>
           </div>
+
+          {/* Lightbox */}
+          {lightboxIndex !== null && (
+            <Lightbox
+              items={completedItems}
+              startIndex={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+            />
+          )}
         </>
       )}
     </div>

@@ -176,6 +176,7 @@ def get_job_items(job_id: str) -> List[Dict[str, Any]]:
                 "scene_prompt": item.scene_prompt,
                 "scene_index": item.scene_index,
                 "scene_type": item.scene_type,
+                "angle_type": item.angle_type,
                 "saved_background_path": item.saved_background_path,
                 "created_at": item.created_at.isoformat() if item.created_at else None,
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None,
