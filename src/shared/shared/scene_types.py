@@ -23,3 +23,25 @@ DEFAULT_SCENE_TYPES: list[str] = [
     "office",
     "nature",
 ]
+
+# ── Multi-angle product photography ──────────────────────────────
+# Angle instructions injected into the FLUX.2 Pro Edit prompt to
+# render the product from different camera viewpoints.
+
+ANGLE_PROMPTS: dict[str, str] = {
+    "front": "straight-on front view of the product, camera at eye level facing the front",
+    "back": "back view of the product, camera positioned behind showing the rear side",
+    "left": "left side profile view of the product, camera positioned to the left",
+    "right": "right side profile view of the product, camera positioned to the right",
+    "3/4": "three-quarter angle view of the product, camera positioned at 45 degrees showing front and side",
+    "top": "overhead top-down view of the product, camera positioned directly above looking straight down",
+}
+
+DEFAULT_ANGLE_TYPES: list[str] = [
+    "front",
+    "3/4",
+    "left",
+    "right",
+    "back",
+    "top",
+]

@@ -413,6 +413,7 @@ class JobItem(Base):
     saved_background_path = Column(String, nullable=True)
     seo_alt_text = Column(String(200), nullable=True)
     seo_filename = Column(String(255), nullable=True)
+    angle_type = Column(String(50), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

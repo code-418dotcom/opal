@@ -72,6 +72,7 @@ class ApiClient {
       scene_types?: string[];
       scene_template_ids?: string[];
       use_saved_background?: boolean;
+      angle_types?: string[];
     },
     brandProfileId?: string,
   ): Promise<CreateJobResponse> {
@@ -89,6 +90,9 @@ class ApiClient {
             scene_template_ids: sceneOptions.scene_template_ids,
             use_saved_background: sceneOptions.use_saved_background || false,
           } : {}),
+          ...(sceneOptions?.angle_types && sceneOptions.angle_types.length > 0
+            ? { angle_types: sceneOptions.angle_types }
+            : {}),
         })),
         processing_options: processingOptions || {
           remove_background: true,

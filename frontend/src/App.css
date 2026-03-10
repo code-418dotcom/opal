@@ -2182,6 +2182,63 @@ body {
   color: var(--color-text-secondary);
 }
 
+/* ── Angle Picker ────────────────────────────────────────── */
+
+.angle-picker-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--color-surface);
+  border-radius: var(--radius);
+}
+
+.angle-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.angle-picker-hint {
+  font-size: 0.813rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.75rem 0;
+}
+
+.angle-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.angle-chip {
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 0.813rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.angle-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.angle-chip.selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.angle-picker-count {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.813rem;
+  color: var(--color-text-secondary);
+}
+
 /* Footer */
 .footer {
   background: var(--color-surface);
@@ -3714,31 +3771,80 @@ body {
   text-transform: capitalize;
 }
 
-.integration-card-actions {
-  display: flex;
-  gap: 0.5rem;
+/* ── Base .btn classes (integrations page) ──────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  text-decoration: none;
 }
 
-.integration-card-actions .btn {
-  flex: 1;
-  font-size: 0.8rem;
-  padding: 0.5rem 0.75rem;
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.btn.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+}
+
+.btn.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.btn.btn-secondary:hover:not(:disabled) {
+  background: var(--color-surface-hover);
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.1);
   color: var(--color-error);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.25);
+.btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
 }
 
-/* Connect form */
+/* ── Integration card actions ──────────────────────── */
+
+.integration-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.integration-card-actions .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.75rem;
+}
+
+/* ── Connect providers ─────────────────────────────── */
+
 .connect-providers {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
 }
 
@@ -3747,32 +3853,42 @@ body {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .connect-form h4 {
   margin: 0 0 0.75rem;
   font-size: 0.95rem;
-  color: var(--color-text-primary);
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .connect-input-group {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  align-items: stretch;
 }
 
 .connect-input {
   flex: 1;
-  padding: 0.6rem 1rem;
+  min-width: 0;
+  padding: 0.55rem 0.875rem;
   border-radius: var(--radius);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-text);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .connect-input:focus {
   outline: none;
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.connect-input-group .btn {
+  flex-shrink: 0;
 }
 
 .connect-cost-info {
@@ -5827,17 +5943,17 @@ body {
 
 .plugin-setup-hint {
   margin-top: 0.75rem;
-  padding: 0.75rem;
-  background: rgba(37, 99, 235, 0.08);
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 8px;
-  border: 1px solid rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .plugin-setup-hint p {
   margin: 0;
   font-size: 0.82rem;
-  color: rgba(200, 205, 224, 0.8);
-  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.5;
 }
 
 .integration-card-actions a.btn {

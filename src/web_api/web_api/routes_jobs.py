@@ -28,6 +28,7 @@ class ItemIn(BaseModel):
     scene_types: list[str] | None = None
     scene_template_ids: list[str] | None = None
     use_saved_background: bool = False
+    angle_types: list[str] | None = None
 
 
 class ProcessingOptions(BaseModel):
@@ -64,12 +65,24 @@ def create_job(
         if not bp:
             raise HTTPException(status_code=404, detail="Brand profile not found")
 
+    # Validate angle_types values
+    from shared.scene_types import ANGLE_PROMPTS
+    for it in body.items:
+        if it.angle_types:
+            invalid = [a for a in it.angle_types if a not in ANGLE_PROMPTS]
+            if invalid:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid angle_types: {invalid}. Valid: {list(ANGLE_PROMPTS.keys())}",
+                )
+
     # Token deduction (skip for API key users who have unlimited balance)
     if user["user_id"] != "apikey":
-        total_items = sum(
-            len(it.scene_template_ids) if it.scene_template_ids else it.scene_count
-            for it in body.items
-        )
+        total_items = 0
+        for it in body.items:
+            scenes = len(it.scene_template_ids) if it.scene_template_ids else it.scene_count
+            angles = len(it.angle_types) if it.angle_types else 1
+            total_items += scenes * angles
         cost = max(total_items, 1)  # 1 token per output image
         new_balance = debit_tokens(
             user_id=user["user_id"],
@@ -102,12 +115,14 @@ def create_job(
     if body.brand_profile_id != "default":
         bp = get_brand_profile(body.brand_profile_id, tenant_id)
 
-    # Create job items (fan out for multi-scene)
+    # Create job items (fan out for multi-scene × multi-angle)
     from shared.scene_types import DEFAULT_SCENE_TYPES
 
     items_data = []
     created_items = []
     for it in body.items:
+        angle_types = it.angle_types or [None]  # None means no specific angle
+
         # Scene template mode: each template ID becomes a scene
         if it.scene_template_ids:
             templates = []
@@ -117,26 +132,32 @@ def create_job(
                     raise HTTPException(status_code=404, detail=f"Scene template not found: {tid}")
                 templates.append(tmpl)
 
-            for scene_idx, tmpl in enumerate(templates):
-                item_id = new_id("item")
+            multi = len(templates) * len(angle_types) > 1
+            idx = 0
+            for tmpl in templates:
                 saved_bg = tmpl.get("preview_blob_path") if it.use_saved_background else None
-                items_data.append({
-                    "id": item_id,
-                    "job_id": job_id,
-                    "tenant_id": tenant_id,
-                    "filename": it.filename,
-                    "status": "created",
-                    "scene_prompt": tmpl["prompt"],
-                    "scene_index": scene_idx if len(templates) > 1 else None,
-                    "scene_type": tmpl.get("scene_type"),
-                    "saved_background_path": saved_bg,
-                })
-                created_items.append({
-                    "item_id": item_id,
-                    "filename": it.filename,
-                    "scene_index": scene_idx if len(templates) > 1 else None,
-                    "scene_type": tmpl.get("scene_type"),
-                })
+                for angle in angle_types:
+                    item_id = new_id("item")
+                    items_data.append({
+                        "id": item_id,
+                        "job_id": job_id,
+                        "tenant_id": tenant_id,
+                        "filename": it.filename,
+                        "status": "created",
+                        "scene_prompt": tmpl["prompt"],
+                        "scene_index": idx if multi else None,
+                        "scene_type": tmpl.get("scene_type"),
+                        "saved_background_path": saved_bg,
+                        "angle_type": angle,
+                    })
+                    created_items.append({
+                        "item_id": item_id,
+                        "filename": it.filename,
+                        "scene_index": idx if multi else None,
+                        "scene_type": tmpl.get("scene_type"),
+                        "angle_type": angle,
+                    })
+                    idx += 1
             continue
 
         # Apply brand profile defaults if no explicit scene config
@@ -154,8 +175,9 @@ def create_job(
                 detail=f"scene_types length ({len(scene_types)}) must equal scene_count ({scene_count})"
             )
 
+        multi = scene_count * len(angle_types) > 1
+        idx = 0
         for scene_idx in range(scene_count):
-            item_id = new_id("item")
             scene_type = None
             scene_prompt = it.scene_prompt
 
@@ -165,22 +187,27 @@ def create_job(
                 else:
                     scene_type = DEFAULT_SCENE_TYPES[scene_idx % len(DEFAULT_SCENE_TYPES)]
 
-            items_data.append({
-                "id": item_id,
-                "job_id": job_id,
-                "tenant_id": tenant_id,
-                "filename": it.filename,
-                "status": "created",
-                "scene_prompt": scene_prompt,
-                "scene_index": scene_idx if scene_count > 1 else None,
-                "scene_type": scene_type,
-            })
-            created_items.append({
-                "item_id": item_id,
-                "filename": it.filename,
-                "scene_index": scene_idx if scene_count > 1 else None,
-                "scene_type": scene_type,
-            })
+            for angle in angle_types:
+                item_id = new_id("item")
+                items_data.append({
+                    "id": item_id,
+                    "job_id": job_id,
+                    "tenant_id": tenant_id,
+                    "filename": it.filename,
+                    "status": "created",
+                    "scene_prompt": scene_prompt,
+                    "scene_index": idx if multi else None,
+                    "scene_type": scene_type,
+                    "angle_type": angle,
+                })
+                created_items.append({
+                    "item_id": item_id,
+                    "filename": it.filename,
+                    "scene_index": idx if multi else None,
+                    "scene_type": scene_type,
+                    "angle_type": angle,
+                })
+                idx += 1
 
     if items_data:
         create_job_item_records(items_data)
@@ -229,6 +256,7 @@ def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
                 "scene_prompt": i.get("scene_prompt"),
                 "scene_index": i.get("scene_index"),
                 "scene_type": i.get("scene_type"),
+                "angle_type": i.get("angle_type"),
                 "saved_background_path": i.get("saved_background_path"),
             }
             for i in items

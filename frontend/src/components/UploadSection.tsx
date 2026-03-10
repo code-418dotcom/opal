@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Loader, CheckCircle, AlertCircle, Minus, Plus, ChevronDown, ChevronUp, Image as ImageIcon, RotateCw } from 'lucide-react';
 import { api } from '../api';
 import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
 
@@ -31,7 +31,17 @@ export default function UploadSection({ onJobCreated }: Props) {
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [useSavedBackground, setUseSavedBackground] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [selectedAngles, setSelectedAngles] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const ANGLE_OPTIONS = [
+    { value: 'front', label: t('upload.angleFront', 'Front') },
+    { value: '3/4', label: t('upload.angle34', '3/4 Angle') },
+    { value: 'left', label: t('upload.angleLeft', 'Left Side') },
+    { value: 'right', label: t('upload.angleRight', 'Right Side') },
+    { value: 'back', label: t('upload.angleBack', 'Back') },
+    { value: 'top', label: t('upload.angleTop', 'Top Down') },
+  ];
 
   const { data: brandProfiles = [] } = useQuery({
     queryKey: ['brand-profiles'],
@@ -102,10 +112,12 @@ export default function UploadSection({ onJobCreated }: Props) {
 
     try {
       const filenames = files.map((f) => f.file.name);
-      const sceneOptions = sceneCount > 1 || selectedTemplateIds.length > 0 ? {
+      const hasSceneOptions = sceneCount > 1 || selectedTemplateIds.length > 0 || selectedAngles.length > 0;
+      const sceneOptions = hasSceneOptions ? {
         scene_count: sceneCount,
         scene_template_ids: selectedTemplateIds.length > 0 ? selectedTemplateIds : undefined,
         use_saved_background: selectedTemplateIds.length > 0 ? useSavedBackground : undefined,
+        angle_types: selectedAngles.length > 0 ? selectedAngles : undefined,
       } : undefined;
       const job = await api.createJob(
         filenames,
@@ -312,6 +324,42 @@ export default function UploadSection({ onJobCreated }: Props) {
               )}
             </div>
 
+            <div className="angle-picker-section">
+              <div className="angle-picker-header">
+                <RotateCw size={16} />
+                <label className="form-label" style={{ margin: 0 }}>
+                  {t('upload.multiAngle', 'Multi-Angle Views')}
+                </label>
+              </div>
+              <p className="angle-picker-hint">
+                {t('upload.multiAngleHint', 'Generate your product from different camera angles')}
+              </p>
+              <div className="angle-picker-chips">
+                {ANGLE_OPTIONS.map(opt => {
+                  const isSelected = selectedAngles.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      className={`angle-chip ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedAngles(prev =>
+                          isSelected ? prev.filter(a => a !== opt.value) : [...prev, opt.value]
+                        );
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedAngles.length > 0 && (
+                <span className="angle-picker-count">
+                  {t('upload.anglesSelected', '{{count}} angle(s) selected', { count: selectedAngles.length })}
+                  {sceneCount > 1 && ` × ${sceneCount} ${t('upload.scenes', 'scenes')} = ${selectedAngles.length * sceneCount} ${t('upload.images', 'images')}`}
+                </span>
+              )}
+            </div>
+
             {sceneTemplates.length > 0 && (
               <div className="template-picker">
                 <button
@@ -369,6 +417,7 @@ export default function UploadSection({ onJobCreated }: Props) {
           <button className="button-primary" onClick={uploadFiles}>
             {t('upload.uploadProcess', { count: files.length })}
             {sceneCount > 1 && processingOptions.generate_scene && t('upload.scenesEach', { count: sceneCount })}
+            {selectedAngles.length > 0 && processingOptions.generate_scene && ` · ${selectedAngles.length} ${t('upload.angles', 'angles')}`}
           </button>
         </>
       )}

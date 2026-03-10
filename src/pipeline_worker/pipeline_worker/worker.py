@@ -213,6 +213,7 @@ def process_message(data: dict) -> None:
         raw_blob_path = item.raw_blob_path
         item_scene_prompt = item.scene_prompt
         item_scene_type = item.scene_type
+        item_angle_type = item.angle_type
         item.status = ItemStatus.processing
         s.commit()
 
@@ -251,6 +252,7 @@ def process_message(data: dict) -> None:
         upscale_enabled=settings.UPSCALE_ENABLED,
         saved_background_bytes=saved_background_bytes,
         upload_tmp_image=_upload_tmp_image,
+        angle_type=item_angle_type,
     )
 
     # Apply watermark for free-tier users (no subscription, low balance)

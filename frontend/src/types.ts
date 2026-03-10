@@ -8,6 +8,7 @@ export interface JobItem {
   scene_prompt?: string;
   scene_index?: number;
   scene_type?: string;
+  angle_type?: string;
   saved_background_path?: string;
   seo_alt_text?: string;
   seo_filename?: string;
@@ -26,7 +27,7 @@ export interface Job {
 export interface CreateJobResponse {
   job_id: string;
   correlation_id: string;
-  items: Array<{ item_id: string; filename: string; scene_index?: number; scene_type?: string }>;
+  items: Array<{ item_id: string; filename: string; scene_index?: number; scene_type?: string; angle_type?: string }>;
 }
 
 export interface UploadSasResponse {

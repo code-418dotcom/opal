@@ -59,15 +59,26 @@ def _run_step(step_name: str, fn, *args, **kwargs):
         classify_and_raise(e)
 
 
-def _build_edit_prompt(scene_prompt: Optional[str]) -> str:
+def _build_edit_prompt(scene_prompt: Optional[str], angle_type: Optional[str] = None) -> str:
     """Build a FLUX.2 Pro Edit prompt that instructs the model to place the
-    product from the reference image into the described scene."""
+    product from the reference image into the described scene, optionally
+    from a specific camera angle."""
     scene_desc = scene_prompt or (
         "a clean, professional product photography setting with soft studio "
         "lighting and a neutral background"
     )
+
+    # Inject angle instruction when requested
+    angle_instruction = ""
+    if angle_type:
+        from shared.scene_types import ANGLE_PROMPTS
+        angle_desc = ANGLE_PROMPTS.get(angle_type)
+        if angle_desc:
+            angle_instruction = f" Show a {angle_desc}."
+
     return (
-        f"Place the product from the image into {scene_desc}. "
+        f"Place the product from the image into {scene_desc}."
+        f"{angle_instruction} "
         "Create natural lighting, soft shadows and reflections. "
         "Keep the product exactly as-is — do not alter its shape, color or details. "
         "Professional e-commerce product photography style."
@@ -92,6 +103,7 @@ def execute_pipeline(
     upscale_enabled: bool = True,
     saved_background_bytes: Optional[bytes] = None,
     upload_tmp_image: Optional[Callable[[bytes], str]] = None,
+    angle_type: Optional[str] = None,
 ) -> PipelineResult:
     """
     Execute the full image processing pipeline in-memory.
@@ -125,8 +137,8 @@ def execute_pipeline(
         )
 
         if use_edit:
-            LOG.info("Step 2/3: Scene edit (%s)", img_gen_provider.name)
-            edit_prompt = _build_edit_prompt(scene_prompt)
+            LOG.info("Step 2/3: Scene edit (%s) angle=%s", img_gen_provider.name, angle_type)
+            edit_prompt = _build_edit_prompt(scene_prompt, angle_type=angle_type)
 
             # Upload bg-removed product so the API can fetch it
             if upload_tmp_image:
