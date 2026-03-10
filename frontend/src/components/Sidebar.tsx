@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
   Upload,
+  Activity,
   Image as ImageIcon,
   Palette,
   Store,
@@ -20,6 +21,7 @@ import LanguageSelector from './LanguageSelector';
 export type Page =
   | 'dashboard'
   | 'upload'
+  | 'monitor'
   | 'results'
   | 'brands'
   | 'integrations'
@@ -55,6 +57,7 @@ export default function Sidebar({
   const navItems = [
     { id: 'dashboard' as Page, icon: LayoutDashboard, label: t('nav.dashboard', { defaultValue: 'Dashboard' }) },
     { id: 'upload' as Page, icon: Upload, label: t('nav.process', { defaultValue: 'Process Images' }) },
+    { id: 'monitor' as Page, icon: Activity, label: t('nav.monitor', { defaultValue: 'Job Monitor' }) },
     { id: 'results' as Page, icon: ImageIcon, label: t('nav.results', { defaultValue: 'Results' }) },
     { id: 'brands' as Page, icon: Palette, label: t('nav.brands', { defaultValue: 'Brands & Scenes' }) },
     { id: 'integrations' as Page, icon: Store, label: t('nav.integrations', { defaultValue: 'Integrations' }) },

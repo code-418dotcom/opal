@@ -6,6 +6,7 @@ import OnboardingWizard from './components/OnboardingWizard';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import ResultsGallery from './components/ResultsGallery';
+import type { Job } from './types';
 import BrandProfiles from './components/BrandProfiles';
 import SceneLibrary from './components/SceneLibrary';
 import BillingPage from './components/BillingPage';
@@ -62,8 +63,6 @@ function AppContent({
   const [currentJobId, setCurrentJobId] = useState<string | null>(() => {
     return localStorage.getItem('currentJobId');
   });
-  const [showMonitor, setShowMonitor] = useState(false);
-  const [monitorMinimized, setMonitorMinimized] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     return localStorage.getItem('opal_onboarding_dismissed') === '1';
   });
@@ -91,11 +90,11 @@ function AppContent({
   const handleJobCreated = (jobId: string) => {
     setCurrentJobId(jobId);
     localStorage.setItem('currentJobId', jobId);
-    setShowMonitor(true);
-    setMonitorMinimized(false);
+    setActivePage('monitor');
   };
 
-  useQuery({
+  // Auto-navigate to results when the active job finishes
+  useQuery<Job>({
     queryKey: ['job-nav', currentJobId],
     queryFn: async () => {
       const job = await api.getJob(currentJobId!);
@@ -105,22 +104,16 @@ function AppContent({
         prevStatus === 'processing' &&
         (job.status === 'completed' || job.status === 'failed' || job.status === 'partial')
       ) {
-        // Use setTimeout to avoid setState during render
-        setTimeout(() => {
-          setShowMonitor(false);
-          setActivePage('results');
-        }, 0);
+        setTimeout(() => setActivePage('results'), 0);
       }
       return job;
     },
-    enabled: !!currentJobId && showMonitor,
+    enabled: !!currentJobId && activePage === 'monitor',
     refetchInterval: 3000,
   });
 
   const handleNavigate = (page: Page) => {
     setActivePage(page);
-    setShowMonitor(false);
-    // Auto-collapse sidebar on mobile
     if (isMobile) {
       setSidebarCollapsed(true);
     }
@@ -162,34 +155,6 @@ function AppContent({
             <OnboardingWizard onComplete={handleOnboardingComplete} />
           )}
 
-          {showMonitor && currentJobId && (
-            <div className={`monitor-panel ${monitorMinimized ? 'monitor-minimized' : ''}`}>
-              <div className="monitor-panel-controls">
-                <button
-                  className="btn btn-ghost btn-sm monitor-toggle"
-                  onClick={() => setMonitorMinimized(m => !m)}
-                  title={monitorMinimized ? 'Expand' : 'Minimize'}
-                >
-                  {monitorMinimized ? '▲' : '▼'}
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm monitor-close"
-                  onClick={() => setShowMonitor(false)}
-                  title="Close"
-                >
-                  ✕
-                </button>
-              </div>
-              {monitorMinimized ? (
-                <div className="monitor-mini-status" onClick={() => setMonitorMinimized(false)}>
-                  Processing job...
-                </div>
-              ) : (
-                <JobMonitor jobId={currentJobId} />
-              )}
-            </div>
-          )}
-
           {activePage === 'dashboard' && (
             <Dashboard
               onNavigate={handleNavigate}
@@ -200,6 +165,10 @@ function AppContent({
 
           {activePage === 'upload' && (
             <UploadSection onJobCreated={handleJobCreated} />
+          )}
+
+          {activePage === 'monitor' && (
+            <JobMonitor jobId={currentJobId} />
           )}
 
           {activePage === 'results' && (

@@ -575,6 +575,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "process": "Process Images",
+    "monitor": "Job Monitor",
     "results": "Results",
     "brands": "Brands & Scenes",
     "integrations": "Integrations",

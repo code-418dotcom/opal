@@ -275,81 +275,6 @@ body {
 }
 
 /* ── Monitor Panel (floating) ─────────────────────────── */
-.monitor-panel {
-  position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  width: 400px;
-  max-height: 300px;
-  overflow-y: auto;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  z-index: 100;
-  padding: 1rem;
-}
-
-.monitor-panel .section-header {
-  margin-bottom: 0.75rem;
-}
-
-.monitor-panel .section-header h2 {
-  font-size: 1rem;
-}
-
-.monitor-panel-controls {
-  display: flex;
-  gap: 0.25rem;
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 1;
-}
-
-.monitor-toggle,
-.monitor-close {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 0.25rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  line-height: 1;
-}
-
-.monitor-toggle:hover,
-.monitor-close:hover {
-  background: var(--color-border);
-  color: var(--color-text);
-}
-
-.monitor-minimized {
-  max-height: none;
-  padding: 0;
-  overflow: hidden;
-}
-
-.monitor-minimized .monitor-panel-controls {
-  position: static;
-  padding: 0.5rem 0.75rem;
-  justify-content: flex-end;
-}
-
-.monitor-mini-status {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.monitor-mini-status:hover {
-  color: var(--color-text);
-}
 
 /* ── Results Job Tabs ────────────────────────────────── */
 .results-job-tabs {
@@ -1255,14 +1180,6 @@ body {
 
   .onboarding-step h2 {
     font-size: 1.25rem;
-  }
-
-  .monitor-panel {
-    width: calc(100% - 2rem);
-    left: 1rem;
-    right: 1rem;
-    bottom: 1rem;
-    max-height: 250px;
   }
 
   .sidebar-overlay {
