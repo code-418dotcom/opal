@@ -10,7 +10,7 @@ from web_api.routes_downloads import router as downloads_router
 from web_api.routes_brand_profiles import router as brand_profiles_router
 from web_api.routes_scene_templates import router as scene_templates_router
 from web_api.routes_billing import router as billing_router, public_router as billing_public_router
-from web_api.routes_integrations import router as integrations_router, gdpr_router
+from web_api.routes_integrations import router as integrations_router, oauth_callback_router, gdpr_router
 from web_api.routes_catalog import router as catalog_router
 from web_api.routes_ab_tests import router as ab_tests_router
 from web_api.routes_benchmarks import router as benchmarks_router
@@ -49,4 +49,5 @@ app.include_router(gdpr_privacy_router, dependencies=[Depends(get_current_user)]
 app.include_router(api_keys_router, prefix="/v1", dependencies=[Depends(get_current_user)])
 app.include_router(preferences_router, dependencies=[Depends(get_current_user)])
 app.include_router(admin_router)  # Admin routes have their own require_admin dependency
+app.include_router(oauth_callback_router)  # OAuth callbacks are browser redirects (state-verified, no auth header)
 app.include_router(gdpr_router)  # Shopify GDPR webhooks are unauthenticated (HMAC-verified)

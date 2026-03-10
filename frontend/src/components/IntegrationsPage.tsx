@@ -186,6 +186,17 @@ export default function IntegrationsPage() {
   const [pageInfoStack, setPageInfoStack] = useState<string[]>([]);
   const [currentPageInfo, setCurrentPageInfo] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('shopify') === 'connected') {
+      // Clean up URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('shopify');
+      window.history.replaceState({}, '', url.toString());
+      return t('integrations.shopifyConnected', { defaultValue: 'Shopify store connected successfully!' });
+    }
+    return null;
+  });
 
   const { data: integrations, isLoading } = useQuery({
     queryKey: ['integrations'],
@@ -372,6 +383,12 @@ export default function IntegrationsPage() {
 
   return (
     <div className="integrations-page">
+      {successMsg && (
+        <div className="integration-success">
+          <span>{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)}>{t('common.dismiss')}</button>
+        </div>
+      )}
       {error && (
         <div className="integration-error">
           <X size={14} />

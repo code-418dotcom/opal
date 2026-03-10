@@ -25,6 +25,7 @@ from web_api.auth import get_current_user
 LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/integrations", tags=["integrations"])
+oauth_callback_router = APIRouter(prefix="/v1/integrations", tags=["integrations-oauth"])
 
 # In-memory OAuth state store (short-lived, per-instance)
 # In production, use Redis or DB for multi-instance deployments
@@ -99,7 +100,7 @@ async def shopify_connect(
     return {"auth_url": auth_url}
 
 
-@router.get("/shopify/callback")
+@oauth_callback_router.get("/shopify/callback")
 async def shopify_callback(
     code: str = Query(...),
     state: str = Query(...),
@@ -473,7 +474,7 @@ async def woocommerce_connect(
     return {"auth_url": auth_url}
 
 
-@router.post("/woocommerce/callback")
+@oauth_callback_router.post("/woocommerce/callback")
 async def woocommerce_callback(request: Request):
     """Handle WooCommerce REST API key callback."""
     data = await request.json()
@@ -563,7 +564,7 @@ async def etsy_connect(
     return {"auth_url": auth_url}
 
 
-@router.get("/etsy/callback")
+@oauth_callback_router.get("/etsy/callback")
 async def etsy_callback(
     code: str = Query(...),
     state: str = Query(...),
