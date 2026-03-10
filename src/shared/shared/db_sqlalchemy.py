@@ -70,6 +70,7 @@ def create_job_item_records(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                 scene_index=item_data.get("scene_index"),
                 scene_type=item_data.get("scene_type"),
                 saved_background_path=item_data.get("saved_background_path"),
+                angle_type=item_data.get("angle_type"),
                 created_at=item_data.get("created_at", datetime.utcnow()),
                 updated_at=item_data.get("updated_at", datetime.utcnow()),
             )

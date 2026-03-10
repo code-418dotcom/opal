@@ -51,12 +51,12 @@ class TestUploadSas:
 # ── POST /v1/uploads/complete ─────────────────────────────────────
 
 class TestUploadComplete:
-    @patch("web_api.routes_uploads.send_job_message")
+    @patch("web_api.routes_uploads.send_job_messages_batch")
     @patch("web_api.routes_uploads.update_job_item")
     @patch("web_api.routes_uploads.get_job_items_by_filename")
     @patch("web_api.routes_uploads.get_job_item")
     @patch("web_api.routes_uploads.get_job_by_id")
-    def test_complete_enqueues_siblings(self, mock_job, mock_item, mock_siblings, mock_update, mock_send, client):
+    def test_complete_enqueues_siblings(self, mock_job, mock_item, mock_siblings, mock_update, mock_batch, client):
         mock_job.return_value = {
             "id": "job_1", "tenant_id": "tenant_test", "correlation_id": "corr_1",
         }
@@ -68,7 +68,8 @@ class TestUploadComplete:
         })
         assert resp.status_code == 200
         assert mock_update.call_count == 2
-        assert mock_send.call_count == 2
+        mock_batch.assert_called_once()
+        assert len(mock_batch.call_args[0][0]) == 2
 
 
 # ── GET /v1/downloads/{item_id} ───────────────────────────────────

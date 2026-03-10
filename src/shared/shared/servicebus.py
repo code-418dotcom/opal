@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from azure.identity import DefaultAzureCredential
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
@@ -57,6 +57,32 @@ def send_job_message(payload: Dict[str, Any]) -> None:
             "Failed to send job message: job_id=%s item_id=%s error=%s",
             payload.get("job_id"),
             payload.get("item_id"),
+            e,
+        )
+        raise
+
+
+def send_job_messages_batch(payloads: List[Dict[str, Any]]) -> None:
+    """Send multiple messages to the jobs queue using a single connection."""
+    if not payloads:
+        return
+    try:
+        with get_client() as client:
+            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_JOBS_QUEUE)
+            with sender:
+                messages = [ServiceBusMessage(json.dumps(p)) for p in payloads]
+                sender.send_messages(messages)
+                LOG.info(
+                    "Sent %d job messages to queue=%s job_id=%s",
+                    len(payloads),
+                    settings.SERVICEBUS_JOBS_QUEUE,
+                    payloads[0].get("job_id"),
+                )
+    except Exception as e:
+        LOG.error(
+            "Failed to send batch job messages: job_id=%s count=%d error=%s",
+            payloads[0].get("job_id") if payloads else "?",
+            len(payloads),
             e,
         )
         raise

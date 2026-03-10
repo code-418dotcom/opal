@@ -284,6 +284,15 @@ def send_job_message(payload: Dict[str, Any]):
     return send_message('jobs', payload)
 
 
+def send_job_messages_batch(payloads: List[Dict[str, Any]]):
+    """Send multiple messages to the jobs queue in a single connection."""
+    if settings.QUEUE_BACKEND == 'azure':
+        from shared.servicebus import send_job_messages_batch as _sb_batch
+        return _sb_batch(payloads)
+    for payload in payloads:
+        send_message('jobs', payload)
+
+
 def send_export_message(payload: Dict[str, Any]):
     """Send a message to the exports queue (routes via QUEUE_BACKEND setting)."""
     if settings.QUEUE_BACKEND == 'azure':

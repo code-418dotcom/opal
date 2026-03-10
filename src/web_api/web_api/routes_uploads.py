@@ -8,7 +8,7 @@ from shared.storage import (
     generate_upload_url,
     upload_file as storage_upload_file,
 )
-from shared.queue_database import send_job_message
+from shared.queue_database import send_job_message, send_job_messages_batch
 from web_api.auth import get_tenant_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["uploads"])
@@ -118,21 +118,24 @@ def upload_complete(body: UploadComplete, tenant_id: str = Depends(get_tenant_fr
     LOG.info("Upload complete: job_id=%s item_id=%s tenant_id=%s siblings=%d",
              body.job_id, body.item_id, tenant_id, len(siblings))
 
+    messages = []
     for sibling in siblings:
-        try:
-            msg = {
-                "tenant_id": tenant_id,
-                "job_id": body.job_id,
-                "item_id": sibling["id"],
-                "correlation_id": job["correlation_id"],
-                "processing_options": body.processing_options.model_dump(),
-            }
-            if sibling.get("saved_background_path"):
-                msg["saved_background_path"] = sibling["saved_background_path"]
-            send_job_message(msg)
-            LOG.info("Queue message sent for item_id=%s", sibling["id"])
-        except Exception as e:
-            LOG.error("Failed to send queue message for item_id=%s: %s", sibling["id"], e, exc_info=True)
+        msg = {
+            "tenant_id": tenant_id,
+            "job_id": body.job_id,
+            "item_id": sibling["id"],
+            "correlation_id": job["correlation_id"],
+            "processing_options": body.processing_options.model_dump(),
+        }
+        if sibling.get("saved_background_path"):
+            msg["saved_background_path"] = sibling["saved_background_path"]
+        messages.append(msg)
+
+    try:
+        send_job_messages_batch(messages)
+        LOG.info("Queued %d messages for job_id=%s", len(messages), body.job_id)
+    except Exception as e:
+        LOG.error("Failed to send batch queue messages for job_id=%s: %s", body.job_id, e, exc_info=True)
 
     return {"ok": True}
 
