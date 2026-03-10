@@ -14,29 +14,29 @@ export default function CostPreview({ fileCount, options, sceneCount, angleCount
 
   if (fileCount === 0) return null;
 
-  // Each enabled step produces output images that cost 1 token each
-  // Scene generation with multiple scenes/angles multiplies the count
   let imagesPerFile = 0;
-  if (options.remove_background) imagesPerFile = 1;
   if (options.generate_scene) {
     const scenes = Math.max(1, sceneCount);
     const angles = Math.max(1, angleCount);
     imagesPerFile = scenes * angles;
-  }
-  if (!options.remove_background && !options.generate_scene && options.upscale) {
+  } else if (options.remove_background || options.upscale) {
     imagesPerFile = 1;
   }
 
   const totalImages = fileCount * Math.max(1, imagesPerFile);
 
+  // Half credit when only 1 pipeline step is enabled
+  const stepsEnabled = [options.remove_background, options.generate_scene, options.upscale].filter(Boolean).length;
+  const cost = stepsEnabled <= 1 ? Math.max(1, Math.ceil(totalImages / 2)) : totalImages;
+
   return (
     <div className="cost-preview">
       <Coins size={16} className="cost-preview-icon" />
       <span className="cost-preview-text">
-        {t('upload.costEstimate', 'Estimated cost: {{count}} token(s)', { count: totalImages })}
-        {fileCount > 1 && (
+        {t('upload.jobCost', 'This job will cost {{count}} credit(s)', { count: cost })}
+        {stepsEnabled <= 1 && totalImages > 1 && (
           <span className="cost-preview-detail">
-            {' '}({fileCount} {t('upload.images', 'images')} × {Math.max(1, imagesPerFile)} {t('upload.outputsEach', 'output(s) each')})
+            {' '}{t('upload.halfCreditNote', '(half credit per image with single step)')}
           </span>
         )}
       </span>

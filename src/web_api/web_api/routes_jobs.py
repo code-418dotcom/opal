@@ -83,11 +83,17 @@ def create_job(
             scenes = len(it.scene_template_ids) if it.scene_template_ids else it.scene_count
             angles = len(it.angle_types) if it.angle_types else 1
             total_items += scenes * angles
-        cost = max(total_items, 1)  # 1 token per output image
+        # Half credit when only 1 pipeline step is enabled
+        opts = body.processing_options
+        steps_enabled = sum([opts.remove_background, opts.generate_scene, opts.upscale])
+        if steps_enabled <= 1:
+            cost = max(1, -(-total_items // 2))  # ceil(total_items / 2), min 1
+        else:
+            cost = max(total_items, 1)
         new_balance = debit_tokens(
             user_id=user["user_id"],
             amount=cost,
-            description=f"Job: {cost} image(s)",
+            description=f"Job: {total_items} image(s), {cost} credit(s)",
         )
         if new_balance is None:
             raise HTTPException(

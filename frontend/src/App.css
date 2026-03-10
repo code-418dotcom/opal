@@ -2232,32 +2232,65 @@ body {
   margin: 0 0 0.75rem 0;
 }
 
-.angle-picker-chips {
-  display: flex;
-  flex-wrap: wrap;
+.style-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.5rem;
 }
-
-.angle-chip {
-  padding: 0.375rem 0.875rem;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
-  font-size: 0.813rem;
+.style-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  text-align: center;
 }
-
-.angle-chip:hover {
-  border-color: var(--color-primary);
-  color: var(--color-text);
+.style-card:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.04);
 }
-
-.angle-chip.selected {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #fff;
+.style-card.selected {
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(139, 92, 246, 0.1);
+}
+.style-card-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  margin-bottom: 0.35rem;
+}
+.style-card-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+.style-card-desc {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.25;
+}
+/* Thumbnail gradients representing each lighting style */
+.style-thumb-eye-level {
+  background: linear-gradient(180deg, #d4d0c8 0%, #b8b4aa 40%, #9a9690 70%, #787470 100%);
+}
+.style-thumb-low-angle {
+  background: linear-gradient(0deg, #1a1a2e 0%, #16213e 30%, #0f3460 60%, #533483 100%);
+}
+.style-thumb-overhead {
+  background: radial-gradient(circle at 50% 50%, #e8e4de 0%, #c8c4be 40%, #a8a49e 70%, #888480 100%);
+}
+.style-thumb-side-lit {
+  background: linear-gradient(90deg, #f0e6d3 0%, #c8b89a 25%, #3a3530 50%, #1a1510 100%);
+}
+.style-thumb-backlit {
+  background: radial-gradient(ellipse at 50% 30%, #fff8e7 0%, #ffd87030 30%, #2a2520 60%, #1a1510 100%);
+}
+.style-thumb-golden {
+  background: linear-gradient(135deg, #f5c542 0%, #e6a817 30%, #c4841d 60%, #8b5e2f 100%);
 }
 
 .angle-picker-count {

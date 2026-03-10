@@ -37,12 +37,12 @@ export default function UploadSection({ onJobCreated }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ANGLE_OPTIONS = [
-    { value: 'eye-level', label: t('upload.angleEyeLevel', 'Eye Level') },
-    { value: 'low-angle', label: t('upload.angleLowAngle', 'Low Angle') },
-    { value: 'overhead', label: t('upload.angleOverhead', 'Overhead') },
-    { value: 'side-lit', label: t('upload.angleSideLit', 'Side Lit') },
-    { value: 'backlit', label: t('upload.angleBacklit', 'Backlit') },
-    { value: 'golden', label: t('upload.angleGolden', 'Golden Hour') },
+    { value: 'eye-level', label: t('upload.angleEyeLevel', 'Eye Level'), desc: t('upload.angleEyeLevelDesc', 'Balanced, even lighting') },
+    { value: 'low-angle', label: t('upload.angleLowAngle', 'Low Angle'), desc: t('upload.angleLowAngleDesc', 'Dramatic, bold presence') },
+    { value: 'overhead', label: t('upload.angleOverhead', 'Overhead'), desc: t('upload.angleOverheadDesc', 'Flat-lay, top-down') },
+    { value: 'side-lit', label: t('upload.angleSideLit', 'Side Lit'), desc: t('upload.angleSideLitDesc', 'Deep shadows, texture') },
+    { value: 'backlit', label: t('upload.angleBacklit', 'Backlit'), desc: t('upload.angleBacklitDesc', 'Soft glow, rim light') },
+    { value: 'golden', label: t('upload.angleGolden', 'Golden Hour'), desc: t('upload.angleGoldenDesc', 'Warm amber tones') },
   ];
 
   const { data: brandProfiles = [] } = useQuery({
@@ -343,20 +343,22 @@ export default function UploadSection({ onJobCreated }: Props) {
               <p className="angle-picker-hint">
                 {t('upload.lightingStylesHint', 'Add lighting and composition variations to each scene')}
               </p>
-              <div className="angle-picker-chips">
+              <div className="style-picker-grid">
                 {ANGLE_OPTIONS.map(opt => {
                   const isSelected = selectedAngles.includes(opt.value);
                   return (
                     <button
                       key={opt.value}
-                      className={`angle-chip ${isSelected ? 'selected' : ''}`}
+                      className={`style-card ${isSelected ? 'selected' : ''}`}
                       onClick={() => {
                         setSelectedAngles(prev =>
                           isSelected ? prev.filter(a => a !== opt.value) : [...prev, opt.value]
                         );
                       }}
                     >
-                      {opt.label}
+                      <div className={`style-card-thumb style-thumb-${opt.value}`} />
+                      <div className="style-card-label">{opt.label}</div>
+                      <div className="style-card-desc">{opt.desc}</div>
                     </button>
                   );
                 })}
