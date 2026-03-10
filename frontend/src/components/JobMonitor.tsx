@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle, Copy, Check } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
 
@@ -19,6 +19,14 @@ const STATUS_WEIGHT: Record<string, number> = {
 
 export default function JobMonitor({ jobId }: Props) {
   const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const copyJobId = (id: string) => {
+    navigator.clipboard.writeText(id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const { data: job, isLoading, error, refetch } = useQuery<Job>({
     queryKey: ['job', jobId],
@@ -130,10 +138,15 @@ export default function JobMonitor({ jobId }: Props) {
 
       {job && (
         <div className="job-details">
-          <div className="job-header">
-            <div>
-              <h3>Job {job.job_id.slice(0, 16)}...</h3>
-            </div>
+          <div className="job-id-row">
+            <code className="job-id-value">{job.job_id}</code>
+            <button
+              className="job-id-copy"
+              onClick={() => copyJobId(job.job_id)}
+              title={t('monitor.copyJobId', 'Copy Job ID')}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
             {getStatusBadge(job.status)}
           </div>
 

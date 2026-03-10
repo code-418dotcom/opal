@@ -1517,18 +1517,43 @@ body {
   padding: 1.5rem;
 }
 
-.job-header {
+.job-id-row {
   display: flex;
-  justify-content: space-between;
-  align-items: start;
-  margin-bottom: 2rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--color-border);
 }
-
-.job-header h3 {
-  font-size: 1.25rem;
-  margin-bottom: 0.5rem;
+.job-id-value {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: all;
+  cursor: text;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.job-id-copy {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: flex;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.job-id-copy:hover {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Badges */
@@ -3111,9 +3136,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .job-header {
-    flex-direction: column;
-    gap: 1rem;
+  .job-id-row {
+    flex-wrap: wrap;
   }
 
   .progress-stats {
