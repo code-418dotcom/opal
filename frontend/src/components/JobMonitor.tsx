@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 import {
   RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle,
   Copy, Check, Scissors, Sparkles, ArrowUpFromDot, Timer, Ban,
+  Download, History,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
 
 interface Props {
   jobId: string | null;
+  onSelectJob?: (jobId: string) => void;
 }
 
 const STATUS_WEIGHT: Record<string, number> = {
@@ -25,6 +27,14 @@ function formatElapsed(seconds: number): string {
   const s = seconds % 60;
   if (m === 0) return `${s}s`;
   return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
+
+function formatTimeAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function useElapsedTimer(startIso: string | undefined, running: boolean) {
@@ -103,11 +113,34 @@ function getStepExplanation(
   return { icon: Loader, text: t('monitor.step.processing', 'Processing your images...') };
 }
 
-export default function JobMonitor({ jobId }: Props) {
+function DownloadButton({ itemId }: { itemId: string }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const url = await api.getDownloadUrl(itemId);
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('Download failed:', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <button className="button-icon button-sm" onClick={handleDownload} disabled={downloading} title="Download">
+      <Download size={14} className={downloading ? 'spinning' : ''} />
+    </button>
+  );
+}
+
+export default function JobMonitor({ jobId, onSelectJob }: Props) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelResult, setCancelResult] = useState<{ cancelled_items: number; refunded_tokens: number } | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const copyJobId = (id: string) => {
     navigator.clipboard.writeText(id).then(() => {
@@ -136,6 +169,14 @@ export default function JobMonitor({ jobId }: Props) {
     enabled: !!jobId,
     refetchInterval: 3000,
   });
+
+  // Job history — fetch recent jobs
+  const { data: historyData } = useQuery({
+    queryKey: ['job-history'],
+    queryFn: () => api.listJobs(10),
+    refetchInterval: 10000,
+  });
+  const jobHistory = historyData?.jobs ?? [];
 
   const isRunning = !!job && job.status !== 'completed' && job.status !== 'failed' && job.status !== 'partial';
   const elapsed = useElapsedTimer(job?.created_at, isRunning);
@@ -192,11 +233,32 @@ export default function JobMonitor({ jobId }: Props) {
           <h2>{t('monitor.title')}</h2>
           <p>{t('monitor.subtitle')}</p>
         </div>
-        <div className="empty-state">
-          <Loader size={48} />
-          <h3>{t('monitor.noActiveJob')}</h3>
-          <p>{t('monitor.noActiveJobHint')}</p>
-        </div>
+
+        {/* Show history when no active job */}
+        {jobHistory.length > 0 ? (
+          <div className="job-history-section">
+            <h4><History size={16} /> {t('monitor.recentJobs', 'Recent Jobs')}</h4>
+            <div className="job-history-list">
+              {jobHistory.map((j: { job_id: string; status: string; created_at?: string }) => (
+                <button
+                  key={j.job_id}
+                  className="job-history-item"
+                  onClick={() => onSelectJob?.(j.job_id)}
+                >
+                  <code className="job-history-id">{j.job_id.slice(4, 16)}...</code>
+                  {getStatusBadge(j.status)}
+                  {j.created_at && <span className="job-history-time">{formatTimeAgo(j.created_at)}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <Loader size={48} />
+            <h3>{t('monitor.noActiveJob')}</h3>
+            <p>{t('monitor.noActiveJobHint')}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -223,6 +285,13 @@ export default function JobMonitor({ jobId }: Props) {
               </button>
             )}
             <button
+              className="button-secondary button-sm"
+              onClick={() => setShowHistory(h => !h)}
+            >
+              <History size={16} />
+              {t('monitor.history', 'History')}
+            </button>
+            <button
               className="button-secondary"
               onClick={() => refetch()}
               disabled={isLoading}
@@ -233,6 +302,25 @@ export default function JobMonitor({ jobId }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Collapsible history panel */}
+      {showHistory && jobHistory.length > 0 && (
+        <div className="job-history-section job-history-inline">
+          <div className="job-history-list">
+            {jobHistory.map((j: { job_id: string; status: string; created_at?: string }) => (
+              <button
+                key={j.job_id}
+                className={`job-history-item ${j.job_id === jobId ? 'job-history-active' : ''}`}
+                onClick={() => { onSelectJob?.(j.job_id); setShowHistory(false); }}
+              >
+                <code className="job-history-id">{j.job_id.slice(4, 16)}...</code>
+                {getStatusBadge(j.status)}
+                {j.created_at && <span className="job-history-time">{formatTimeAgo(j.created_at)}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="error-box">
@@ -389,7 +477,12 @@ export default function JobMonitor({ jobId }: Props) {
                                 <span className="item-scene-index">#{item.scene_index + 1}</span>
                               )}
                             </div>
-                            {getStatusBadge(item.status)}
+                            <div className="item-actions">
+                              {item.status === 'completed' && item.output_blob_path && (
+                                <DownloadButton itemId={item.item_id} />
+                              )}
+                              {getStatusBadge(item.status)}
+                            </div>
                           </div>
 
                           {item.error_message && (

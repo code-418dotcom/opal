@@ -186,6 +186,7 @@ class Job(Base):
 
     id = Column(String, primary_key=True, name='id')
     tenant_id = Column(String, nullable=False, index=True)
+    user_id = Column(String, ForeignKey('users.id'), nullable=True, index=True)
     brand_profile_id = Column(String, nullable=False)
     correlation_id = Column(String, nullable=False, index=True)
     status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.created, index=True)

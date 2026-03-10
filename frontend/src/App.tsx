@@ -168,7 +168,10 @@ function AppContent({
           )}
 
           {activePage === 'monitor' && (
-            <JobMonitor jobId={currentJobId} />
+            <JobMonitor jobId={currentJobId} onSelectJob={(id) => {
+              setCurrentJobId(id);
+              localStorage.setItem('currentJobId', id);
+            }} />
           )}
 
           {activePage === 'results' && (

@@ -11,11 +11,13 @@ from shared.config import settings
 
 LOG = logging.getLogger(__name__)
 
+# Module-level singleton — reused across all send calls
+_client: ServiceBusClient | None = None
+_credential: DefaultAzureCredential | None = None
+
 
 def get_fully_qualified_namespace() -> str:
     """Convert namespace to fully qualified domain name."""
-    # settings.SERVICEBUS_NAMESPACE is like: "opal-xxx-bus"
-    # Service Bus client needs: "<namespace>.servicebus.windows.net"
     ns = settings.SERVICEBUS_NAMESPACE.strip()
     if ns.endswith(".servicebus.windows.net"):
         return ns
@@ -23,35 +25,34 @@ def get_fully_qualified_namespace() -> str:
 
 
 def get_client() -> ServiceBusClient:
-    """Create Service Bus client with managed identity authentication."""
-    fqns = get_fully_qualified_namespace()
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
-    return ServiceBusClient(fully_qualified_namespace=fqns, credential=credential)
+    """Return a shared Service Bus client (creates on first call)."""
+    global _client, _credential
+    if _client is None:
+        fqns = get_fully_qualified_namespace()
+        _credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+        _client = ServiceBusClient(fully_qualified_namespace=fqns, credential=_credential)
+        LOG.info("Created shared ServiceBusClient for %s", fqns)
+    return _client
+
+
+def _send_to_queue(queue_name: str, payload: Dict[str, Any]) -> None:
+    """Send a single message to a named queue."""
+    client = get_client()
+    sender = client.get_queue_sender(queue_name=queue_name)
+    with sender:
+        sender.send_messages(ServiceBusMessage(json.dumps(payload)))
 
 
 def send_job_message(payload: Dict[str, Any]) -> None:
-    """
-    Send a message to the jobs queue.
-    
-    Args:
-        payload: Dictionary containing job message data (tenant_id, job_id, item_id, correlation_id)
-    
-    Raises:
-        Exception: If message sending fails
-    """
+    """Send a message to the jobs queue."""
     try:
-        with get_client() as client:
-            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_JOBS_QUEUE)
-            with sender:
-                message_body = json.dumps(payload)
-                message = ServiceBusMessage(message_body)
-                sender.send_messages(message)
-                LOG.info(
-                    "Sent job message to queue=%s job_id=%s item_id=%s",
-                    settings.SERVICEBUS_JOBS_QUEUE,
-                    payload.get("job_id"),
-                    payload.get("item_id"),
-                )
+        _send_to_queue(settings.SERVICEBUS_JOBS_QUEUE, payload)
+        LOG.info(
+            "Sent job message to queue=%s job_id=%s item_id=%s",
+            settings.SERVICEBUS_JOBS_QUEUE,
+            payload.get("job_id"),
+            payload.get("item_id"),
+        )
     except Exception as e:
         LOG.error(
             "Failed to send job message: job_id=%s item_id=%s error=%s",
@@ -63,21 +64,21 @@ def send_job_message(payload: Dict[str, Any]) -> None:
 
 
 def send_job_messages_batch(payloads: List[Dict[str, Any]]) -> None:
-    """Send multiple messages to the jobs queue using a single connection."""
+    """Send multiple messages to the jobs queue in a single batch."""
     if not payloads:
         return
     try:
-        with get_client() as client:
-            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_JOBS_QUEUE)
-            with sender:
-                messages = [ServiceBusMessage(json.dumps(p)) for p in payloads]
-                sender.send_messages(messages)
-                LOG.info(
-                    "Sent %d job messages to queue=%s job_id=%s",
-                    len(payloads),
-                    settings.SERVICEBUS_JOBS_QUEUE,
-                    payloads[0].get("job_id"),
-                )
+        client = get_client()
+        sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_JOBS_QUEUE)
+        with sender:
+            messages = [ServiceBusMessage(json.dumps(p)) for p in payloads]
+            sender.send_messages(messages)
+            LOG.info(
+                "Sent %d job messages to queue=%s job_id=%s",
+                len(payloads),
+                settings.SERVICEBUS_JOBS_QUEUE,
+                payloads[0].get("job_id"),
+            )
     except Exception as e:
         LOG.error(
             "Failed to send batch job messages: job_id=%s count=%d error=%s",
@@ -91,13 +92,9 @@ def send_job_messages_batch(payloads: List[Dict[str, Any]]) -> None:
 def send_bg_removal_message(payload: Dict[str, Any]) -> None:
     """Send pipeline message to bg-removal queue."""
     try:
-        with get_client() as client:
-            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_BG_REMOVAL_QUEUE)
-            with sender:
-                message = ServiceBusMessage(json.dumps(payload))
-                sender.send_messages(message)
-                LOG.info("Sent bg-removal message: job_id=%s item_id=%s",
-                         payload.get("job_id"), payload.get("item_id"))
+        _send_to_queue(settings.SERVICEBUS_BG_REMOVAL_QUEUE, payload)
+        LOG.info("Sent bg-removal message: job_id=%s item_id=%s",
+                 payload.get("job_id"), payload.get("item_id"))
     except Exception as e:
         LOG.error("Failed to send bg-removal message: job_id=%s error=%s",
                   payload.get("job_id"), e)
@@ -107,13 +104,9 @@ def send_bg_removal_message(payload: Dict[str, Any]) -> None:
 def send_scene_gen_message(payload: Dict[str, Any]) -> None:
     """Send pipeline message to scene-gen queue."""
     try:
-        with get_client() as client:
-            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_SCENE_GEN_QUEUE)
-            with sender:
-                message = ServiceBusMessage(json.dumps(payload))
-                sender.send_messages(message)
-                LOG.info("Sent scene-gen message: job_id=%s item_id=%s",
-                         payload.get("job_id"), payload.get("item_id"))
+        _send_to_queue(settings.SERVICEBUS_SCENE_GEN_QUEUE, payload)
+        LOG.info("Sent scene-gen message: job_id=%s item_id=%s",
+                 payload.get("job_id"), payload.get("item_id"))
     except Exception as e:
         LOG.error("Failed to send scene-gen message: job_id=%s error=%s",
                   payload.get("job_id"), e)
@@ -123,13 +116,9 @@ def send_scene_gen_message(payload: Dict[str, Any]) -> None:
 def send_upscale_message(payload: Dict[str, Any]) -> None:
     """Send pipeline message to upscale queue."""
     try:
-        with get_client() as client:
-            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_UPSCALE_QUEUE)
-            with sender:
-                message = ServiceBusMessage(json.dumps(payload))
-                sender.send_messages(message)
-                LOG.info("Sent upscale message: job_id=%s item_id=%s",
-                         payload.get("job_id"), payload.get("item_id"))
+        _send_to_queue(settings.SERVICEBUS_UPSCALE_QUEUE, payload)
+        LOG.info("Sent upscale message: job_id=%s item_id=%s",
+                 payload.get("job_id"), payload.get("item_id"))
     except Exception as e:
         LOG.error("Failed to send upscale message: job_id=%s error=%s",
                   payload.get("job_id"), e)
@@ -137,27 +126,14 @@ def send_upscale_message(payload: Dict[str, Any]) -> None:
 
 
 def send_export_message(payload: Dict[str, Any]) -> None:
-    """
-    Send a message to the exports queue.
-    
-    Args:
-        payload: Dictionary containing export message data (tenant_id, job_id, correlation_id)
-    
-    Raises:
-        Exception: If message sending fails
-    """
+    """Send a message to the exports queue."""
     try:
-        with get_client() as client:
-            sender = client.get_queue_sender(queue_name=settings.SERVICEBUS_EXPORTS_QUEUE)
-            with sender:
-                message_body = json.dumps(payload)
-                message = ServiceBusMessage(message_body)
-                sender.send_messages(message)
-                LOG.info(
-                    "Sent export message to queue=%s job_id=%s",
-                    settings.SERVICEBUS_EXPORTS_QUEUE,
-                    payload.get("job_id"),
-                )
+        _send_to_queue(settings.SERVICEBUS_EXPORTS_QUEUE, payload)
+        LOG.info(
+            "Sent export message to queue=%s job_id=%s",
+            settings.SERVICEBUS_EXPORTS_QUEUE,
+            payload.get("job_id"),
+        )
     except Exception as e:
         LOG.error(
             "Failed to send export message: job_id=%s error=%s",

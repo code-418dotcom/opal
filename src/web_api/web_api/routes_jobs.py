@@ -110,6 +110,7 @@ def create_job(
     job_data = {
         "id": job_id,
         "tenant_id": tenant_id,
+        "user_id": user["user_id"] if user["user_id"] != "apikey" else None,
         "brand_profile_id": body.brand_profile_id,
         "status": "created",
         "correlation_id": corr,
@@ -331,7 +332,8 @@ def cancel_job(
 
     # Refund tokens for non-completed items
     refunded = 0
-    if cancelled_count > 0 and user["user_id"] != "apikey":
+    refund_user_id = job.get("user_id") or (user["user_id"] if user["user_id"] != "apikey" else None)
+    if cancelled_count > 0 and refund_user_id:
         opts = job.get("processing_options") or {}
         steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", True)])
         if steps_enabled <= 1:
@@ -339,7 +341,7 @@ def cancel_job(
         else:
             refund_amount = cancelled_count
         credit_tokens(
-            user_id=user["user_id"],
+            user_id=refund_user_id,
             amount=refund_amount,
             tx_type="refund",
             description=f"Cancelled job {job_id}: {cancelled_count} item(s)",
@@ -353,6 +355,68 @@ def cancel_job(
         "cancelled_items": cancelled_count,
         "completed_items": completed_count,
         "refunded_tokens": refunded,
+    }
+
+
+@router.post("/jobs/cancel-all")
+def cancel_all_jobs(
+    tenant_id: str = Depends(get_tenant_from_api_key),
+    user: dict = Depends(get_current_user),
+):
+    """Cancel all active jobs for the current user. Returns total refund."""
+    active_jobs = list_jobs(tenant_id, status="created", limit=100) + \
+                  list_jobs(tenant_id, status="processing", limit=100)
+
+    total_cancelled = 0
+    total_refunded = 0
+    cancelled_job_ids = []
+
+    for job_summary in active_jobs:
+        job = get_job_by_id(job_summary["id"], tenant_id)
+        if not job or job["status"] in ("completed", "failed"):
+            continue
+
+        items = get_job_items(job_summary["id"])
+        completed_count = 0
+        cancelled_count = 0
+
+        for item in items:
+            if item["status"] == "completed":
+                completed_count += 1
+            elif item["status"] != "failed":
+                update_job_item(item["id"], {"status": "failed", "error_message": "Cancelled by user"})
+                cancelled_count += 1
+
+        if completed_count > 0:
+            update_job_status(job_summary["id"], "partial")
+        else:
+            update_job_status(job_summary["id"], "failed")
+
+        refund_user_id = job.get("user_id") or (user["user_id"] if user["user_id"] != "apikey" else None)
+        if cancelled_count > 0 and refund_user_id:
+            opts = job.get("processing_options") or {}
+            steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", True)])
+            if steps_enabled <= 1:
+                refund_amount = max(1, -(-cancelled_count // 2))
+            else:
+                refund_amount = cancelled_count
+            credit_tokens(
+                user_id=refund_user_id,
+                amount=refund_amount,
+                tx_type="refund",
+                description=f"Cancelled job {job_summary['id']}: {cancelled_count} item(s)",
+                reference_id=job_summary["id"],
+            )
+            total_refunded += refund_amount
+
+        total_cancelled += cancelled_count
+        cancelled_job_ids.append(job_summary["id"])
+
+    return {
+        "ok": True,
+        "cancelled_jobs": len(cancelled_job_ids),
+        "cancelled_items": total_cancelled,
+        "refunded_tokens": total_refunded,
     }
 
 

@@ -26,6 +26,7 @@ def create_job_record(job_data: Dict[str, Any]) -> Dict[str, Any]:
         job = Job(
             id=job_data["id"],
             tenant_id=job_data["tenant_id"],
+            user_id=job_data.get("user_id"),
             brand_profile_id=job_data["brand_profile_id"],
             correlation_id=job_data["correlation_id"],
             status=JobStatus(job_data.get("status", "created")),
@@ -115,6 +116,7 @@ def get_job_by_id(job_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
             "id": job.id,
             "job_id": job.id,
             "tenant_id": job.tenant_id,
+            "user_id": job.user_id,
             "brand_profile_id": job.brand_profile_id,
             "correlation_id": job.correlation_id,
             "status": job.status.value,
@@ -753,6 +755,7 @@ def list_jobs(
                 "id": job.id,
                 "job_id": job.id,
                 "tenant_id": job.tenant_id,
+                "user_id": job.user_id,
                 "brand_profile_id": job.brand_profile_id,
                 "correlation_id": job.correlation_id,
                 "status": job.status.value,

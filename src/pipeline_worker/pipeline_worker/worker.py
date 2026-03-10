@@ -33,7 +33,7 @@ from azure.servicebus import ServiceBusReceiveMode, AutoLockRenewer
 
 from shared.config import settings
 from shared.db import SessionLocal
-from shared.models import JobItem, ItemStatus, User
+from shared.models import Job, JobItem, JobStatus, ItemStatus, User
 from shared.storage import build_output_blob_path
 from shared.pipeline import ProcessingOptions, finalize_job_status, mark_item_failed
 from shared.scene_types import SCENE_PROMPTS
@@ -194,7 +194,7 @@ def process_message(data: dict) -> None:
         job_id, item_id, opts.remove_background, opts.generate_scene, opts.upscale,
     )
 
-    # Validate item exists and isn't already done
+    # Validate item exists and isn't already done or cancelled
     with SessionLocal() as s:
         item = s.get(JobItem, item_id)
         if not item:
@@ -202,6 +202,14 @@ def process_message(data: dict) -> None:
             return
         if item.status == ItemStatus.completed:
             LOG.info('Item already completed, skipping: %s', item_id)
+            return
+        if item.status == ItemStatus.failed:
+            LOG.info('Item already failed/cancelled, skipping: %s', item_id)
+            return
+        # Check if the parent job was cancelled
+        job = s.get(Job, job_id)
+        if job and job.status in (JobStatus.failed, JobStatus.partial):
+            LOG.info('Job %s already terminated (status=%s), skipping item %s', job_id, job.status.value, item_id)
             return
         if not item.raw_blob_path:
             LOG.error('Missing raw_blob_path: %s', item_id)

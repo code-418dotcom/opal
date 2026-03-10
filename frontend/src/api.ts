@@ -185,6 +185,10 @@ class ApiClient {
     return this.request(`/v1/jobs/${jobId}/cancel`, { method: 'POST' });
   }
 
+  async cancelAllJobs(): Promise<{ cancelled_jobs: number; cancelled_items: number; refunded_tokens: number }> {
+    return this.request('/v1/jobs/cancel-all', { method: 'POST' });
+  }
+
   async getDownloadUrl(itemId: string, _bucket: string = 'outputs'): Promise<string> {
     const response = await this.request<{ download_url: string }>(
       `/v1/downloads/${itemId}`
