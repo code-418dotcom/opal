@@ -21,6 +21,12 @@ export interface Job {
   status: 'created' | 'processing' | 'completed' | 'failed' | 'partial';
   correlation_id: string;
   export_blob_path?: string;
+  processing_options?: {
+    remove_background: boolean;
+    generate_scene: boolean;
+    upscale: boolean;
+  };
+  created_at?: string;
   items: JobItem[];
 }
 

@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle, Copy, Check } from 'lucide-react';
+import {
+  RefreshCw, Clock, CheckCircle, XCircle, Loader, AlertTriangle,
+  Copy, Check, Scissors, Sparkles, ArrowUpFromDot, Timer,
+} from 'lucide-react';
 import { api } from '../api';
 import type { Job } from '../types';
 
@@ -16,6 +19,89 @@ const STATUS_WEIGHT: Record<string, number> = {
   completed: 100,
   failed: 100,
 };
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
+
+function useElapsedTimer(startIso: string | undefined, running: boolean) {
+  const [elapsed, setElapsed] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!startIso || !running) return;
+
+    const start = new Date(startIso).getTime();
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [startIso, running]);
+
+  // Freeze elapsed when job finishes
+  useEffect(() => {
+    if (!running && startIso) {
+      const start = new Date(startIso).getTime();
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }
+  }, [running, startIso]);
+
+  return elapsed;
+}
+
+function getStepExplanation(
+  job: Job,
+  t: (key: string, fallback: string) => string,
+): { icon: typeof Scissors; text: string } | null {
+  const opts = job.processing_options;
+  if (!opts) return null;
+
+  const isTerminal = job.status === 'completed' || job.status === 'failed' || job.status === 'partial';
+  if (isTerminal) return null;
+
+  if (job.status === 'created') {
+    return { icon: Clock, text: t('monitor.step.queued', 'Waiting in queue...') };
+  }
+
+  // Determine current step from item statuses
+  const hasUploading = job.items.some(i => i.status === 'uploaded');
+  const hasProcessing = job.items.some(i => i.status === 'processing');
+  const completedCount = job.items.filter(i => i.status === 'completed').length;
+  const total = job.items.length;
+
+  if (hasUploading && !hasProcessing && completedCount === 0) {
+    return { icon: Clock, text: t('monitor.step.uploading', 'Uploading images to storage...') };
+  }
+
+  // Infer pipeline stage from progress ratio
+  if (hasProcessing || completedCount < total) {
+    const progress = completedCount / total;
+
+    if (opts.remove_background && progress < 0.33) {
+      return { icon: Scissors, text: t('monitor.step.removingBg', 'Removing backgrounds — isolating your products...') };
+    }
+    if (opts.generate_scene && progress < 0.66) {
+      return { icon: Sparkles, text: t('monitor.step.generatingScene', 'Generating AI scenes — compositing your products into professional settings...') };
+    }
+    if (opts.upscale) {
+      return { icon: ArrowUpFromDot, text: t('monitor.step.upscaling', 'HD upscaling — sharpening images to high resolution...') };
+    }
+
+    // Fallback if only some steps enabled
+    if (opts.remove_background) {
+      return { icon: Scissors, text: t('monitor.step.removingBg', 'Removing backgrounds — isolating your products...') };
+    }
+    if (opts.generate_scene) {
+      return { icon: Sparkles, text: t('monitor.step.generatingScene', 'Generating AI scenes — compositing your products into professional settings...') };
+    }
+  }
+
+  return { icon: Loader, text: t('monitor.step.processing', 'Processing your images...') };
+}
 
 export default function JobMonitor({ jobId }: Props) {
   const { t } = useTranslation();
@@ -35,12 +121,8 @@ export default function JobMonitor({ jobId }: Props) {
     refetchInterval: 3000,
   });
 
-  // Invalidate related queries when job completes
-  useEffect(() => {
-    if (job && (job.status === 'completed' || job.status === 'partial')) {
-      // Stop polling handled by parent auto-nav
-    }
-  }, [job]);
+  const isRunning = !!job && job.status !== 'completed' && job.status !== 'failed' && job.status !== 'partial';
+  const elapsed = useElapsedTimer(job?.created_at, isRunning);
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { icon: typeof Clock; cls: string; label: string }> = {
@@ -103,6 +185,8 @@ export default function JobMonitor({ jobId }: Props) {
     );
   }
 
+  const step = job ? getStepExplanation(job, t) : null;
+
   return (
     <div className="job-monitor">
       <div className="section-header">
@@ -150,6 +234,38 @@ export default function JobMonitor({ jobId }: Props) {
             {getStatusBadge(job.status)}
           </div>
 
+          {/* Timer + current step */}
+          <div className="job-timer-row">
+            <div className="job-timer">
+              <Timer size={16} className={isRunning ? 'job-timer-pulse' : ''} />
+              <span className="job-timer-value">{formatElapsed(elapsed)}</span>
+            </div>
+            {step && (
+              <div className="job-step-explanation">
+                <step.icon size={16} className={isRunning ? 'spinning' : ''} />
+                <span>{step.text}</span>
+              </div>
+            )}
+            {!isRunning && job.status === 'completed' && (
+              <div className="job-step-explanation job-step-done">
+                <CheckCircle size={16} />
+                <span>{t('monitor.step.done', 'All images processed successfully!')}</span>
+              </div>
+            )}
+            {!isRunning && job.status === 'failed' && (
+              <div className="job-step-explanation job-step-error">
+                <XCircle size={16} />
+                <span>{t('monitor.step.failed', 'Processing failed. Check individual items for details.')}</span>
+              </div>
+            )}
+            {!isRunning && job.status === 'partial' && (
+              <div className="job-step-explanation job-step-warning">
+                <AlertTriangle size={16} />
+                <span>{t('monitor.step.partial', 'Some images completed, others failed. Check items below.')}</span>
+              </div>
+            )}
+          </div>
+
           <div className="progress-section">
             <div className="progress-header">
               <span>{t('monitor.overallProgress')}</span>
@@ -176,33 +292,77 @@ export default function JobMonitor({ jobId }: Props) {
           <div className="items-section">
             <h4>{t('monitor.items')} ({job.items.length})</h4>
             <div className="items-list">
-              {job.items.map((item) => (
-                <div key={item.item_id} className="item-card">
-                  <div className="item-header">
-                    <div>
-                      <div className="item-filename">
-                        {item.filename}
-                        {item.scene_type && (
-                          <span className="item-scene-tag">
-                            {item.scene_type.charAt(0).toUpperCase() + item.scene_type.slice(1)}
-                          </span>
-                        )}
-                        {item.scene_index != null && (
-                          <span className="item-scene-index">#{item.scene_index + 1}</span>
-                        )}
-                      </div>
-                    </div>
-                    {getStatusBadge(item.status)}
-                  </div>
+              {(() => {
+                // Group items by source filename
+                const groups = new Map<string, typeof job.items>();
+                for (const item of job.items) {
+                  const key = item.filename;
+                  if (!groups.has(key)) groups.set(key, []);
+                  groups.get(key)!.push(item);
+                }
 
-                  {item.error_message && (
-                    <div className="item-error">
-                      <AlertTriangle size={16} />
-                      <span>{item.error_message}</span>
+                return Array.from(groups.entries()).map(([filename, items]) => {
+                  const isSingle = items.length === 1;
+                  return (
+                    <div key={filename} className="item-group">
+                      {!isSingle && (
+                        <div className="item-group-header">
+                          <span className="item-filename">{filename}</span>
+                          <span className="item-group-count">{items.length} {t('monitor.variants', 'variants')}</span>
+                        </div>
+                      )}
+                      {items.map((item) => (
+                        <div key={item.item_id} className={`item-card ${!isSingle ? 'item-card-nested' : ''}`}>
+                          <div className="item-header">
+                            <div className="item-filename">
+                              {isSingle && filename}
+                              {!isSingle && (
+                                <span className="item-variant-label">
+                                  {item.angle_type && (
+                                    <span className="item-angle-tag">
+                                      {item.angle_type === '3/4' ? '3/4 Angle' : item.angle_type.charAt(0).toUpperCase() + item.angle_type.slice(1)}
+                                    </span>
+                                  )}
+                                  {item.scene_type && (
+                                    <span className="item-scene-tag">
+                                      {item.scene_type.charAt(0).toUpperCase() + item.scene_type.slice(1)}
+                                    </span>
+                                  )}
+                                  {item.scene_index != null && (
+                                    <span className="item-scene-index">Scene #{item.scene_index + 1}</span>
+                                  )}
+                                  {!item.angle_type && !item.scene_type && item.scene_index == null && filename}
+                                </span>
+                              )}
+                              {isSingle && item.angle_type && (
+                                <span className="item-angle-tag">
+                                  {item.angle_type === '3/4' ? '3/4 Angle' : item.angle_type.charAt(0).toUpperCase() + item.angle_type.slice(1)}
+                                </span>
+                              )}
+                              {isSingle && item.scene_type && (
+                                <span className="item-scene-tag">
+                                  {item.scene_type.charAt(0).toUpperCase() + item.scene_type.slice(1)}
+                                </span>
+                              )}
+                              {isSingle && item.scene_index != null && (
+                                <span className="item-scene-index">#{item.scene_index + 1}</span>
+                              )}
+                            </div>
+                            {getStatusBadge(item.status)}
+                          </div>
+
+                          {item.error_message && (
+                            <div className="item-error">
+                              <AlertTriangle size={16} />
+                              <span>{item.error_message}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-              ))}
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>

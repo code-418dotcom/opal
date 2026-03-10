@@ -245,6 +245,8 @@ def get_job(job_id: str, tenant_id: str = Depends(get_tenant_from_api_key)):
         "status": job["status"],
         "correlation_id": job["correlation_id"],
         "export_blob_path": job.get("export_blob_path"),
+        "processing_options": job.get("processing_options"),
+        "created_at": job["created_at"].isoformat() if job.get("created_at") else None,
         "items": [
             {
                 "item_id": i["id"],
