@@ -5,8 +5,8 @@ import {
   Store, Image as ImageIcon, ArrowUpRight, Check, X,
   Loader2, ChevronRight, ChevronLeft, ArrowLeft,
   Minus, Plus, RotateCw, ChevronDown, ChevronUp,
+  CheckCircle, FlaskConical,
 } from 'lucide-react';
-import { CheckCircle } from 'lucide-react';
 import { api } from '../api';
 import type { Integration, ShopifyProduct, ShopifyImage } from '../types';
 import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
@@ -53,6 +53,8 @@ export default function ProductsPage({ onJobCreated }: Props) {
   const [processingJobId, setProcessingJobId] = useState<string | null>(() => savedStoreJob?.jobId ?? null);
   const [processedItems, setProcessedItems] = useState<ProcessedItem[]>(() => savedStoreJob?.processedItems ?? []);
   const [savedIntegrationId] = useState<string | null>(() => savedStoreJob?.integrationId ?? null);
+  const [savedProductId] = useState<string | null>(() => savedStoreJob?.productId ?? null);
+  const [savedProductTitle] = useState<string | null>(() => savedStoreJob?.productTitle ?? null);
   const [pushBackMode, setPushBackMode] = useState<'replace' | 'add'>('add');
   const [pushingBack, setPushingBack] = useState(false);
   const [pushBackResults, setPushBackResults] = useState<Array<{ item_id: string; status: string; error?: string }>>([]);
@@ -170,11 +172,13 @@ export default function ProductsPage({ onJobCreated }: Props) {
       setProcessedItems(result.items);
       queryClient.invalidateQueries({ queryKey: ['balance'] });
 
-      // Save store job context so we can restore push-back after monitor
+      // Save store job context so we can restore push-back/A/B test after monitor
       localStorage.setItem('opal_store_job', JSON.stringify({
         jobId: result.job_id,
         integrationId: effectiveIntegration.id,
         processedItems: result.items,
+        productId: String(selectedProduct.id),
+        productTitle: selectedProduct.title,
       }));
 
       // Navigate to Job Monitor
@@ -613,29 +617,75 @@ export default function ProductsPage({ onJobCreated }: Props) {
         </>
       )}
 
-      {/* Results / push back (accessible after returning from monitor) */}
+      {/* Results / push back / A/B test (accessible after returning from monitor) */}
       {view === 'results' && processingJobId && (
-        <ResultsPushBack
+        <StoreResults
           integrationId={pushBackIntegrationId ?? ''}
           jobId={processingJobId}
           processedItems={processedItems}
+          productId={savedProductId ?? (selectedProduct ? String(selectedProduct.id) : '')}
+          productTitle={savedProductTitle ?? selectedProduct?.title ?? ''}
           pushBackMode={pushBackMode}
           setPushBackMode={setPushBackMode}
           pushingBack={pushingBack}
           pushBackResults={pushBackResults}
           onPushBack={handlePushBack}
           onBack={goBack}
-          error={error}
-          setError={setError}
         />
       )}
     </div>
   );
 }
 
-// Extracted results/push-back into a sub-component
-function ResultsPushBack({
+// Thumbnail component for processed items
+function ItemThumbnail({ itemId, selected, label, onClick }: {
+  itemId: string;
+  selected?: boolean;
+  label?: string;
+  onClick?: () => void;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getDownloadUrl(itemId, 'outputs')
+      .then(url => { if (!cancelled) setSrc(url); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [itemId]);
+
+  return (
+    <div
+      className={`product-image-card ${selected ? 'selected' : ''}`}
+      onClick={onClick}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+    >
+      {loading ? (
+        <div className="product-card-no-image"><Loader2 size={24} className="spin" /></div>
+      ) : src ? (
+        <img src={src} alt="Processed result" />
+      ) : (
+        <div className="product-card-no-image"><ImageIcon size={32} /></div>
+      )}
+      {selected && (
+        <div className="product-image-overlay"><Check size={24} /></div>
+      )}
+      {label && (
+        <div className="product-image-info">{label}</div>
+      )}
+    </div>
+  );
+}
+
+// Full results view with push-back + A/B test
+function StoreResults({
+  integrationId,
   jobId,
+  processedItems,
+  productId,
+  productTitle,
   pushBackMode,
   setPushBackMode,
   pushingBack,
@@ -646,21 +696,77 @@ function ResultsPushBack({
   integrationId: string;
   jobId: string;
   processedItems: Array<{ item_id: string; filename: string; shopify_image_id: number; shopify_product_id: number }>;
+  productId: string;
+  productTitle: string;
   pushBackMode: 'replace' | 'add';
   setPushBackMode: (m: 'replace' | 'add') => void;
   pushingBack: boolean;
   pushBackResults: Array<{ item_id: string; status: string; error?: string }>;
   onPushBack: () => void;
   onBack: () => void;
-  error: string | null;
-  setError: (e: string | null) => void;
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+
+  const [action, setAction] = useState<'choose' | 'push' | 'abtest'>('choose');
+  const [abVariantA, setAbVariantA] = useState<string | null>(null);
+  const [abVariantB, setAbVariantB] = useState<string | null>(null);
+  const [abLabelA, setAbLabelA] = useState('Current image');
+  const [abLabelB, setAbLabelB] = useState('New variant');
+  const [creatingTest, setCreatingTest] = useState(false);
+  const [abTestCreated, setAbTestCreated] = useState<string | null>(null);
+  const [abError, setAbError] = useState<string | null>(null);
 
   const { data: jobData } = useQuery({
     queryKey: ['job', jobId],
     queryFn: () => api.getJob(jobId),
   });
+
+  const completedItems = jobData?.items.filter(
+    (i: { status: string }) => i.status === 'completed'
+  ) ?? [];
+
+  const handleCreateABTest = async () => {
+    if (!abVariantA || !abVariantB) return;
+    setCreatingTest(true);
+    setAbError(null);
+    try {
+      const originalImageId = processedItems[0]?.shopify_image_id;
+      const test = await api.createABTest({
+        integration_id: integrationId,
+        product_id: productId,
+        product_title: productTitle,
+        variant_a_job_item_id: abVariantA,
+        variant_b_job_item_id: abVariantB,
+        variant_a_label: abLabelA,
+        variant_b_label: abLabelB,
+        original_image_id: originalImageId ? String(originalImageId) : undefined,
+      });
+      // Auto-start the test (pushes variant A to store)
+      await api.startABTest(test.id);
+      setAbTestCreated(test.id);
+      queryClient.invalidateQueries({ queryKey: ['ab-tests'] });
+    } catch (err: unknown) {
+      setAbError(err instanceof Error ? err.message : 'Failed to create A/B test');
+    } finally {
+      setCreatingTest(false);
+    }
+  };
+
+  const handleSelectABVariant = (itemId: string) => {
+    if (!abVariantA) {
+      setAbVariantA(itemId);
+    } else if (abVariantA === itemId) {
+      setAbVariantA(null);
+    } else if (!abVariantB) {
+      setAbVariantB(itemId);
+    } else if (abVariantB === itemId) {
+      setAbVariantB(null);
+    } else {
+      // Replace B
+      setAbVariantB(itemId);
+    }
+  };
 
   if (!jobData) {
     return <div className="empty-state"><Loader2 size={24} className="spin" /></div>;
@@ -669,22 +775,48 @@ function ResultsPushBack({
   return (
     <div className="results-view">
       <div className="view-header">
-        <button className="btn btn-secondary" onClick={onBack}>
-          <ArrowLeft size={14} /> {t('products.backToProduct', { defaultValue: 'Back to product' })}
+        <button className="btn btn-secondary" onClick={action === 'choose' ? onBack : () => { setAction('choose'); setAbVariantA(null); setAbVariantB(null); setAbTestCreated(null); }}>
+          <ArrowLeft size={14} /> {action === 'choose' ? t('products.backToProducts', { defaultValue: 'Products' }) : t('common.back', { defaultValue: 'Back' })}
         </button>
-        <h2 className="section-title">{t('results.title', { defaultValue: 'Results' })}</h2>
+        <h2 className="section-title">
+          {productTitle || t('results.title', { defaultValue: 'Results' })}
+          {' '}&middot;{' '}
+          {completedItems.length} {t('products.imagesReady', { defaultValue: 'image(s) ready' })}
+        </h2>
       </div>
 
-      <div className="results-images-grid">
-        {jobData.items.map((item: { item_id: string; filename: string; status: string }) => (
-          <div key={item.item_id} className={`result-image-card status-${item.status}`}>
-            <div className="result-image-filename">{item.filename}</div>
-            <span className={`status-badge status-${item.status}`}>{item.status}</span>
-          </div>
-        ))}
-      </div>
+      {/* Image thumbnails grid */}
+      {action !== 'abtest' && (
+        <div className="product-images-grid">
+          {completedItems.map((item: { item_id: string; filename: string; scene_type?: string; angle_type?: string; scene_index?: number }) => {
+            const meta = [
+              item.scene_type,
+              item.angle_type?.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+              item.scene_index != null ? `#${item.scene_index + 1}` : null,
+            ].filter(Boolean).join(' · ') || item.filename;
+            return (
+              <ItemThumbnail key={item.item_id} itemId={item.item_id} label={meta} />
+            );
+          })}
+        </div>
+      )}
 
-      {pushBackResults.length === 0 ? (
+      {/* Action chooser */}
+      {action === 'choose' && pushBackResults.length === 0 && !abTestCreated && (
+        <div className="push-back-section" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={() => setAction('push')} disabled={completedItems.length === 0}>
+            <ArrowUpRight size={14} /> {t('products.useInStore', { defaultValue: 'Use in store' })}
+          </button>
+          {completedItems.length >= 2 && (
+            <button className="btn btn-secondary" onClick={() => setAction('abtest')}>
+              <FlaskConical size={14} /> {t('products.abTest', { defaultValue: 'A/B Test' })}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Push back flow */}
+      {action === 'push' && pushBackResults.length === 0 && (
         <div className="push-back-section">
           <h3>{t('integrations.pushBackTitle', { defaultValue: 'Push images back to store' })}</h3>
           <div className="push-back-options">
@@ -705,20 +837,111 @@ function ResultsPushBack({
             {pushingBack ? (
               <><Loader2 size={14} className="spin" /> {t('integrations.pushing', { defaultValue: 'Pushing...' })}</>
             ) : (
-              <><ArrowUpRight size={14} /> {t('integrations.pushImages', { count: jobData.items.filter((i: { status: string }) => i.status === 'completed').length, defaultValue: 'Push {{count}} images' })}</>
+              <><ArrowUpRight size={14} /> {t('integrations.pushImages', { count: completedItems.length, defaultValue: 'Push {{count}} images' })}</>
             )}
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Push back results */}
+      {pushBackResults.length > 0 && (
         <div className="push-back-results">
           <h3>{t('integrations.pushBackResults', { defaultValue: 'Push back results' })}</h3>
           {pushBackResults.map((r, i) => (
             <div key={i} className={`push-back-result push-back-${r.status}`}>
               {r.status === 'success' ? <Check size={14} /> : <X size={14} />}
-              <span>{r.item_id}: {r.status}</span>
+              <span>{r.item_id.slice(0, 12)}...: {r.status}</span>
               {r.error && <span className="push-back-error">{r.error}</span>}
             </div>
           ))}
+          <button className="btn btn-secondary" onClick={onBack} style={{ marginTop: '1rem' }}>
+            {t('common.done', { defaultValue: 'Done' })}
+          </button>
+        </div>
+      )}
+
+      {/* A/B Test flow */}
+      {action === 'abtest' && !abTestCreated && (
+        <div className="push-back-section">
+          <h3>{t('products.abTestTitle', { defaultValue: 'Create A/B Test' })}</h3>
+          <p style={{ color: 'rgba(200,205,224,0.6)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            {t('products.abTestHint', { defaultValue: 'Select two images to test against each other on your store. Variant A goes live first.' })}
+          </p>
+
+          {abError && (
+            <div className="integration-error" style={{ marginBottom: '1rem' }}>
+              <X size={14} /><span>{abError}</span>
+              <button onClick={() => setAbError(null)}>{t('common.dismiss', { defaultValue: 'Dismiss' })}</button>
+            </div>
+          )}
+
+          <div className="product-images-grid">
+            {completedItems.map((item: { item_id: string; filename: string; scene_type?: string; angle_type?: string; scene_index?: number }) => {
+              const isA = item.item_id === abVariantA;
+              const isB = item.item_id === abVariantB;
+              const label = isA ? 'Variant A' : isB ? 'Variant B' : (
+                [item.scene_type, item.angle_type?.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), item.scene_index != null ? `#${item.scene_index + 1}` : null].filter(Boolean).join(' · ') || item.filename
+              );
+              return (
+                <ItemThumbnail
+                  key={item.item_id}
+                  itemId={item.item_id}
+                  selected={isA || isB}
+                  label={label}
+                  onClick={() => handleSelectABVariant(item.item_id)}
+                />
+              );
+            })}
+          </div>
+
+          {abVariantA && abVariantB && (
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <label className="form-label">{t('products.labelA', { defaultValue: 'Variant A label' })}</label>
+                <input className="input" value={abLabelA} onChange={e => setAbLabelA(e.target.value)} />
+              </div>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <label className="form-label">{t('products.labelB', { defaultValue: 'Variant B label' })}</label>
+                <input className="input" value={abLabelB} onChange={e => setAbLabelB(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          <button
+            className="btn btn-primary"
+            onClick={handleCreateABTest}
+            disabled={!abVariantA || !abVariantB || creatingTest}
+            style={{ marginTop: '1rem' }}
+          >
+            {creatingTest ? (
+              <><Loader2 size={14} className="spin" /> {t('products.creatingTest', { defaultValue: 'Creating test...' })}</>
+            ) : (
+              <><FlaskConical size={14} /> {t('products.startABTest', { defaultValue: 'Start A/B Test' })}</>
+            )}
+          </button>
+
+          {!abVariantA && (
+            <p style={{ color: 'rgba(200,205,224,0.4)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+              {t('products.selectVariantA', { defaultValue: 'Click an image to select Variant A' })}
+            </p>
+          )}
+          {abVariantA && !abVariantB && (
+            <p style={{ color: 'rgba(200,205,224,0.4)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+              {t('products.selectVariantB', { defaultValue: 'Now click another image for Variant B' })}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* A/B Test created success */}
+      {abTestCreated && (
+        <div className="push-back-results">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Check size={18} /> {t('products.abTestStarted', { defaultValue: 'A/B Test started!' })}
+          </h3>
+          <p style={{ color: 'rgba(200,205,224,0.6)', fontSize: '0.85rem' }}>
+            {t('products.abTestStartedHint', { defaultValue: 'Variant A is now live on your store. Track metrics and swap variants from the A/B Tests page.' })}
+          </p>
           <button className="btn btn-secondary" onClick={onBack} style={{ marginTop: '1rem' }}>
             {t('common.done', { defaultValue: 'Done' })}
           </button>
