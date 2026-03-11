@@ -12,6 +12,7 @@ from shared.db_sqlalchemy import (
     list_all_token_packages, update_token_package, create_token_package, delete_token_package,
     list_all_transactions, list_all_payments,
     get_jobs_older_than, delete_job_cascade,
+    get_pipeline_performance,
 )
 from shared.util import new_id
 from web_api.auth import get_current_user
@@ -205,6 +206,19 @@ async def get_all_jobs(
     """List all jobs across all tenants."""
     jobs = list_all_jobs(limit=limit, offset=offset, status_filter=status)
     return {"jobs": jobs, "limit": limit, "offset": offset}
+
+
+# ── Pipeline Performance ────────────────────────────────────────────
+
+@router.get("/pipeline-performance")
+async def get_pipeline_performance_stats(
+    limit: int = Query(100, ge=1, le=500),
+    days: int = Query(30, ge=1, le=365),
+    admin: dict = Depends(require_admin),
+):
+    """Pipeline step timing data: recent items, averages, daily trends."""
+    data = get_pipeline_performance(limit=limit, days=days)
+    return data
 
 
 # ── Integrations (all users) ────────────────────────────────────────

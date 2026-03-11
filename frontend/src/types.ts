@@ -383,3 +383,21 @@ export interface AdminPayment {
   status: string;
   created_at: string;
 }
+
+export interface PipelineItemTiming {
+  item_id: string;
+  job_id: string;
+  tenant_id: string;
+  filename: string;
+  scene_type?: string;
+  angle_type?: string;
+  step_timings: Record<string, number>;
+  completed_at: string;
+}
+
+export interface PipelinePerformance {
+  recent_items: PipelineItemTiming[];
+  averages: Record<string, number>;
+  total_items: number;
+  daily_averages: Array<Record<string, number | string>>;
+}

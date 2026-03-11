@@ -4,15 +4,19 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Settings, Users, Server, Eye, EyeOff, Save, Trash2, Plus, Shield, ShieldOff,
   X, Check, Loader2, Coins, BarChart3, Briefcase, CreditCard, Activity, Link,
-  Package, Edit2,
+  Package, Edit2, Timer,
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  LineChart, Line, Legend,
+} from 'recharts';
 import { api } from '../api';
 import type {
   AdminSetting, AdminUser, AdminJob, AdminTokenPackage, AdminTransaction,
-  AdminPayment, AdminIntegration, PlatformStats,
+  AdminPayment, AdminIntegration, PlatformStats, PipelinePerformance,
 } from '../types';
 
-type AdminTab = 'dashboard' | 'users' | 'jobs' | 'packages' | 'activity' | 'integrations' | 'settings' | 'system';
+type AdminTab = 'dashboard' | 'users' | 'jobs' | 'pipeline' | 'packages' | 'activity' | 'integrations' | 'settings' | 'system';
 
 const truncateId = (id: string) => id.length > 12 ? id.slice(0, 12) + '...' : id;
 const formatMoney = (cents: number) => `\u20AC${(cents / 100).toFixed(2)}`;
@@ -47,6 +51,7 @@ export default function AdminPage() {
     { id: 'dashboard', label: t('admin.tabs.dashboard'), icon: BarChart3 },
     { id: 'users', label: t('admin.tabs.users'), icon: Users },
     { id: 'jobs', label: t('admin.tabs.jobs'), icon: Briefcase },
+    { id: 'pipeline', label: 'Pipeline', icon: Timer },
     { id: 'packages', label: t('admin.tabs.packages'), icon: Package },
     { id: 'activity', label: t('admin.tabs.activity'), icon: Activity },
     { id: 'integrations', label: t('admin.tabs.integrations'), icon: Link },
@@ -72,6 +77,7 @@ export default function AdminPage() {
       {activeTab === 'dashboard' && <DashboardPanel />}
       {activeTab === 'users' && <UsersPanel />}
       {activeTab === 'jobs' && <JobsPanel />}
+      {activeTab === 'pipeline' && <PipelinePanel />}
       {activeTab === 'packages' && <PackagesPanel />}
       {activeTab === 'activity' && <ActivityPanel />}
       {activeTab === 'integrations' && <IntegrationsPanel />}
@@ -626,6 +632,234 @@ function JobsPanel() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Pipeline Performance Panel ──────────────────────────────────────
+
+const STEP_COLORS: Record<string, string> = {
+  bg_removal: '#22c55e',
+  upload_product: '#64748b',
+  scene_edit: '#a855f7',
+  scene_gen: '#8b5cf6',
+  preserve_details: '#06b6d4',
+  composite: '#0ea5e9',
+  upscale: '#f59e0b',
+  total: '#e879f9',
+};
+
+const STEP_LABELS: Record<string, string> = {
+  bg_removal: 'BG Removal',
+  upload_product: 'Upload',
+  scene_edit: 'Scene Edit',
+  scene_gen: 'Scene Gen',
+  preserve_details: 'Preserve Details',
+  composite: 'Composite',
+  upscale: 'Upscale',
+  total: 'Total',
+};
+
+function PipelinePanel() {
+  const [days, setDays] = useState(30);
+
+  const { data, isLoading } = useQuery<PipelinePerformance>({
+    queryKey: ['admin-pipeline', days],
+    queryFn: () => api.getPipelinePerformance(200, days),
+    refetchInterval: 30000,
+  });
+
+  if (isLoading) {
+    return <div className="empty-state"><Loader2 size={24} className="spin" /> Loading pipeline data...</div>;
+  }
+
+  if (!data || data.total_items === 0) {
+    return (
+      <div className="empty-state">
+        <Timer size={48} />
+        <h3>No pipeline data yet</h3>
+        <p>Step timings will appear here once jobs are processed.</p>
+      </div>
+    );
+  }
+
+  const { averages, daily_averages, recent_items, total_items } = data;
+  const stepKeys = Object.keys(averages).filter(k => k !== 'total');
+
+  // Build bar chart data for averages
+  const avgChartData = stepKeys.map(step => ({
+    name: STEP_LABELS[step] || step,
+    seconds: averages[step],
+    fill: STEP_COLORS[step] || '#94a3b8',
+  }));
+
+  // Trend chart: daily averages for each step
+  const trendData = daily_averages.map(d => {
+    const entry: Record<string, string | number> = { date: (d.date as string).slice(5) }; // MM-DD
+    for (const step of stepKeys) {
+      if (d[step] != null) entry[step] = d[step] as number;
+    }
+    if (d.total != null) entry.total = d.total as number;
+    entry.count = (d.count as number) || 0;
+    return entry;
+  });
+
+  return (
+    <div className="admin-pipeline-panel">
+      {/* Header with time range selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Time range:</span>
+        {[7, 14, 30, 90].map(d => (
+          <button
+            key={d}
+            className={`btn btn-sm ${days === d ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setDays(d)}
+            style={days === d ? { background: '#a855f7', borderColor: '#a855f7' } : {}}
+          >
+            {d}d
+          </button>
+        ))}
+        <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '0.8rem' }}>
+          {total_items} items processed
+        </span>
+      </div>
+
+      {/* Average step times bar chart */}
+      <div className="pipeline-chart-card">
+        <h4 style={{ margin: '0 0 0.75rem', color: '#e2e8f0', fontSize: '0.95rem' }}>
+          Average Step Duration
+        </h4>
+        {averages.total != null && (
+          <p style={{ margin: '0 0 1rem', color: '#a855f7', fontSize: '1.5rem', fontWeight: 700 }}>
+            {averages.total}s <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#94a3b8' }}>avg total</span>
+          </p>
+        )}
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={avgChartData} layout="vertical" margin={{ left: 100, right: 20, top: 5, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+            <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} unit="s" />
+            <YAxis type="category" dataKey="name" tick={{ fill: '#e2e8f0', fontSize: 12 }} width={95} />
+            <Tooltip
+              contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }}
+              formatter={(value) => [`${value}s`, 'Avg']}
+            />
+            <Bar dataKey="seconds" radius={[0, 4, 4, 0]}>
+              {avgChartData.map((entry, i) => (
+                <rect key={i} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Daily trend line chart */}
+      {trendData.length > 1 && (
+        <div className="pipeline-chart-card" style={{ marginTop: '1rem' }}>
+          <h4 style={{ margin: '0 0 0.75rem', color: '#e2e8f0', fontSize: '0.95rem' }}>
+            Daily Trends
+          </h4>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={trendData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} unit="s" />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }}
+                formatter={(value, name) => [`${value}s`, STEP_LABELS[name as string] || name]}
+              />
+              <Legend formatter={(value: string) => STEP_LABELS[value] || value} />
+              {stepKeys.map(step => (
+                <Line
+                  key={step}
+                  type="monotone"
+                  dataKey={step}
+                  stroke={STEP_COLORS[step] || '#94a3b8'}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                />
+              ))}
+              <Line
+                type="monotone"
+                dataKey="total"
+                stroke={STEP_COLORS.total}
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Volume chart */}
+      {trendData.length > 1 && (
+        <div className="pipeline-chart-card" style={{ marginTop: '1rem' }}>
+          <h4 style={{ margin: '0 0 0.75rem', color: '#e2e8f0', fontSize: '0.95rem' }}>
+            Daily Volume
+          </h4>
+          <ResponsiveContainer width="100%" height={150}>
+            <BarChart data={trendData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }}
+                formatter={(value) => [value, 'Items']}
+              />
+              <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Recent items table */}
+      <div className="pipeline-chart-card" style={{ marginTop: '1rem' }}>
+        <h4 style={{ margin: '0 0 0.75rem', color: '#e2e8f0', fontSize: '0.95rem' }}>
+          Recent Items ({recent_items.length})
+        </h4>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Scene</th>
+                <th>Angle</th>
+                {stepKeys.map(s => <th key={s} style={{ textAlign: 'right' }}>{STEP_LABELS[s] || s}</th>)}
+                <th style={{ textAlign: 'right' }}>Total</th>
+                <th>Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent_items.map(item => (
+                <tr key={item.item_id}>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.filename}
+                  </td>
+                  <td>
+                    {item.scene_type && <span style={badgeStyle('processing')}>{item.scene_type}</span>}
+                  </td>
+                  <td>
+                    {item.angle_type && <span style={badgeStyle('pending')}>{item.angle_type}</span>}
+                  </td>
+                  {stepKeys.map(s => (
+                    <td key={s} style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem' }}>
+                      {item.step_timings[s] != null ? `${item.step_timings[s]}s` : '—'}
+                    </td>
+                  ))}
+                  <td style={{ textAlign: 'right', fontWeight: 600, color: '#a855f7', fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem' }}>
+                    {item.step_timings.total != null ? `${item.step_timings.total}s` : '—'}
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                    {item.completed_at ? new Date(item.completed_at).toLocaleString() : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

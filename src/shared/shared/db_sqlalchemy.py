@@ -1298,6 +1298,106 @@ def list_all_jobs(limit: int = 20, offset: int = 0, status_filter: Optional[str]
         return results
 
 
+def get_pipeline_performance(limit: int = 100, days: int = 30) -> Dict[str, Any]:
+    """Get pipeline performance data: recent items with timings + aggregated averages."""
+    from datetime import datetime, timedelta
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    with SessionLocal() as session:
+        # Recent completed items with step_timings
+        items_q = (
+            session.query(JobItem, Job.tenant_id)
+            .join(Job, JobItem.job_id == Job.id)
+            .filter(
+                JobItem.status == ItemStatus.completed,
+                JobItem.step_timings.isnot(None),
+                JobItem.updated_at >= cutoff,
+            )
+            .order_by(JobItem.updated_at.desc())
+            .limit(limit)
+        )
+        recent_items = []
+        for item, tenant_id in items_q.all():
+            recent_items.append({
+                "item_id": item.id,
+                "job_id": item.job_id,
+                "tenant_id": tenant_id,
+                "filename": item.filename,
+                "scene_type": item.scene_type,
+                "angle_type": item.angle_type,
+                "step_timings": item.step_timings,
+                "completed_at": item.updated_at.isoformat() if item.updated_at else None,
+            })
+
+        # Aggregate averages across all steps
+        all_items = (
+            session.query(JobItem.step_timings)
+            .filter(
+                JobItem.status == ItemStatus.completed,
+                JobItem.step_timings.isnot(None),
+                JobItem.updated_at >= cutoff,
+            )
+            .all()
+        )
+        step_sums: Dict[str, float] = {}
+        step_counts: Dict[str, int] = {}
+        for (timings,) in all_items:
+            if not isinstance(timings, dict):
+                continue
+            for step, secs in timings.items():
+                if isinstance(secs, (int, float)):
+                    step_sums[step] = step_sums.get(step, 0.0) + secs
+                    step_counts[step] = step_counts.get(step, 0) + 1
+
+        averages = {
+            step: round(step_sums[step] / step_counts[step], 2)
+            for step in step_sums
+        }
+
+        # Daily aggregates for trend chart (avg total per day)
+        daily: Dict[str, list] = {}
+        for (timings,) in all_items:
+            if not isinstance(timings, dict):
+                continue
+        # Re-query with dates for daily breakdown
+        daily_items = (
+            session.query(JobItem.step_timings, JobItem.updated_at)
+            .filter(
+                JobItem.status == ItemStatus.completed,
+                JobItem.step_timings.isnot(None),
+                JobItem.updated_at >= cutoff,
+            )
+            .all()
+        )
+        daily_data: Dict[str, Dict[str, list]] = {}
+        for timings, updated_at in daily_items:
+            if not isinstance(timings, dict) or not updated_at:
+                continue
+            day = updated_at.strftime("%Y-%m-%d")
+            if day not in daily_data:
+                daily_data[day] = {}
+            for step, secs in timings.items():
+                if isinstance(secs, (int, float)):
+                    if step not in daily_data[day]:
+                        daily_data[day][step] = []
+                    daily_data[day][step].append(secs)
+
+        daily_averages = []
+        for day in sorted(daily_data.keys()):
+            entry: Dict[str, Any] = {"date": day}
+            for step, values in daily_data[day].items():
+                entry[step] = round(sum(values) / len(values), 2)
+            entry["count"] = max(len(v) for v in daily_data[day].values()) if daily_data[day] else 0
+            daily_averages.append(entry)
+
+        return {
+            "recent_items": recent_items,
+            "averages": averages,
+            "total_items": len(all_items),
+            "daily_averages": daily_averages,
+        }
+
+
 def list_all_integrations(limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
     """List all integrations across users (admin only)."""
     with SessionLocal() as session:

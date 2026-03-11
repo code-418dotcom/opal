@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse, PipelinePerformance } from './types';
 
 const API_URL = (import.meta.env.VITE_API_URL as string) || '';
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -707,6 +707,10 @@ class ApiClient {
     if (status) params.set('status', status);
     const resp = await this.request<{ jobs: AdminJob[] }>(`/v1/admin/jobs?${params}`);
     return resp.jobs;
+  }
+
+  async getPipelinePerformance(limit = 100, days = 30): Promise<PipelinePerformance> {
+    return this.request(`/v1/admin/pipeline-performance?limit=${limit}&days=${days}`);
   }
 
   async listAdminIntegrations(limit = 50, offset = 0): Promise<AdminIntegration[]> {

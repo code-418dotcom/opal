@@ -4799,6 +4799,24 @@ body {
   gap: 0.5rem;
 }
 
+/* Pipeline Performance Panel */
+.admin-pipeline-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pipeline-chart-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.pipeline-chart-card .recharts-tooltip-cursor {
+  fill: rgba(255, 255, 255, 0.04);
+}
+
 /* Users Panel */
 .admin-table {
   width: 100%;
