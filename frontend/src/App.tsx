@@ -100,7 +100,9 @@ function AppContent({
     setActivePage('monitor');
   };
 
-  // Auto-navigate to results when the active job finishes
+  // Auto-navigate when the active job finishes:
+  // - Store jobs → Products page (for push-back options)
+  // - Regular jobs → Results gallery
   useQuery<Job>({
     queryKey: ['job-nav', currentJobId],
     queryFn: async () => {
@@ -111,7 +113,9 @@ function AppContent({
         prevStatus === 'processing' &&
         (job.status === 'completed' || job.status === 'failed' || job.status === 'partial')
       ) {
-        setTimeout(() => setActivePage('results'), 0);
+        const storeCtx = localStorage.getItem('opal_store_job');
+        const isStoreJob = storeCtx && JSON.parse(storeCtx).jobId === currentJobId;
+        setTimeout(() => setActivePage(isStoreJob ? 'products' : 'results'), 0);
       }
       return job;
     },

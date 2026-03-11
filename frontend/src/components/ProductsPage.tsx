@@ -38,12 +38,21 @@ export default function ProductsPage({ onJobCreated }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const [view, setView] = useState<View>('stores');
+  // Restore push-back context from localStorage if navigated back from monitor
+  const savedStoreJob = (() => {
+    try {
+      const raw = localStorage.getItem('opal_store_job');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
+
+  const [view, setView] = useState<View>(() => savedStoreJob ? 'results' : 'stores');
   const [activeIntegration, setActiveIntegration] = useState<Integration | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(new Set());
-  const [processingJobId, setProcessingJobId] = useState<string | null>(null);
-  const [processedItems, setProcessedItems] = useState<ProcessedItem[]>([]);
+  const [processingJobId, setProcessingJobId] = useState<string | null>(() => savedStoreJob?.jobId ?? null);
+  const [processedItems, setProcessedItems] = useState<ProcessedItem[]>(() => savedStoreJob?.processedItems ?? []);
+  const [savedIntegrationId] = useState<string | null>(() => savedStoreJob?.integrationId ?? null);
   const [pushBackMode, setPushBackMode] = useState<'replace' | 'add'>('add');
   const [pushingBack, setPushingBack] = useState(false);
   const [pushBackResults, setPushBackResults] = useState<Array<{ item_id: string; status: string; error?: string }>>([]);
@@ -161,6 +170,13 @@ export default function ProductsPage({ onJobCreated }: Props) {
       setProcessedItems(result.items);
       queryClient.invalidateQueries({ queryKey: ['balance'] });
 
+      // Save store job context so we can restore push-back after monitor
+      localStorage.setItem('opal_store_job', JSON.stringify({
+        jobId: result.job_id,
+        integrationId: effectiveIntegration.id,
+        processedItems: result.items,
+      }));
+
       // Navigate to Job Monitor
       onJobCreated(result.job_id);
     } catch (err: unknown) {
@@ -170,8 +186,10 @@ export default function ProductsPage({ onJobCreated }: Props) {
     }
   };
 
+  const pushBackIntegrationId = effectiveIntegration?.id ?? savedIntegrationId;
+
   const handlePushBack = async () => {
-    if (!effectiveIntegration || !processingJobId) return;
+    if (!pushBackIntegrationId || !processingJobId) return;
     setPushingBack(true);
     setError(null);
     try {
@@ -181,7 +199,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
         shopify_image_id: item.shopify_image_id,
         mode: pushBackMode,
       }));
-      const result = await api.pushBackToShopify(effectiveIntegration.id, processingJobId, items);
+      const result = await api.pushBackToShopify(pushBackIntegrationId, processingJobId, items);
       setPushBackResults(result.results);
       queryClient.invalidateQueries({ queryKey: ['balance'] });
     } catch (err: unknown) {
@@ -210,10 +228,11 @@ export default function ProductsPage({ onJobCreated }: Props) {
 
   const goBack = () => {
     if (view === 'results') {
-      setView('detail');
+      localStorage.removeItem('opal_store_job');
       setProcessingJobId(null);
       setProcessedItems([]);
       setPushBackResults([]);
+      setView('stores');
     } else if (view === 'configure') {
       setView('detail');
     } else if (view === 'detail') {
@@ -597,7 +616,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
       {/* Results / push back (accessible after returning from monitor) */}
       {view === 'results' && processingJobId && (
         <ResultsPushBack
-          integrationId={effectiveIntegration?.id ?? ''}
+          integrationId={pushBackIntegrationId ?? ''}
           jobId={processingJobId}
           processedItems={processedItems}
           pushBackMode={pushBackMode}
