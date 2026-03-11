@@ -379,6 +379,22 @@ class ApiClient {
     return this.request(`/v1/integrations/${integrationId}/products/${productId}/images`);
   }
 
+  async importProductImages(
+    integrationId: string,
+    productId: number
+  ): Promise<{ imported: number; total: number; images: Array<{ id: string; provider_image_id: string; blob_path: string; width?: number; height?: number }> }> {
+    return this.request(`/v1/integrations/${integrationId}/import/${productId}`, {
+      method: 'POST',
+    });
+  }
+
+  async getImportedProductImages(
+    integrationId: string,
+    productId: number
+  ): Promise<{ images: Array<{ id: string; provider_image_id: string; blob_path: string; width?: number; height?: number }> }> {
+    return this.request(`/v1/integrations/${integrationId}/imported/${productId}`);
+  }
+
   async processShopifyImages(
     integrationId: string,
     productId: number,

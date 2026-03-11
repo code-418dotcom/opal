@@ -1,18 +1,19 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Store, Image as ImageIcon, ArrowUpRight, Check, X,
   Loader2, ChevronRight, ChevronLeft, ArrowLeft,
   Minus, Plus, RotateCw, ChevronDown, ChevronUp,
-  CheckCircle,
+  CheckCircle, Download, Layers,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Integration, ShopifyProduct, ShopifyImage } from '../types';
 import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
 import CostPreview from './CostPreview';
 import HelpTooltip from './HelpTooltip';
-type View = 'stores' | 'products' | 'detail' | 'configure' | 'results';
+import CatalogProcessor from './CatalogProcessor';
+type View = 'stores' | 'products' | 'detail' | 'configure' | 'results' | 'bulk';
 
 interface ProcessedItem {
   item_id: string;
@@ -100,6 +101,25 @@ export default function ProductsPage({ onJobCreated }: Props) {
     queryFn: () => api.listShopifyProducts(effectiveIntegration!.id, 20, currentPageInfo),
     enabled: !!effectiveIntegration && (view === 'products' || view === 'stores'),
   });
+
+  // Auto-import product images when entering detail view
+  const importMutation = useMutation({
+    mutationFn: ({ integId, prodId }: { integId: string; prodId: number }) =>
+      api.importProductImages(integId, prodId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['imported-images'] });
+    },
+  });
+
+  useEffect(() => {
+    if (view === 'detail' && selectedProduct && effectiveIntegration) {
+      importMutation.mutate({
+        integId: effectiveIntegration.id,
+        prodId: selectedProduct.id,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedProduct?.id, effectiveIntegration?.id]);
 
   // Auto-populate scene count from brand profile
   useEffect(() => {
@@ -236,6 +256,8 @@ export default function ProductsPage({ onJobCreated }: Props) {
       setProcessedItems([]);
       setPushBackResults([]);
       setView('stores');
+    } else if (view === 'bulk') {
+      setView('products');
     } else if (view === 'configure') {
       setView('detail');
     } else if (view === 'detail') {
@@ -330,6 +352,13 @@ export default function ProductsPage({ onJobCreated }: Props) {
               </button>
             )}
             <h2 className="section-title">{storeName}</h2>
+            <button
+              className="btn btn-primary"
+              onClick={() => setView('bulk')}
+              style={{ marginLeft: 'auto' }}
+            >
+              <Layers size={14} /> {t('products.processAll', { defaultValue: 'Process All Products' })}
+            </button>
           </div>
 
           {loadingProducts ? (
@@ -396,7 +425,22 @@ export default function ProductsPage({ onJobCreated }: Props) {
           </div>
           <div className="product-detail">
             <div className="product-detail-header">
-              <h3>{selectedProduct.title}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <h3>{selectedProduct.title}</h3>
+                {importMutation.isPending && (
+                  <span className="import-badge importing">
+                    <Loader2 size={12} className="spin" /> {t('products.importing', { defaultValue: 'Saving originals...' })}
+                  </span>
+                )}
+                {importMutation.isSuccess && (
+                  <span className="import-badge imported">
+                    <Download size={12} /> {t('products.imported', {
+                      count: importMutation.data?.total ?? 0,
+                      defaultValue: '{{count}} originals saved',
+                    })}
+                  </span>
+                )}
+              </div>
               <div className="product-detail-actions">
                 <button className="btn btn-secondary" onClick={selectAllImages}>
                   {selectedImageIds.size === selectedProduct.images.length
@@ -627,6 +671,14 @@ export default function ProductsPage({ onJobCreated }: Props) {
           pushBackResults={pushBackResults}
           onPushBack={handlePushBack}
           onBack={goBack}
+        />
+      )}
+
+      {/* Bulk catalog processing */}
+      {view === 'bulk' && effectiveIntegration && (
+        <CatalogProcessor
+          integration={effectiveIntegration}
+          onBack={() => setView('products')}
         />
       )}
     </div>

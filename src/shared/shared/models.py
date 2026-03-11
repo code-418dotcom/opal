@@ -408,6 +408,28 @@ class UserPreference(Base):
         return f'<UserPreference user={self.user_id}>'
 
 
+class ImportedImage(Base):
+    __tablename__ = 'imported_images'
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    tenant_id = Column(String, nullable=False)
+    integration_id = Column(String, ForeignKey('integrations.id', ondelete='CASCADE'), nullable=False, index=True)
+    provider_product_id = Column(String, nullable=False)
+    provider_image_id = Column(String, nullable=False)
+    blob_path = Column(String, nullable=False)
+    filename = Column(String, nullable=False)
+    original_url = Column(String, nullable=True)
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    file_size = Column(Integer, nullable=True)
+    content_type = Column(String, nullable=True, default='image/jpeg')
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ImportedImage {self.id} product={self.provider_product_id}>'
+
+
 class JobItem(Base):
     __tablename__ = 'job_items'
 

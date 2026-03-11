@@ -13,6 +13,7 @@ from .models import (
     AdminSetting, SubscriptionPlan, UserSubscription,
     CatalogJob, CatalogJobStatus, CatalogJobProduct, CatalogProductStatus,
     ABTest, ABTestStatus, ABTestMetric,
+    ImportedImage,
 )
 from datetime import datetime, timedelta
 import logging
@@ -1794,6 +1795,93 @@ def get_pending_catalog_products(catalog_job_id: str, limit: int = 10) -> List[D
             .all()
         )
         return [_catalog_product_to_dict(p) for p in products]
+
+
+# ── Imported Images ────────────────────────────────────────────────────
+
+def _imported_image_to_dict(img: ImportedImage) -> Dict[str, Any]:
+    return {
+        "id": img.id,
+        "user_id": img.user_id,
+        "tenant_id": img.tenant_id,
+        "integration_id": img.integration_id,
+        "provider_product_id": img.provider_product_id,
+        "provider_image_id": img.provider_image_id,
+        "blob_path": img.blob_path,
+        "filename": img.filename,
+        "original_url": img.original_url,
+        "width": img.width,
+        "height": img.height,
+        "file_size": img.file_size,
+        "content_type": img.content_type,
+        "created_at": img.created_at.isoformat() if img.created_at else None,
+    }
+
+
+def create_imported_image(data: Dict[str, Any]) -> Dict[str, Any]:
+    with SessionLocal() as session:
+        img = ImportedImage(**data)
+        session.add(img)
+        session.commit()
+        session.refresh(img)
+        return _imported_image_to_dict(img)
+
+
+def get_imported_images_for_product(
+    integration_id: str, provider_product_id: str
+) -> List[Dict[str, Any]]:
+    """Get all imported images for a specific product."""
+    with SessionLocal() as session:
+        images = (
+            session.query(ImportedImage)
+            .filter(
+                ImportedImage.integration_id == integration_id,
+                ImportedImage.provider_product_id == provider_product_id,
+            )
+            .order_by(ImportedImage.created_at.asc())
+            .all()
+        )
+        return [_imported_image_to_dict(img) for img in images]
+
+
+def get_imported_image(
+    integration_id: str, provider_product_id: str, provider_image_id: str
+) -> Optional[Dict[str, Any]]:
+    """Get a single imported image by provider IDs."""
+    with SessionLocal() as session:
+        img = session.query(ImportedImage).filter(
+            ImportedImage.integration_id == integration_id,
+            ImportedImage.provider_product_id == provider_product_id,
+            ImportedImage.provider_image_id == provider_image_id,
+        ).first()
+        return _imported_image_to_dict(img) if img else None
+
+
+def list_imported_products(user_id: str, integration_id: str) -> List[Dict[str, Any]]:
+    """List distinct products that have imported images."""
+    with SessionLocal() as session:
+        from sqlalchemy import func, distinct
+        rows = (
+            session.query(
+                ImportedImage.provider_product_id,
+                func.count(ImportedImage.id).label("image_count"),
+                func.min(ImportedImage.created_at).label("first_imported"),
+            )
+            .filter(
+                ImportedImage.user_id == user_id,
+                ImportedImage.integration_id == integration_id,
+            )
+            .group_by(ImportedImage.provider_product_id)
+            .all()
+        )
+        return [
+            {
+                "provider_product_id": row[0],
+                "image_count": row[1],
+                "first_imported": row[2].isoformat() if row[2] else None,
+            }
+            for row in rows
+        ]
 
 
 # ── A/B Tests ─────────────────────────────────────────────────────────

@@ -13,6 +13,8 @@ from shared.db_sqlalchemy import (
     create_integration, get_integration, get_integration_with_token,
     list_integrations, update_integration_status, delete_integration,
     get_integration_cost, debit_tokens,
+    create_imported_image, get_imported_images_for_product,
+    get_imported_image, list_imported_products,
 )
 from shared.encryption import encrypt, decrypt
 from shared.shopify_client import (
@@ -192,6 +194,99 @@ async def list_product_images(
     return {"images": images}
 
 
+# ── Import Product Images ────────────────────────────────────────────
+
+@router.post("/{integration_id}/import/{product_id}")
+async def import_product_images(
+    integration_id: str,
+    product_id: int,
+    user: dict = Depends(get_current_user),
+):
+    """Download product images from store and save to blob storage for re-use."""
+    from shared.storage import upload_file
+    import httpx
+
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+
+    # Check which images are already imported
+    existing = get_imported_images_for_product(integration_id, str(product_id))
+    existing_ids = {img["provider_image_id"] for img in existing}
+
+    # Get images from store
+    client = await _get_shopify_client(integration_id, user["user_id"])
+    all_images = await client.get_product_images(product_id)
+
+    # Filter out already-imported images
+    to_import = [img for img in all_images if str(img["id"]) not in existing_ids]
+
+    if not to_import:
+        return {"imported": 0, "total": len(all_images), "images": existing}
+
+    imported = []
+    async with httpx.AsyncClient(timeout=30) as http:
+        for img in to_import:
+            try:
+                resp = await http.get(img["src"])
+                resp.raise_for_status()
+                image_bytes = resp.content
+                content_type = resp.headers.get("content-type", "image/jpeg")
+
+                # Store in blob: imports/{tenant_id}/{integration_id}/{product_id}/{image_id}.jpg
+                ext = "jpg" if "jpeg" in content_type or "jpg" in content_type else "png"
+                blob_path = f"imports/{user['tenant_id']}/{integration_id}/{product_id}/{img['id']}.{ext}"
+                filename = f"product_{product_id}_img_{img['id']}.{ext}"
+
+                upload_file("raw", blob_path, image_bytes, content_type)
+
+                record = create_imported_image({
+                    "id": new_id("imp"),
+                    "user_id": user["user_id"],
+                    "tenant_id": user["tenant_id"],
+                    "integration_id": integration_id,
+                    "provider_product_id": str(product_id),
+                    "provider_image_id": str(img["id"]),
+                    "blob_path": blob_path,
+                    "filename": filename,
+                    "original_url": img["src"],
+                    "width": img.get("width"),
+                    "height": img.get("height"),
+                    "file_size": len(image_bytes),
+                    "content_type": content_type,
+                })
+                imported.append(record)
+            except Exception as e:
+                LOG.warning("Failed to import image %s for product %s: %s", img["id"], product_id, e)
+
+    all_imported = existing + imported
+    return {"imported": len(imported), "total": len(all_images), "images": all_imported}
+
+
+@router.get("/{integration_id}/imported")
+async def list_imported(
+    integration_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """List all products that have imported images."""
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    products = list_imported_products(user["user_id"], integration_id)
+    return {"products": products}
+
+
+@router.get("/{integration_id}/imported/{product_id}")
+async def get_imported_product_images(
+    integration_id: str,
+    product_id: int,
+    user: dict = Depends(get_current_user),
+):
+    """Get imported images for a specific product."""
+    images = get_imported_images_for_product(integration_id, str(product_id))
+    return {"images": images}
+
+
 # ── Process & Push Back ──────────────────────────────────────────────
 
 class ProcessImagesIn(BaseModel):
@@ -307,19 +402,30 @@ async def process_images(
     from shared.scene_types import DEFAULT_SCENE_TYPES
 
     # Download images and fan out items for scene × angle combinations
+    # Check for cached imports first to avoid re-downloading
     import httpx
     items_data = []
     created_items = []
+
+    cached_imports = {
+        imp["provider_image_id"]: imp
+        for imp in get_imported_images_for_product(integration_id, str(body.product_id))
+    }
 
     async with httpx.AsyncClient(timeout=30) as http:
         for img in images:
             filename = f"shopify_{body.product_id}_{img['id']}.jpg"
 
-            # Download once from store CDN
-            resp = await http.get(img["src"])
-            resp.raise_for_status()
-            image_bytes = resp.content
-            content_type = resp.headers.get("content-type", "image/jpeg")
+            # Use cached import if available, otherwise download from store
+            cached = cached_imports.get(str(img["id"]))
+            if cached:
+                image_bytes = download_file("raw", cached["blob_path"])
+                content_type = cached.get("content_type", "image/jpeg")
+            else:
+                resp = await http.get(img["src"])
+                resp.raise_for_status()
+                image_bytes = resp.content
+                content_type = resp.headers.get("content-type", "image/jpeg")
 
             multi = items_per_image > 1
             idx = 0
