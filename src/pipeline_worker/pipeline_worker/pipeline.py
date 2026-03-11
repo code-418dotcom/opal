@@ -73,14 +73,15 @@ def composite_product_on_scene(product_png: bytes, scene_jpg: bytes) -> bytes:
 
 
 def _preserve_product_details(product_rgba_bytes: bytes, scene_bytes: bytes,
-                               erode_px: int = 8) -> bytes:
+                               erode_px: int = 8, feather_px: int = 6) -> bytes:
     """Composite original product pixels back onto the AI-generated scene.
 
     FLUX.2 Pro Edit produces great scenes but can corrupt fine details like
     text, logos, and patterns on the product surface. This function pastes
-    the original product pixels back using an eroded alpha mask, so:
+    the original product pixels back using an eroded + feathered alpha mask:
       - The product interior (text, labels, patterns) is pixel-perfect
-      - Edge pixels (where FLUX added lighting/shadows) are kept from the scene
+      - Edge pixels blend smoothly from original to FLUX's version,
+        avoiding hard outline artifacts (especially visible on white products)
     """
     product = Image.open(BytesIO(product_rgba_bytes)).convert("RGBA")
     scene = Image.open(BytesIO(scene_bytes)).convert("RGBA")
@@ -94,7 +95,12 @@ def _preserve_product_details(product_rgba_bytes: bytes, scene_bytes: bytes,
     alpha = product.split()[3]
     eroded_alpha = alpha.filter(ImageFilter.MinFilter(size=erode_px * 2 + 1))
 
-    # Composite: scene as base, original product pixels pasted using eroded mask
+    # Feather the eroded mask with a Gaussian blur to create a smooth
+    # gradient at the boundary instead of a hard step — prevents the
+    # visible outline artifact where FLUX's edge colors meet original pixels
+    eroded_alpha = eroded_alpha.filter(ImageFilter.GaussianBlur(radius=feather_px))
+
+    # Composite: scene as base, original product pixels pasted using feathered mask
     scene.paste(product, (0, 0), eroded_alpha)
 
     output = BytesIO()
