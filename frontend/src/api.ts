@@ -95,7 +95,7 @@ class ApiClient {
         processing_options: processingOptions || {
           remove_background: true,
           generate_scene: true,
-          upscale: true
+          upscale: false
         },
       }),
     });
@@ -172,7 +172,7 @@ class ApiClient {
         processing_options: processingOptions || {
           remove_background: true,
           generate_scene: true,
-          upscale: true
+          upscale: false
         },
       }),
     });
@@ -434,7 +434,7 @@ class ApiClient {
         processing_options: processingOptions || {
           remove_background: true,
           generate_scene: true,
-          upscale: true,
+          upscale: false,
         },
         ...(sceneOptions?.scene_count && sceneOptions.scene_count > 1 ? { scene_count: sceneOptions.scene_count } : {}),
         ...(sceneOptions?.scene_template_ids?.length ? { scene_template_ids: sceneOptions.scene_template_ids } : {}),

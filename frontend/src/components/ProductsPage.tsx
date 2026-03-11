@@ -69,7 +69,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
   const [processingOptions, setProcessingOptions] = useState<ProcessingOptionsType>({
     remove_background: true,
     generate_scene: true,
-    upscale: true,
+    upscale: false,
   });
   const [sceneCount, setSceneCount] = useState(1);
   const [selectedBrandId, setSelectedBrandId] = useState('');
