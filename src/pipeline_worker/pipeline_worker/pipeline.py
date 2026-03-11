@@ -11,7 +11,8 @@ Scene generation has two modes:
     composite it natively with realistic lighting / shadows
 """
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Optional, Callable
 
@@ -50,6 +51,7 @@ class PipelineResult:
     output_bytes: bytes
     error: Optional[str] = None
     failed_step: Optional[str] = None
+    step_timings: dict = field(default_factory=dict)
 
 
 def composite_product_on_scene(product_png: bytes, scene_jpg: bytes) -> bytes:
@@ -100,13 +102,21 @@ def _preserve_product_details(product_rgba_bytes: bytes, scene_bytes: bytes,
     return output.getvalue()
 
 
-def _run_step(step_name: str, fn, *args, **kwargs):
-    """Run a pipeline step with error classification."""
+def _run_step(step_name: str, fn, *args, timings: dict | None = None, **kwargs):
+    """Run a pipeline step with error classification and timing."""
+    t0 = time.monotonic()
     try:
-        return fn(*args, **kwargs)
+        result = fn(*args, **kwargs)
+        if timings is not None:
+            timings[step_name] = round(time.monotonic() - t0, 2)
+        return result
     except (TransientError, PermanentError):
+        if timings is not None:
+            timings[step_name] = round(time.monotonic() - t0, 2)
         raise
     except Exception as e:
+        if timings is not None:
+            timings[step_name] = round(time.monotonic() - t0, 2)
         LOG.error("Step '%s' failed: %s", step_name, e)
         classify_and_raise(e)
 
@@ -174,11 +184,13 @@ def execute_pipeline(
             the product image as a URL.
     """
     current_bytes = raw_bytes
+    timings: dict[str, float] = {}
+    pipeline_start = time.monotonic()
 
     # Step 1: Background removal
     if remove_background and bg_provider:
         LOG.info("Step 1/3: Background removal (%s)", bg_provider.name)
-        current_bytes = _run_step("bg_removal", bg_provider.remove_background, current_bytes)
+        current_bytes = _run_step("bg_removal", bg_provider.remove_background, current_bytes, timings=timings)
     else:
         LOG.info("Step 1/3: Background removal — skipped")
 
@@ -205,7 +217,7 @@ def execute_pipeline(
             # Upload bg-removed product so the API can fetch it
             if upload_tmp_image:
                 product_url = _run_step(
-                    "upload_product", upload_tmp_image, current_bytes,
+                    "upload_product", upload_tmp_image, current_bytes, timings=timings,
                 )
                 gen_kwargs = {"image_urls": [product_url], "image_size": image_size}
             else:
@@ -213,14 +225,14 @@ def execute_pipeline(
                 gen_kwargs = {"image_size": image_size}
 
             current_bytes = _run_step(
-                "scene_edit", img_gen_provider.generate, edit_prompt, **gen_kwargs,
+                "scene_edit", img_gen_provider.generate, edit_prompt, timings=timings, **gen_kwargs,
             )
 
             # Composite original product pixels back to preserve text/labels/details
             LOG.info("Step 2.5/3: Preserving product details (text, labels, patterns)")
             current_bytes = _run_step(
                 "preserve_details", _preserve_product_details,
-                product_rgba_bytes, current_bytes,
+                product_rgba_bytes, current_bytes, timings=timings,
             )
         else:
             # --- Legacy mode: generate background, then PIL composite -----
@@ -248,16 +260,19 @@ def execute_pipeline(
                         gen_kwargs["fal_endpoint"] = fal_ep
                 except Exception:
                     pass
-                scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt, **gen_kwargs)
-            current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes)
+                scene_bytes = _run_step("scene_gen", img_gen_provider.generate, prompt, timings=timings, **gen_kwargs)
+            current_bytes = _run_step("composite", composite_product_on_scene, current_bytes, scene_bytes, timings=timings)
     else:
         LOG.info("Step 2/3: Scene generation — skipped")
 
     # Step 3: Upscaling
     if upscale and upscale_provider and upscale_enabled:
         LOG.info("Step 3/3: Upscaling (%s)", upscale_provider.name)
-        current_bytes = _run_step("upscale", upscale_provider.upscale, current_bytes)
+        current_bytes = _run_step("upscale", upscale_provider.upscale, current_bytes, timings=timings)
     else:
         LOG.info("Step 3/3: Upscaling — skipped")
 
-    return PipelineResult(output_bytes=current_bytes)
+    timings["total"] = round(time.monotonic() - pipeline_start, 2)
+    LOG.info("Pipeline timings: %s", timings)
+
+    return PipelineResult(output_bytes=current_bytes, step_timings=timings)

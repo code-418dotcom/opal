@@ -485,6 +485,23 @@ export default function JobMonitor({ jobId, onSelectJob }: Props) {
                             </div>
                           </div>
 
+                          {item.step_timings && item.status === 'completed' && (
+                            <div className="item-timings">
+                              {Object.entries(item.step_timings)
+                                .filter(([k]) => k !== 'total')
+                                .map(([step, secs]) => (
+                                  <span key={step} className="timing-chip">
+                                    {step.replace(/_/g, ' ')}: {secs}s
+                                  </span>
+                                ))}
+                              {item.step_timings.total != null && (
+                                <span className="timing-chip timing-total">
+                                  total: {item.step_timings.total}s
+                                </span>
+                              )}
+                            </div>
+                          )}
+
                           {item.error_message && (
                             <div className="item-error">
                               <AlertTriangle size={16} />

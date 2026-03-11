@@ -311,6 +311,8 @@ def process_message(data: dict) -> None:
         if item:
             item.output_blob_path = out_path
             item.status = ItemStatus.completed
+            if result.step_timings:
+                item.step_timings = result.step_timings
             if seo_alt_text:
                 item.seo_alt_text = seo_alt_text
             if seo_filename:

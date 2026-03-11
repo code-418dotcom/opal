@@ -1872,6 +1872,28 @@ body {
   gap: 0.4rem;
 }
 
+.item-timings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.25rem 0;
+}
+
+.timing-chip {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.timing-chip.timing-total {
+  background: rgba(168, 130, 255, 0.15);
+  color: rgba(168, 130, 255, 0.85);
+  font-weight: 600;
+}
+
 .item-error {
   display: flex;
   align-items: center;

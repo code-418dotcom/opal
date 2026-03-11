@@ -12,6 +12,7 @@ export interface JobItem {
   saved_background_path?: string;
   seo_alt_text?: string;
   seo_filename?: string;
+  step_timings?: Record<string, number>;
 }
 
 export interface Job {
