@@ -1,14 +1,18 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Store, Image as ImageIcon, ArrowUpRight, Check, X,
   Loader2, ChevronRight, ChevronLeft, ArrowLeft,
+  Minus, Plus, RotateCw, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { api } from '../api';
 import type { Integration, ShopifyProduct, ShopifyImage } from '../types';
-
-type View = 'stores' | 'products' | 'detail' | 'processing' | 'results';
+import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptions';
+import CostPreview from './CostPreview';
+import HelpTooltip from './HelpTooltip';
+type View = 'stores' | 'products' | 'detail' | 'configure' | 'results';
 
 interface ProcessedItem {
   item_id: string;
@@ -17,7 +21,20 @@ interface ProcessedItem {
   shopify_product_id: number;
 }
 
-export default function ProductsPage() {
+interface Props {
+  onJobCreated: (jobId: string) => void;
+}
+
+const ANGLE_OPTIONS = [
+  { value: 'eye-level', label: 'Eye Level', desc: 'Balanced, even lighting' },
+  { value: 'low-angle', label: 'Low Angle', desc: 'Dramatic, bold presence' },
+  { value: 'overhead', label: 'Overhead', desc: 'Flat-lay, top-down' },
+  { value: 'side-lit', label: 'Side Lit', desc: 'Deep shadows, texture' },
+  { value: 'backlit', label: 'Backlit', desc: 'Soft glow, rim light' },
+  { value: 'golden', label: 'Golden Hour', desc: 'Warm amber tones' },
+];
+
+export default function ProductsPage({ onJobCreated }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
@@ -33,15 +50,38 @@ export default function ProductsPage() {
   const [pageInfoStack, setPageInfoStack] = useState<string[]>([]);
   const [currentPageInfo, setCurrentPageInfo] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Processing options state
+  const [processingOptions, setProcessingOptions] = useState<ProcessingOptionsType>({
+    remove_background: true,
+    generate_scene: true,
+    upscale: true,
+  });
+  const [sceneCount, setSceneCount] = useState(1);
+  const [selectedBrandId, setSelectedBrandId] = useState('');
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [useSavedBackground, setUseSavedBackground] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [selectedAngles, setSelectedAngles] = useState<string[]>([]);
 
   const { data: integrations, isLoading: loadingIntegrations } = useQuery({
     queryKey: ['integrations'],
     queryFn: () => api.listIntegrations(),
   });
 
-  const activeStores = integrations?.filter(i => i.status === 'active') ?? [];
+  const { data: brandProfiles = [] } = useQuery({
+    queryKey: ['brand-profiles'],
+    queryFn: () => api.listBrandProfiles(),
+  });
 
-  // Auto-select if only one store
+  const { data: sceneTemplates = [] } = useQuery({
+    queryKey: ['scene-templates', selectedBrandId],
+    queryFn: () => api.listSceneTemplates(selectedBrandId || undefined),
+    enabled: processingOptions.generate_scene && view === 'configure',
+  });
+
+  const activeStores = integrations?.filter(i => i.status === 'active') ?? [];
   const effectiveIntegration = activeIntegration ?? (activeStores.length === 1 ? activeStores[0] : null);
   const showStoreSelector = activeStores.length > 1 && !activeIntegration;
 
@@ -51,20 +91,14 @@ export default function ProductsPage() {
     enabled: !!effectiveIntegration && (view === 'products' || view === 'stores'),
   });
 
-  const { data: jobData } = useQuery({
-    queryKey: ['job', processingJobId],
-    queryFn: () => api.getJob(processingJobId!),
-    enabled: !!processingJobId && view === 'processing',
-    refetchInterval: 3000,
-  });
-
-  // Auto-transition when job completes
-  if (jobData && view === 'processing') {
-    const status = jobData.status;
-    if (status === 'completed' || status === 'partial' || status === 'failed') {
-      setView('results');
+  // Auto-populate scene count from brand profile
+  useEffect(() => {
+    if (!selectedBrandId) return;
+    const bp = brandProfiles.find((p: { id: string; default_scene_count?: number }) => p.id === selectedBrandId);
+    if (bp?.default_scene_count && bp.default_scene_count > 1) {
+      setSceneCount(bp.default_scene_count);
     }
-  }
+  }, [selectedBrandId, brandProfiles]);
 
   const handleSelectStore = (integration: Integration) => {
     setActiveIntegration(integration);
@@ -97,22 +131,42 @@ export default function ProductsPage() {
     }
   }, [selectedProduct, selectedImageIds.size]);
 
+  const handleContinueToConfig = () => {
+    setView('configure');
+  };
+
   const handleProcessImages = async () => {
     if (!effectiveIntegration || !selectedProduct) return;
     setError(null);
+    setIsSubmitting(true);
     try {
       const imageIds = selectedImageIds.size > 0 ? Array.from(selectedImageIds) : undefined;
+      const hasSceneOptions = sceneCount > 1 || selectedTemplateIds.length > 0 || selectedAngles.length > 0;
+      const sceneOptions = hasSceneOptions ? {
+        scene_count: sceneCount,
+        scene_template_ids: selectedTemplateIds.length > 0 ? selectedTemplateIds : undefined,
+        use_saved_background: selectedTemplateIds.length > 0 ? useSavedBackground : undefined,
+        angle_types: selectedAngles.length > 0 ? selectedAngles : undefined,
+      } : undefined;
+
       const result = await api.processShopifyImages(
         effectiveIntegration.id,
         selectedProduct.id,
         imageIds,
+        selectedBrandId || 'default',
+        processingOptions,
+        sceneOptions,
       );
       setProcessingJobId(result.job_id);
       setProcessedItems(result.items);
-      setView('processing');
       queryClient.invalidateQueries({ queryKey: ['balance'] });
+
+      // Navigate to Job Monitor
+      onJobCreated(result.job_id);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('integrations.processingFailed'));
+      setError(err instanceof Error ? err.message : t('integrations.processingFailed', { defaultValue: 'Processing failed' }));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -131,7 +185,7 @@ export default function ProductsPage() {
       setPushBackResults(result.results);
       queryClient.invalidateQueries({ queryKey: ['balance'] });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('integrations.pushBackFailed'));
+      setError(err instanceof Error ? err.message : t('integrations.pushBackFailed', { defaultValue: 'Push back failed' }));
     } finally {
       setPushingBack(false);
     }
@@ -150,12 +204,18 @@ export default function ProductsPage() {
     setCurrentPageInfo(prev || undefined);
   };
 
+  const adjustSceneCount = (delta: number) => {
+    setSceneCount(prev => Math.max(1, Math.min(10, prev + delta)));
+  };
+
   const goBack = () => {
     if (view === 'results') {
       setView('detail');
       setProcessingJobId(null);
       setProcessedItems([]);
       setPushBackResults([]);
+    } else if (view === 'configure') {
+      setView('detail');
     } else if (view === 'detail') {
       setSelectedProduct(null);
       setView('products');
@@ -165,15 +225,16 @@ export default function ProductsPage() {
       setPageInfoStack([]);
       setView('stores');
     }
-    // If single store on 'products' view, there's nowhere further back to go
   };
 
-  // Determine the current breadcrumb path
   const storeName = effectiveIntegration
     ? (effectiveIntegration.provider_metadata?.shop_name || effectiveIntegration.store_url)
     : '';
 
-  // Loading
+  const imageCount = selectedProduct
+    ? (selectedImageIds.size > 0 ? selectedImageIds.size : selectedProduct.images.length)
+    : 0;
+
   if (loadingIntegrations) {
     return (
       <div className="integrations-page">
@@ -182,7 +243,6 @@ export default function ProductsPage() {
     );
   }
 
-  // No stores connected
   if (activeStores.length === 0) {
     return (
       <div className="integrations-page">
@@ -208,7 +268,7 @@ export default function ProductsPage() {
       )}
 
       {/* Store selector (multi-store only) */}
-      {showStoreSelector && (view === 'stores') && (
+      {showStoreSelector && view === 'stores' && (
         <>
           <h2 className="section-title">{t('products.selectStore', { defaultValue: 'Select a store' })}</h2>
           <div className="integrations-grid">
@@ -303,7 +363,7 @@ export default function ProductsPage() {
         </>
       )}
 
-      {/* Product detail */}
+      {/* Product detail — image selection */}
       {view === 'detail' && selectedProduct && effectiveIntegration && (
         <>
           <div className="view-header">
@@ -323,12 +383,12 @@ export default function ProductsPage() {
                 </button>
                 <button
                   className="btn btn-primary"
-                  onClick={handleProcessImages}
+                  onClick={handleContinueToConfig}
                   disabled={selectedProduct.images.length === 0}
                 >
                   <ArrowUpRight size={14} />
                   {selectedImageIds.size > 0
-                    ? t('integrations.processImages', { count: selectedImageIds.size, defaultValue: 'Process {{count}} images' })
+                    ? t('products.processSelected', { count: selectedImageIds.size, defaultValue: 'Process {{count}} images' })
                     : t('integrations.processAll', { defaultValue: 'Process All' })}
                 </button>
               </div>
@@ -354,98 +414,295 @@ export default function ProductsPage() {
         </>
       )}
 
-      {/* Processing */}
-      {view === 'processing' && (
-        <div className="processing-view">
-          <div className="view-header">
-            <h2 className="section-title">{t('integrations.processingImages', { defaultValue: 'Processing images...' })}</h2>
-          </div>
-          <div className="processing-status">
-            <Loader2 size={48} className="spin" />
-            <p>{t('integrations.processingCount', { count: processedItems.length, defaultValue: 'Processing {{count}} items' })}</p>
-            {jobData && (
-              <div className="processing-progress">
-                <span className={`status-badge status-${jobData.status}`}>{jobData.status}</span>
-                <span>
-                  {jobData.items.filter((i: { status: string }) => i.status === 'completed').length} / {jobData.items.length} {t('integrations.complete', { defaultValue: 'complete' })}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Results / push back */}
-      {view === 'results' && jobData && (
-        <div className="results-view">
+      {/* Configure processing options */}
+      {view === 'configure' && selectedProduct && effectiveIntegration && (
+        <>
           <div className="view-header">
             <button className="btn btn-secondary" onClick={goBack}>
-              <ArrowLeft size={14} /> {t('products.backToProduct', { defaultValue: 'Back to product' })}
+              <ArrowLeft size={14} /> {t('products.backToImages', { defaultValue: 'Back to images' })}
             </button>
-            <h2 className="section-title">{t('results.title', { defaultValue: 'Results' })}</h2>
+            <h2 className="section-title">
+              {selectedProduct.title} &middot; {imageCount} {t('products.imagesToProcess', { defaultValue: 'image(s)' })}
+            </h2>
           </div>
 
-          <div className="results-images-grid">
-            {jobData.items.map((item: { item_id: string; filename: string; status: string; output_blob_path?: string }) => (
-              <div key={item.item_id} className={`result-image-card status-${item.status}`}>
-                <div className="result-image-filename">{item.filename}</div>
-                <span className={`status-badge status-${item.status}`}>{item.status}</span>
+          <div className="upload-section" style={{ maxWidth: '700px' }}>
+            {brandProfiles.length > 0 && (
+              <div className="brand-selector">
+                <label className="form-label">
+                  {t('upload.brandProfile', { defaultValue: 'Brand Profile' })}
+                  <HelpTooltip text={t('help.brandProfile', 'Select a brand profile to apply consistent colors, mood, and style to all generated scenes.')} />
+                </label>
+                <select
+                  className="input"
+                  value={selectedBrandId}
+                  onChange={e => {
+                    setSelectedBrandId(e.target.value);
+                    setSelectedTemplateIds([]);
+                  }}
+                >
+                  <option value="">{t('upload.noneDefault', { defaultValue: 'None (default)' })}</option>
+                  {brandProfiles.map((p: { id: string; name: string }) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
               </div>
-            ))}
-          </div>
+            )}
 
-          {pushBackResults.length === 0 ? (
-            <div className="push-back-section">
-              <h3>{t('integrations.pushBackTitle', { defaultValue: 'Push images back to store' })}</h3>
-              <div className="push-back-options">
-                <label className="push-back-option">
-                  <input
-                    type="radio"
-                    name="pushBackMode"
-                    value="add"
-                    checked={pushBackMode === 'add'}
-                    onChange={() => setPushBackMode('add')}
-                  />
-                  <span>{t('integrations.addAsNew', { defaultValue: 'Add as new images' })}</span>
-                </label>
-                <label className="push-back-option">
-                  <input
-                    type="radio"
-                    name="pushBackMode"
-                    value="replace"
-                    checked={pushBackMode === 'replace'}
-                    onChange={() => setPushBackMode('replace')}
-                  />
-                  <span>{t('integrations.replaceOriginal', { defaultValue: 'Replace original' })}</span>
-                </label>
-              </div>
-              <button
-                className="btn btn-primary"
-                onClick={handlePushBack}
-                disabled={pushingBack || jobData.status === 'failed'}
-              >
-                {pushingBack ? (
-                  <><Loader2 size={14} className="spin" /> {t('integrations.pushing', { defaultValue: 'Pushing...' })}</>
-                ) : (
-                  <><ArrowUpRight size={14} /> {t('integrations.pushImages', { count: jobData.items.filter((i: { status: string }) => i.status === 'completed').length, defaultValue: 'Push {{count}} images' })}</>
-                )}
-              </button>
-            </div>
-          ) : (
-            <div className="push-back-results">
-              <h3>{t('integrations.pushBackResults', { defaultValue: 'Push back results' })}</h3>
-              {pushBackResults.map((r, i) => (
-                <div key={i} className={`push-back-result push-back-${r.status}`}>
-                  {r.status === 'success' ? <Check size={14} /> : <X size={14} />}
-                  <span>{r.item_id}: {r.status}</span>
-                  {r.error && <span className="push-back-error">{r.error}</span>}
+            <ProcessingOptions
+              options={processingOptions}
+              onChange={setProcessingOptions}
+              disabled={isSubmitting}
+            />
+
+            {processingOptions.generate_scene && (
+              <>
+                <div className="scene-count-section">
+                  <label className="scene-count-label">
+                    {t('upload.scenesPerImage', { defaultValue: 'Scenes per image' })}
+                    <HelpTooltip text={t('help.scenesPerImage', 'Generate multiple different scene variations for each product image. More scenes = more options to choose from.')} />
+                  </label>
+                  <div className="scene-count-stepper">
+                    <button className="stepper-btn" onClick={() => adjustSceneCount(-1)} disabled={sceneCount <= 1}>
+                      <Minus size={16} />
+                    </button>
+                    <span className="stepper-value">{sceneCount}</span>
+                    <button className="stepper-btn" onClick={() => adjustSceneCount(1)} disabled={sceneCount >= 10}>
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  {sceneCount > 1 && (
+                    <span className="scene-count-hint">
+                      {t('upload.sceneVariations', { count: sceneCount, defaultValue: '{{count}} scene variations per image' })}
+                    </span>
+                  )}
                 </div>
-              ))}
-              <button className="btn btn-secondary" onClick={goBack} style={{ marginTop: '1rem' }}>
-                {t('common.done', { defaultValue: 'Done' })}
-              </button>
+
+                <div className="angle-picker-section">
+                  <div className="angle-picker-header">
+                    <RotateCw size={16} />
+                    <label className="form-label" style={{ margin: 0 }}>
+                      {t('upload.lightingStyles', { defaultValue: 'Lighting & Perspective' })}
+                      <HelpTooltip text={t('help.lightingStyles', 'Generate extra variations with different lighting and composition styles.')} />
+                    </label>
+                  </div>
+                  <p className="angle-picker-hint">
+                    {t('upload.lightingStylesHint', { defaultValue: 'Add lighting and composition variations to each scene' })}
+                  </p>
+                  <div className="style-picker-grid">
+                    {ANGLE_OPTIONS.map(opt => {
+                      const isSelected = selectedAngles.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          className={`style-card ${isSelected ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedAngles(prev =>
+                              isSelected ? prev.filter(a => a !== opt.value) : [...prev, opt.value]
+                            );
+                          }}
+                        >
+                          <div className={`style-card-thumb style-thumb-${opt.value}`} />
+                          <div className="style-card-label">{opt.label}</div>
+                          <div className="style-card-desc">{opt.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedAngles.length > 0 && (
+                    <span className="angle-picker-count">
+                      {t('upload.stylesSelected', { count: selectedAngles.length, defaultValue: '{{count}} style(s) selected' })}
+                      {sceneCount > 1 && ` × ${sceneCount} ${t('upload.scenes', { defaultValue: 'scenes' })} = ${selectedAngles.length * sceneCount} ${t('upload.images', { defaultValue: 'images' })}`}
+                    </span>
+                  )}
+                </div>
+
+                {sceneTemplates.length > 0 && (
+                  <div className="template-picker">
+                    <button
+                      className="template-picker-toggle"
+                      onClick={() => setShowTemplatePicker(!showTemplatePicker)}
+                    >
+                      <ImageIcon size={16} />
+                      <span>{t('upload.chooseFromLibrary', { count: selectedTemplateIds.length, defaultValue: 'Choose from library ({{count}} selected)' })}</span>
+                      {showTemplatePicker ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+
+                    {showTemplatePicker && (
+                      <div className="template-picker-grid">
+                        {sceneTemplates.map((tmpl: { id: string; name: string; preview_url?: string }) => {
+                          const isSelected = selectedTemplateIds.includes(tmpl.id);
+                          return (
+                            <div
+                              key={tmpl.id}
+                              className={`template-picker-card ${isSelected ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedTemplateIds(prev =>
+                                  isSelected ? prev.filter(id => id !== tmpl.id) : [...prev, tmpl.id]
+                                );
+                              }}
+                            >
+                              {tmpl.preview_url ? (
+                                <img src={tmpl.preview_url} alt={tmpl.name} className="template-picker-img" />
+                              ) : (
+                                <div className="template-picker-placeholder"><ImageIcon size={16} /></div>
+                              )}
+                              <span className="template-picker-name">{tmpl.name}</span>
+                              {isSelected && <CheckCircle size={14} className="template-picker-check" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedTemplateIds.length > 0 && (
+                      <div className="template-picker-option">
+                        <span>{t('upload.useExactBackground', { defaultValue: 'Use exact background' })}</span>
+                        <div
+                          className={`toggle-switch ${useSavedBackground ? 'toggle-on' : ''}`}
+                          onClick={() => setUseSavedBackground(!useSavedBackground)}
+                        >
+                          <div className="toggle-thumb" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            <CostPreview
+              fileCount={imageCount}
+              options={processingOptions}
+              sceneCount={processingOptions.generate_scene ? sceneCount : 1}
+              angleCount={processingOptions.generate_scene ? selectedAngles.length : 0}
+            />
+
+            <button
+              className="button-primary"
+              onClick={handleProcessImages}
+              disabled={isSubmitting}
+              style={{ width: '100%', marginTop: '0.5rem' }}
+            >
+              {isSubmitting ? (
+                <><Loader2 size={16} className="spin" /> {t('products.submitting', { defaultValue: 'Submitting...' })}</>
+              ) : (
+                <><ArrowUpRight size={16} /> {t('products.startProcessing', { defaultValue: 'Start Processing' })}</>
+              )}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Results / push back (accessible after returning from monitor) */}
+      {view === 'results' && processingJobId && (
+        <ResultsPushBack
+          integrationId={effectiveIntegration?.id ?? ''}
+          jobId={processingJobId}
+          processedItems={processedItems}
+          pushBackMode={pushBackMode}
+          setPushBackMode={setPushBackMode}
+          pushingBack={pushingBack}
+          pushBackResults={pushBackResults}
+          onPushBack={handlePushBack}
+          onBack={goBack}
+          error={error}
+          setError={setError}
+        />
+      )}
+    </div>
+  );
+}
+
+// Extracted results/push-back into a sub-component
+function ResultsPushBack({
+  jobId,
+  pushBackMode,
+  setPushBackMode,
+  pushingBack,
+  pushBackResults,
+  onPushBack,
+  onBack,
+}: {
+  integrationId: string;
+  jobId: string;
+  processedItems: Array<{ item_id: string; filename: string; shopify_image_id: number; shopify_product_id: number }>;
+  pushBackMode: 'replace' | 'add';
+  setPushBackMode: (m: 'replace' | 'add') => void;
+  pushingBack: boolean;
+  pushBackResults: Array<{ item_id: string; status: string; error?: string }>;
+  onPushBack: () => void;
+  onBack: () => void;
+  error: string | null;
+  setError: (e: string | null) => void;
+}) {
+  const { t } = useTranslation();
+
+  const { data: jobData } = useQuery({
+    queryKey: ['job', jobId],
+    queryFn: () => api.getJob(jobId),
+  });
+
+  if (!jobData) {
+    return <div className="empty-state"><Loader2 size={24} className="spin" /></div>;
+  }
+
+  return (
+    <div className="results-view">
+      <div className="view-header">
+        <button className="btn btn-secondary" onClick={onBack}>
+          <ArrowLeft size={14} /> {t('products.backToProduct', { defaultValue: 'Back to product' })}
+        </button>
+        <h2 className="section-title">{t('results.title', { defaultValue: 'Results' })}</h2>
+      </div>
+
+      <div className="results-images-grid">
+        {jobData.items.map((item: { item_id: string; filename: string; status: string }) => (
+          <div key={item.item_id} className={`result-image-card status-${item.status}`}>
+            <div className="result-image-filename">{item.filename}</div>
+            <span className={`status-badge status-${item.status}`}>{item.status}</span>
+          </div>
+        ))}
+      </div>
+
+      {pushBackResults.length === 0 ? (
+        <div className="push-back-section">
+          <h3>{t('integrations.pushBackTitle', { defaultValue: 'Push images back to store' })}</h3>
+          <div className="push-back-options">
+            <label className="push-back-option">
+              <input type="radio" name="pushBackMode" value="add" checked={pushBackMode === 'add'} onChange={() => setPushBackMode('add')} />
+              <span>{t('integrations.addAsNew', { defaultValue: 'Add as new images' })}</span>
+            </label>
+            <label className="push-back-option">
+              <input type="radio" name="pushBackMode" value="replace" checked={pushBackMode === 'replace'} onChange={() => setPushBackMode('replace')} />
+              <span>{t('integrations.replaceOriginal', { defaultValue: 'Replace original' })}</span>
+            </label>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={onPushBack}
+            disabled={pushingBack || jobData.status === 'failed'}
+          >
+            {pushingBack ? (
+              <><Loader2 size={14} className="spin" /> {t('integrations.pushing', { defaultValue: 'Pushing...' })}</>
+            ) : (
+              <><ArrowUpRight size={14} /> {t('integrations.pushImages', { count: jobData.items.filter((i: { status: string }) => i.status === 'completed').length, defaultValue: 'Push {{count}} images' })}</>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="push-back-results">
+          <h3>{t('integrations.pushBackResults', { defaultValue: 'Push back results' })}</h3>
+          {pushBackResults.map((r, i) => (
+            <div key={i} className={`push-back-result push-back-${r.status}`}>
+              {r.status === 'success' ? <Check size={14} /> : <X size={14} />}
+              <span>{r.item_id}: {r.status}</span>
+              {r.error && <span className="push-back-error">{r.error}</span>}
             </div>
-          )}
+          ))}
+          <button className="btn btn-secondary" onClick={onBack} style={{ marginTop: '1rem' }}>
+            {t('common.done', { defaultValue: 'Done' })}
+          </button>
         </div>
       )}
     </div>

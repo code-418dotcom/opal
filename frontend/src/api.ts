@@ -384,7 +384,13 @@ class ApiClient {
     productId: number,
     imageIds?: number[],
     brandProfileId = 'default',
-    processingOptions?: { remove_background: boolean; generate_scene: boolean; upscale: boolean }
+    processingOptions?: { remove_background: boolean; generate_scene: boolean; upscale: boolean },
+    sceneOptions?: {
+      scene_count?: number;
+      scene_template_ids?: string[];
+      use_saved_background?: boolean;
+      angle_types?: string[];
+    },
   ): Promise<{ job_id: string; correlation_id: string; items: Array<{ item_id: string; filename: string; shopify_image_id: number; shopify_product_id: number }> }> {
     return this.request(`/v1/integrations/${integrationId}/process`, {
       method: 'POST',
@@ -397,6 +403,10 @@ class ApiClient {
           generate_scene: true,
           upscale: true,
         },
+        ...(sceneOptions?.scene_count && sceneOptions.scene_count > 1 ? { scene_count: sceneOptions.scene_count } : {}),
+        ...(sceneOptions?.scene_template_ids?.length ? { scene_template_ids: sceneOptions.scene_template_ids } : {}),
+        ...(sceneOptions?.use_saved_background ? { use_saved_background: true } : {}),
+        ...(sceneOptions?.angle_types?.length ? { angle_types: sceneOptions.angle_types } : {}),
       }),
     });
   }

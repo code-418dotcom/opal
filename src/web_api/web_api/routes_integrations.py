@@ -203,6 +203,10 @@ class ProcessImagesIn(BaseModel):
         "generate_scene": True,
         "upscale": True,
     })
+    scene_count: int = Field(default=1, ge=1, le=10)
+    scene_template_ids: list[str] | None = None
+    use_saved_background: bool = False
+    angle_types: list[str] | None = None
 
 
 @router.post("/{integration_id}/process")
@@ -211,14 +215,28 @@ async def process_images(
     body: ProcessImagesIn,
     user: dict = Depends(get_current_user),
 ):
-    """Download images from Shopify, create an Opal job to process them."""
-    from shared.db_sqlalchemy import create_job_record, create_job_item_records
+    """Download images from store, create an Opal job with scene/angle fan-out."""
+    from shared.db_sqlalchemy import (
+        create_job_record, create_job_item_records, update_job_status,
+        get_brand_profile, get_scene_template,
+    )
     from shared.storage import upload_file, build_raw_blob_path
     from shared.queue_database import send_job_message
+    from shared.util import new_correlation_id
 
     integ = get_integration(integration_id, user["user_id"])
     if not integ:
         raise HTTPException(status_code=404, detail="Integration not found")
+
+    # Validate angle_types
+    if body.angle_types:
+        from shared.scene_types import ANGLE_PROMPTS
+        invalid = [a for a in body.angle_types if a not in ANGLE_PROMPTS]
+        if invalid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid angle_types: {invalid}. Valid: {list(ANGLE_PROMPTS.keys())}",
+            )
 
     client = await _get_shopify_client(integration_id, user["user_id"])
 
@@ -232,24 +250,47 @@ async def process_images(
     if not images:
         raise HTTPException(status_code=400, detail="No images to process")
 
-    # Check token cost
-    cost_per_image = get_integration_cost("shopify", "process_image")
-    total_cost = cost_per_image * len(images)
+    # Calculate fan-out multiplier for scenes × angles
+    angle_list = body.angle_types or [None]
+    scene_count = body.scene_count
+
+    # Resolve scene templates
+    templates = []
+    if body.scene_template_ids:
+        for tid in body.scene_template_ids:
+            tmpl = get_scene_template(tid, user.get("tenant_id", ""))
+            if not tmpl:
+                raise HTTPException(status_code=404, detail=f"Scene template not found: {tid}")
+            templates.append(tmpl)
+        scene_count = len(templates)
+
+    items_per_image = scene_count * len(angle_list)
+    total_items = len(images) * items_per_image
+
+    # Token cost with half-credit for single-step
+    opts = body.processing_options
+    steps_enabled = sum([
+        opts.get("remove_background", True),
+        opts.get("generate_scene", True),
+        opts.get("upscale", True),
+    ])
+    if steps_enabled <= 1:
+        total_cost = max(1, -(-total_items // 2))
+    else:
+        total_cost = max(total_items, 1)
 
     if user["user_id"] != "apikey" and total_cost > 0:
         new_balance = debit_tokens(
             user_id=user["user_id"],
             amount=total_cost,
-            description=f"Shopify: {len(images)} image(s) from {integ['store_url']}",
+            description=f"Store: {total_items} image(s) from {integ['store_url']}",
         )
         if new_balance is None:
             raise HTTPException(
                 status_code=402,
-                detail=f"Insufficient tokens. This costs {total_cost} token(s).",
+                detail=f"Insufficient tokens. This job costs {total_cost} token(s).",
             )
 
-    # Create job
-    from shared.util import new_correlation_id
     job_id = new_id("job")
     corr = new_correlation_id()
 
@@ -262,45 +303,96 @@ async def process_images(
         "processing_options": body.processing_options,
     })
 
-    # Download images from Shopify and upload to blob storage
+    # Resolve default scene types for multi-scene
+    from shared.scene_types import DEFAULT_SCENE_TYPES
+
+    # Download images and fan out items for scene × angle combinations
     import httpx
     items_data = []
     created_items = []
 
     async with httpx.AsyncClient(timeout=30) as http:
         for img in images:
-            item_id = new_id("item")
             filename = f"shopify_{body.product_id}_{img['id']}.jpg"
-            raw_path = build_raw_blob_path(user["tenant_id"], job_id, item_id, filename)
 
-            # Download from Shopify CDN
+            # Download once from store CDN
             resp = await http.get(img["src"])
             resp.raise_for_status()
             image_bytes = resp.content
-
-            # Upload to our blob storage
             content_type = resp.headers.get("content-type", "image/jpeg")
-            upload_file("raw", raw_path, image_bytes, content_type)
 
-            items_data.append({
-                "id": item_id,
-                "job_id": job_id,
-                "tenant_id": user["tenant_id"],
-                "filename": filename,
-                "status": "uploaded",
-                "raw_blob_path": raw_path,
-            })
-            created_items.append({
-                "item_id": item_id,
-                "filename": filename,
-                "shopify_image_id": img["id"],
-                "shopify_product_id": body.product_id,
-            })
+            multi = items_per_image > 1
+            idx = 0
+
+            if templates:
+                # Template mode
+                for tmpl in templates:
+                    saved_bg = tmpl.get("preview_blob_path") if body.use_saved_background else None
+                    for angle in angle_list:
+                        item_id = new_id("item")
+                        raw_path = build_raw_blob_path(user["tenant_id"], job_id, item_id, filename)
+                        upload_file("raw", raw_path, image_bytes, content_type)
+
+                        items_data.append({
+                            "id": item_id,
+                            "job_id": job_id,
+                            "tenant_id": user["tenant_id"],
+                            "filename": filename,
+                            "status": "uploaded",
+                            "raw_blob_path": raw_path,
+                            "scene_prompt": tmpl["prompt"],
+                            "scene_index": idx if multi else None,
+                            "scene_type": tmpl.get("scene_type"),
+                            "saved_background_path": saved_bg,
+                            "angle_type": angle,
+                        })
+                        created_items.append({
+                            "item_id": item_id,
+                            "filename": filename,
+                            "shopify_image_id": img["id"],
+                            "shopify_product_id": body.product_id,
+                            "scene_index": idx if multi else None,
+                            "scene_type": tmpl.get("scene_type"),
+                            "angle_type": angle,
+                        })
+                        idx += 1
+            else:
+                # Scene count mode
+                for scene_idx in range(body.scene_count):
+                    scene_type = None
+                    if body.scene_count > 1:
+                        scene_type = DEFAULT_SCENE_TYPES[scene_idx % len(DEFAULT_SCENE_TYPES)]
+
+                    for angle in angle_list:
+                        item_id = new_id("item")
+                        raw_path = build_raw_blob_path(user["tenant_id"], job_id, item_id, filename)
+                        upload_file("raw", raw_path, image_bytes, content_type)
+
+                        items_data.append({
+                            "id": item_id,
+                            "job_id": job_id,
+                            "tenant_id": user["tenant_id"],
+                            "filename": filename,
+                            "status": "uploaded",
+                            "raw_blob_path": raw_path,
+                            "scene_index": idx if multi else None,
+                            "scene_type": scene_type,
+                            "angle_type": angle,
+                        })
+                        created_items.append({
+                            "item_id": item_id,
+                            "filename": filename,
+                            "shopify_image_id": img["id"],
+                            "shopify_product_id": body.product_id,
+                            "scene_index": idx if multi else None,
+                            "scene_type": scene_type,
+                            "angle_type": angle,
+                        })
+                        idx += 1
 
     create_job_item_records(items_data)
 
     # Enqueue all items for processing
-    from shared.db_sqlalchemy import update_job_status
     for item in items_data:
         send_job_message({
             "tenant_id": user["tenant_id"],

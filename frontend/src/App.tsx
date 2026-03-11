@@ -194,7 +194,7 @@ function AppContent({
           )}
 
           {activePage === 'integrations' && <IntegrationsPage />}
-          {activePage === 'products' && <ProductsPage />}
+          {activePage === 'products' && <ProductsPage onJobCreated={handleJobCreated} />}
           {activePage === 'ab-tests' && <ABTestPage />}
           {activePage === 'benchmarks' && <BenchmarkPage />}
           {activePage === 'billing' && <BillingPage />}
