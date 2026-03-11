@@ -124,28 +124,29 @@ def _run_step(step_name: str, fn, *args, timings: dict | None = None, **kwargs):
 def _build_edit_prompt(scene_prompt: Optional[str], angle_type: Optional[str] = None) -> str:
     """Build a FLUX.2 Pro Edit prompt that instructs the model to place the
     product from the reference image into the described scene, optionally
-    from a specific camera angle."""
+    with a specific lighting style."""
     scene_desc = scene_prompt or (
         "a clean, professional product photography setting with soft studio "
         "lighting and a neutral background"
     )
 
-    # Inject angle instruction when requested
-    angle_instruction = ""
+    # Inject lighting instruction when requested — never reposition the product
+    lighting_instruction = ""
     if angle_type:
         from shared.scene_types import ANGLE_PROMPTS
         angle_desc = ANGLE_PROMPTS.get(angle_type)
         if angle_desc:
-            angle_instruction = f" Show a {angle_desc}."
+            lighting_instruction = f" Use this lighting style: {angle_desc}."
 
     return (
         f"Change only the background to {scene_desc}. "
         "The product in the image must remain completely unchanged — "
-        "same shape, same colors, same proportions, same textures, same labels, same text. "
-        "Do not redraw, reinterpret, or add any details to the product. "
+        "same position, same orientation, same shape, same colors, same proportions, "
+        "same textures, same labels, same text. "
+        "Do not move, rotate, reposition, redraw, or reinterpret the product. "
         "Only replace the empty space around it with the new scene."
-        f"{angle_instruction} "
-        "Add natural lighting, soft shadows and reflections on the surface beneath the product. "
+        f"{lighting_instruction} "
+        "Add soft shadows and reflections on the surface beneath the product. "
         "Professional e-commerce product photography."
     )
 

@@ -342,7 +342,7 @@ class ProcessImagesIn(BaseModel):
     processing_options: dict = Field(default_factory=lambda: {
         "remove_background": True,
         "generate_scene": True,
-        "upscale": True,
+        "upscale": False,
     })
     scene_count: int = Field(default=1, ge=1, le=10)
     scene_template_ids: list[str] | None = None
@@ -413,7 +413,7 @@ async def process_images(
     steps_enabled = sum([
         opts.get("remove_background", True),
         opts.get("generate_scene", True),
-        opts.get("upscale", True),
+        opts.get("upscale", False),
     ])
     if steps_enabled <= 1:
         total_cost = max(1, -(-total_items // 2))

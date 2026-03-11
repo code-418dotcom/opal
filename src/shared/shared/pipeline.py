@@ -16,14 +16,14 @@ LOG = logging.getLogger(__name__)
 class ProcessingOptions:
     remove_background: bool = True
     generate_scene: bool = True
-    upscale: bool = True
+    upscale: bool = False
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "ProcessingOptions":
         return cls(
             remove_background=d.get("remove_background", True),
             generate_scene=d.get("generate_scene", True),
-            upscale=d.get("upscale", True),
+            upscale=d.get("upscale", False),
         )
 
     def to_dict(self) -> Dict[str, Any]:

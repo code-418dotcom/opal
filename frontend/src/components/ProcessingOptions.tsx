@@ -18,7 +18,7 @@ interface ProcessingOptionsProps {
 type Preset = 'full' | 'bg-only' | 'custom';
 
 function getPreset(options: ProcessingOptionsType): Preset {
-  if (options.remove_background && options.generate_scene && options.upscale) return 'full';
+  if (options.remove_background && options.generate_scene && !options.upscale) return 'full';
   if (options.remove_background && !options.generate_scene && !options.upscale) return 'bg-only';
   return 'custom';
 }
@@ -40,7 +40,7 @@ export const ProcessingOptions: React.FC<ProcessingOptionsProps> = ({
     {
       id: 'full',
       label: t('processing.presetFull', 'Full Enhancement'),
-      description: t('processing.presetFullDesc', 'Background removal + AI scene + HD upscale — best results'),
+      description: t('processing.presetFullDesc', 'Background removal + AI scene — best results'),
     },
     {
       id: 'bg-only',
@@ -83,7 +83,7 @@ export const ProcessingOptions: React.FC<ProcessingOptionsProps> = ({
   const handlePreset = (id: Preset) => {
     setPreset(id);
     if (id === 'full') {
-      onChange({ remove_background: true, generate_scene: true, upscale: true });
+      onChange({ remove_background: true, generate_scene: true, upscale: false });
       setShowCustom(false);
     } else if (id === 'bg-only') {
       onChange({ remove_background: true, generate_scene: false, upscale: false });

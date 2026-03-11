@@ -37,7 +37,7 @@ class ProcessingOptions(BaseModel):
     """Configure which AI processing steps to apply"""
     remove_background: bool = True
     generate_scene: bool = True
-    upscale: bool = True
+    upscale: bool = False
 
 
 class CreateJobIn(BaseModel):
@@ -335,7 +335,7 @@ def cancel_job(
     refund_user_id = job.get("user_id") or (user["user_id"] if user["user_id"] != "apikey" else None)
     if cancelled_count > 0 and refund_user_id:
         opts = job.get("processing_options") or {}
-        steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", True)])
+        steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", False)])
         if steps_enabled <= 1:
             refund_amount = max(1, -(-cancelled_count // 2))
         else:
@@ -395,7 +395,7 @@ def cancel_all_jobs(
         refund_user_id = job.get("user_id") or (user["user_id"] if user["user_id"] != "apikey" else None)
         if cancelled_count > 0 and refund_user_id:
             opts = job.get("processing_options") or {}
-            steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", True)])
+            steps_enabled = sum([opts.get("remove_background", True), opts.get("generate_scene", True), opts.get("upscale", False)])
             if steps_enabled <= 1:
                 refund_amount = max(1, -(-cancelled_count // 2))
             else:

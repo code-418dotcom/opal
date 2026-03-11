@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     
     # Image Upscaling
     UPSCALE_PROVIDER: str = Field(default='realesrgan', env='UPSCALE_PROVIDER')
-    UPSCALE_ENABLED: bool = Field(default=True, env='UPSCALE_ENABLED')
+    UPSCALE_ENABLED: bool = Field(default=False, env='UPSCALE_ENABLED')
     
     # Load from .env file in development, env vars in production
     # Look for .env in current directory or project root

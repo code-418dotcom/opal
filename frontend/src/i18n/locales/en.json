@@ -440,7 +440,7 @@
     "hdUpscale": "HD Upscale",
     "hdUpscaleDesc": "Enhance image resolution for print-ready quality",
     "presetFull": "Full Enhancement",
-    "presetFullDesc": "Background removal + AI scene + HD upscale — best results",
+    "presetFullDesc": "Background removal + AI scene — best results",
     "presetBgOnly": "Background Only",
     "presetBgOnlyDesc": "Just remove the background, keep everything else",
     "presetCustom": "Custom",

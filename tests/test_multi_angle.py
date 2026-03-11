@@ -16,9 +16,9 @@ class TestAnglePrompts:
             assert style in ANGLE_PROMPTS, f"Missing prompt for style: {style}"
 
     def test_prompt_content(self):
-        assert "eye-level" in ANGLE_PROMPTS["eye-level"]
-        assert "overhead" in ANGLE_PROMPTS["overhead"] or "above" in ANGLE_PROMPTS["overhead"]
-        assert "low-angle" in ANGLE_PROMPTS["low-angle"] or "upward" in ANGLE_PROMPTS["low-angle"]
+        assert "lighting" in ANGLE_PROMPTS["eye-level"]
+        assert "above" in ANGLE_PROMPTS["overhead"] or "diffused" in ANGLE_PROMPTS["overhead"]
+        assert "lighting" in ANGLE_PROMPTS["low-angle"] or "upward" in ANGLE_PROMPTS["low-angle"]
 
 
 # ---------------------------------------------------------------------------
@@ -29,24 +29,25 @@ class TestEditPromptAngle:
     def test_no_angle_no_injection(self):
         from pipeline_worker.pipeline import _build_edit_prompt
         prompt = _build_edit_prompt("marble slab scene")
-        assert "Show a" not in prompt
+        assert "lighting style" not in prompt
         assert "marble slab scene" in prompt
 
     def test_style_injected_into_prompt(self):
         from pipeline_worker.pipeline import _build_edit_prompt
         prompt = _build_edit_prompt("marble slab scene", angle_type="eye-level")
-        assert "eye-level" in prompt
+        assert "lighting style" in prompt
+        assert "balanced lighting" in prompt
         assert "marble slab scene" in prompt
 
     def test_overhead_style_injected(self):
         from pipeline_worker.pipeline import _build_edit_prompt
         prompt = _build_edit_prompt(None, angle_type="overhead")
-        assert "overhead" in prompt or "above" in prompt
+        assert "above" in prompt or "diffused" in prompt
 
     def test_unknown_angle_no_injection(self):
         from pipeline_worker.pipeline import _build_edit_prompt
         prompt = _build_edit_prompt("scene", angle_type="nonexistent")
-        assert "Show a" not in prompt
+        assert "lighting style" not in prompt
 
 
 # ---------------------------------------------------------------------------

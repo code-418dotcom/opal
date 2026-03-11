@@ -24,14 +24,16 @@ DEFAULT_SCENE_TYPES: list[str] = [
     "nature",
 ]
 
-# ── Scene perspective & lighting styles ──────────────────────────
-# Perspective instructions injected into the FLUX.2 Pro Edit prompt
-# to vary the lighting, composition, and camera feel per image.
+# ── Lighting styles ──────────────────────────────────────────────
+# Lighting instructions injected into the FLUX.2 Pro Edit prompt.
+# These ONLY describe lighting — never camera angle or product
+# repositioning, since FLUX.2 Pro Edit composites onto the original
+# product image which must stay exactly as-is.
 
 ANGLE_PROMPTS: dict[str, str] = {
-    "eye-level": "straight-on eye-level shot, even balanced lighting from both sides, clean symmetrical composition",
-    "low-angle": "dramatic low-angle perspective looking slightly upward, product appears bold and prominent, subtle upward lighting",
-    "overhead": "overhead flat-lay composition, camera directly above, soft even diffused lighting, clean top-down view",
+    "eye-level": "even balanced lighting from both sides, clean symmetrical illumination, neutral shadows",
+    "low-angle": "subtle upward lighting casting gentle highlights on the upper edges of the product",
+    "overhead": "soft even diffused lighting from directly above, gentle top-down illumination, minimal harsh shadows",
     "side-lit": "strong directional side lighting from the left, dramatic shadows and highlights, moody contrast, depth and texture",
     "backlit": "soft warm backlighting creating a gentle glow and rim light around the product, dreamy halo effect, silhouette edges",
     "golden": "warm golden hour lighting, long soft shadows, rich amber tones, inviting and natural warmth",

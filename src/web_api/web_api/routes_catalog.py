@@ -71,7 +71,7 @@ class CatalogStartIn(BaseModel):
     processing_options: dict = Field(default_factory=lambda: {
         "remove_background": True,
         "generate_scene": True,
-        "upscale": True,
+        "upscale": False,
     })
 
 

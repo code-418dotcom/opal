@@ -126,7 +126,7 @@ def test_catalog_start_body_defaults():
     assert body.product_ids is None
     assert body.processing_options["remove_background"] is True
     assert body.processing_options["generate_scene"] is True
-    assert body.processing_options["upscale"] is True
+    assert body.processing_options["upscale"] is False
 
 
 def test_catalog_start_body_custom():

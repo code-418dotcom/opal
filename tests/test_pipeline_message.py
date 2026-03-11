@@ -49,7 +49,7 @@ class TestProcessingOptions:
         opts = ProcessingOptions()
         assert opts.remove_background is True
         assert opts.generate_scene is True
-        assert opts.upscale is True
+        assert opts.upscale is False
 
     def test_from_empty_dict(self):
         opts = ProcessingOptions.from_dict({})

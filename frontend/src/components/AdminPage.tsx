@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line, Legend,
+  LineChart, Line, Legend, Cell,
 } from 'recharts';
 import { api } from '../api';
 import type {
@@ -745,7 +745,7 @@ function PipelinePanel() {
             />
             <Bar dataKey="seconds" radius={[0, 4, 4, 0]}>
               {avgChartData.map((entry, i) => (
-                <rect key={i} fill={entry.fill} />
+                <Cell key={i} fill={entry.fill} />
               ))}
             </Bar>
           </BarChart>

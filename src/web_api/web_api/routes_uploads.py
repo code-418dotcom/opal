@@ -26,7 +26,7 @@ class ProcessingOptions(BaseModel):
     """Configure which AI processing steps to apply"""
     remove_background: bool = True
     generate_scene: bool = True
-    upscale: bool = True
+    upscale: bool = False
 
 
 class UploadComplete(BaseModel):
