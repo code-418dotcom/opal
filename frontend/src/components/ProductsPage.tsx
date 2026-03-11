@@ -774,6 +774,7 @@ function StoreResults({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const { data: jobData } = useQuery({
     queryKey: ['job', jobId],
@@ -803,17 +804,26 @@ function StoreResults({
 
       {/* Image thumbnails grid */}
       <div className="product-images-grid">
-        {completedItems.map((item: { item_id: string; filename: string; scene_type?: string; angle_type?: string; scene_index?: number }) => {
+        {completedItems.map((item: { item_id: string; filename: string; scene_type?: string; angle_type?: string; scene_index?: number }, idx: number) => {
           const meta = [
             item.scene_type,
             item.angle_type?.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
             item.scene_index != null ? `#${item.scene_index + 1}` : null,
           ].filter(Boolean).join(' · ') || item.filename;
           return (
-            <ItemThumbnail key={item.item_id} itemId={item.item_id} label={meta} />
+            <ItemThumbnail key={item.item_id} itemId={item.item_id} label={meta} onClick={() => setLightboxIndex(idx)} />
           );
         })}
       </div>
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <ProductLightbox
+          items={completedItems}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
 
       {/* Push back options */}
       {pushBackResults.length === 0 && (
@@ -1094,6 +1104,109 @@ function OriginalsView({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ── Lightbox for processed results ──────────────────────────────────
+
+interface LightboxItem {
+  item_id: string;
+  filename: string;
+  scene_type?: string;
+  angle_type?: string;
+  scene_index?: number;
+}
+
+function ProductLightbox({
+  items,
+  startIndex,
+  onClose,
+}: {
+  items: LightboxItem[];
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(startIndex);
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const item = items[index];
+  const hasNext = index < items.length - 1;
+  const hasPrev = index > 0;
+
+  const goNext = useCallback(() => { if (hasNext) setIndex(i => i + 1); }, [hasNext]);
+  const goPrev = useCallback(() => { if (hasPrev) setIndex(i => i - 1); }, [hasPrev]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setSrc(null);
+    api.getDownloadUrl(item.item_id, 'outputs')
+      .then(url => { if (!cancelled) setSrc(url); })
+      .catch(() => { if (!cancelled) setSrc(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [item.item_id]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === 'ArrowLeft') goPrev();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose, goNext, goPrev]);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  const meta = [
+    item.scene_type,
+    item.angle_type?.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+    item.scene_index != null ? `#${item.scene_index + 1}` : null,
+  ].filter(Boolean).join(' · ') || item.filename;
+
+  return (
+    <div className="lightbox-overlay" onClick={onClose}>
+      <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+        <button className="lightbox-close" onClick={onClose}>
+          <X size={20} />
+        </button>
+
+        {hasPrev && (
+          <button className="lightbox-nav lightbox-prev" onClick={goPrev}>
+            <ChevronLeft size={32} />
+          </button>
+        )}
+        {hasNext && (
+          <button className="lightbox-nav lightbox-next" onClick={goNext}>
+            <ChevronRight size={32} />
+          </button>
+        )}
+
+        <div className="lightbox-image-container">
+          {loading ? (
+            <Loader2 size={48} className="spin" />
+          ) : src ? (
+            <img className="lightbox-image" src={src} alt={item.filename} />
+          ) : (
+            <div className="lightbox-error">
+              <ImageIcon size={48} />
+            </div>
+          )}
+        </div>
+
+        <div className="lightbox-footer">
+          <div className="lightbox-info">
+            <span className="lightbox-filename">{meta}</span>
+            <span className="lightbox-counter">{index + 1} / {items.length}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
