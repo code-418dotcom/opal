@@ -12,7 +12,6 @@ import SceneLibrary from './components/SceneLibrary';
 import BillingPage from './components/BillingPage';
 import IntegrationsPage from './components/IntegrationsPage';
 import ProductsPage from './components/ProductsPage';
-import ABTestPage from './components/ABTestPage';
 import BenchmarkPage from './components/BenchmarkPage';
 import AdminPage from './components/AdminPage';
 import SettingsPage from './components/SettingsPage';
@@ -199,7 +198,6 @@ function AppContent({
 
           {activePage === 'integrations' && <IntegrationsPage />}
           {activePage === 'products' && <ProductsPage onJobCreated={handleJobCreated} />}
-          {activePage === 'ab-tests' && <ABTestPage />}
           {activePage === 'benchmarks' && <BenchmarkPage />}
           {activePage === 'billing' && <BillingPage />}
           {activePage === 'settings' && <SettingsPage />}

@@ -5,7 +5,7 @@ import {
   Store, Image as ImageIcon, ArrowUpRight, Check, X,
   Loader2, ChevronRight, ChevronLeft, ArrowLeft,
   Minus, Plus, RotateCw, ChevronDown, ChevronUp,
-  CheckCircle, Download, Layers,
+  CheckCircle, Download, Layers, ShoppingBag,
 } from 'lucide-react';
 import { api } from '../api';
 import type { Integration, ShopifyProduct, ShopifyImage } from '../types';
@@ -13,6 +13,7 @@ import ProcessingOptions, { type ProcessingOptionsType } from './ProcessingOptio
 import CostPreview from './CostPreview';
 import HelpTooltip from './HelpTooltip';
 import CatalogProcessor from './CatalogProcessor';
+type Tab = 'products' | 'originals';
 type View = 'stores' | 'products' | 'detail' | 'configure' | 'results' | 'bulk';
 
 interface ProcessedItem {
@@ -47,6 +48,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
     } catch { return null; }
   })();
 
+  const [activeTab, setActiveTab] = useState<Tab>('products');
   const [view, setView] = useState<View>(() => savedStoreJob ? 'results' : 'stores');
   const [activeIntegration, setActiveIntegration] = useState<Integration | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
@@ -303,6 +305,22 @@ export default function ProductsPage({ onJobCreated }: Props) {
 
   return (
     <div className="integrations-page">
+      {/* Tab bar */}
+      <div className="products-tab-bar">
+        <button
+          className={`products-tab ${activeTab === 'products' ? 'active' : ''}`}
+          onClick={() => setActiveTab('products')}
+        >
+          <ShoppingBag size={16} /> {t('products.tabProducts', { defaultValue: 'Products' })}
+        </button>
+        <button
+          className={`products-tab ${activeTab === 'originals' ? 'active' : ''}`}
+          onClick={() => setActiveTab('originals')}
+        >
+          <Download size={16} /> {t('products.tabOriginals', { defaultValue: 'Originals' })}
+        </button>
+      </div>
+
       {error && (
         <div className="integration-error">
           <X size={14} />
@@ -311,8 +329,16 @@ export default function ProductsPage({ onJobCreated }: Props) {
         </div>
       )}
 
-      {/* Store selector (multi-store only) */}
-      {showStoreSelector && view === 'stores' && (
+      {/* ── Originals tab ── */}
+      {activeTab === 'originals' && (
+        <OriginalsView
+          integrations={activeStores}
+          onError={setError}
+        />
+      )}
+
+      {/* ── Products tab ── */}
+      {activeTab === 'products' && showStoreSelector && view === 'stores' && (
         <>
           <h2 className="section-title">{t('products.selectStore', { defaultValue: 'Select a store' })}</h2>
           <div className="integrations-grid">
@@ -343,7 +369,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
       )}
 
       {/* Product grid */}
-      {(view === 'products' || (view === 'stores' && !showStoreSelector)) && effectiveIntegration && (
+      {activeTab === 'products' && (view === 'products' || (view === 'stores' && !showStoreSelector)) && effectiveIntegration && (
         <>
           <div className="view-header">
             {activeStores.length > 1 && (
@@ -415,7 +441,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
       )}
 
       {/* Product detail — image selection */}
-      {view === 'detail' && selectedProduct && effectiveIntegration && (
+      {activeTab === 'products' && view === 'detail' && selectedProduct && effectiveIntegration && (
         <>
           <div className="view-header">
             <button className="btn btn-secondary" onClick={goBack}>
@@ -481,7 +507,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
       )}
 
       {/* Configure processing options */}
-      {view === 'configure' && selectedProduct && effectiveIntegration && (
+      {activeTab === 'products' && view === 'configure' && selectedProduct && effectiveIntegration && (
         <>
           <div className="view-header">
             <button className="btn btn-secondary" onClick={goBack}>
@@ -661,7 +687,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
       )}
 
       {/* Results / push back (accessible after returning from monitor) */}
-      {view === 'results' && processingJobId && (
+      {activeTab === 'products' && view === 'results' && processingJobId && (
         <StoreResults
           jobId={processingJobId}
           productTitle={savedProductTitle ?? selectedProduct?.title ?? ''}
@@ -675,7 +701,7 @@ export default function ProductsPage({ onJobCreated }: Props) {
       )}
 
       {/* Bulk catalog processing */}
-      {view === 'bulk' && effectiveIntegration && (
+      {activeTab === 'products' && view === 'bulk' && effectiveIntegration && (
         <CatalogProcessor
           integration={effectiveIntegration}
           onBack={() => setView('products')}
@@ -832,6 +858,241 @@ function StoreResults({
             {t('common.done', { defaultValue: 'Done' })}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Originals View ──────────────────────────────────────────────────
+
+interface ImportedImageData {
+  id: string;
+  provider_image_id: string;
+  provider_product_id: string;
+  blob_path: string;
+  download_url?: string;
+  filename: string;
+  width?: number;
+  height?: number;
+  created_at: string;
+}
+
+function OriginalsView({
+  integrations,
+  onError,
+}: {
+  integrations: Integration[];
+  onError: (msg: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(
+    () => integrations.length === 1 ? integrations[0] : null
+  );
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
+  const [pushMode, setPushMode] = useState<'replace' | 'add'>('replace');
+  const [pushing, setPushing] = useState(false);
+  const [pushResults, setPushResults] = useState<Array<{ id: string; status: string; error?: string }>>([]);
+
+  const effectiveInteg = selectedIntegration ?? (integrations.length === 1 ? integrations[0] : null);
+
+  const { data: importedProducts, isLoading: loadingProducts } = useQuery({
+    queryKey: ['imported-products', effectiveInteg?.id],
+    queryFn: () => api.listImportedProducts(effectiveInteg!.id),
+    enabled: !!effectiveInteg,
+  });
+
+  const { data: productImages, isLoading: loadingImages } = useQuery({
+    queryKey: ['imported-images', effectiveInteg?.id, selectedProductId],
+    queryFn: () => api.getImportedProductImages(effectiveInteg!.id, Number(selectedProductId)),
+    enabled: !!effectiveInteg && !!selectedProductId,
+  });
+
+  const handlePushToStore = async () => {
+    if (!effectiveInteg || selectedImageIds.size === 0) return;
+    setPushing(true);
+    setPushResults([]);
+    try {
+      const result = await api.pushOriginalImages(
+        effectiveInteg.id,
+        Array.from(selectedImageIds),
+        pushMode,
+      );
+      setPushResults(result.results);
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Push failed');
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const toggleImage = (id: string) => {
+    setSelectedImageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const images: ImportedImageData[] = productImages?.images ?? [];
+
+  // Store selector for multi-store
+  if (!effectiveInteg) {
+    return (
+      <div>
+        <h3 className="section-title">{t('products.selectStoreOriginals', { defaultValue: 'Select a store to view originals' })}</h3>
+        <div className="integrations-grid">
+          {integrations.map(integ => (
+            <div key={integ.id} className="integration-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedIntegration(integ)}>
+              <div className="integration-card-header">
+                <Store size={20} />
+                <div>
+                  <div className="integration-store-name">{integ.provider_metadata?.shop_name || integ.store_url}</div>
+                </div>
+                <ChevronRight size={16} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Product list
+  if (!selectedProductId) {
+    return (
+      <div>
+        {integrations.length > 1 && (
+          <div className="view-header">
+            <button className="btn btn-secondary" onClick={() => setSelectedIntegration(null)}>
+              <ArrowLeft size={14} /> {t('products.allStores', { defaultValue: 'All stores' })}
+            </button>
+            <h2 className="section-title">{effectiveInteg.provider_metadata?.shop_name || effectiveInteg.store_url}</h2>
+          </div>
+        )}
+        {loadingProducts ? (
+          <div className="empty-state"><Loader2 size={24} className="spin" /></div>
+        ) : !importedProducts?.products.length ? (
+          <div className="empty-state">
+            <Download size={48} />
+            <p>{t('products.noOriginals', { defaultValue: 'No originals saved yet' })}</p>
+            <p style={{ fontSize: '0.85rem', color: 'rgba(200,205,224,0.5)' }}>
+              {t('products.noOriginalsHint', { defaultValue: 'Original images are automatically saved when you view a product in the Products tab.' })}
+            </p>
+          </div>
+        ) : (
+          <div className="products-grid">
+            {importedProducts.products.map(p => (
+              <div
+                key={p.provider_product_id}
+                className="product-card"
+                onClick={() => {
+                  setSelectedProductId(p.provider_product_id);
+                  setSelectedImageIds(new Set());
+                  setPushResults([]);
+                }}
+              >
+                <div className="product-card-no-image">
+                  <ImageIcon size={32} />
+                </div>
+                <div className="product-card-info">
+                  <div className="product-card-title">Product #{p.provider_product_id}</div>
+                  <div className="product-card-meta">
+                    {p.image_count} {t('products.originalsSaved', { defaultValue: 'original(s) saved' })}
+                  </div>
+                </div>
+                <ChevronRight size={16} className="product-card-arrow" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Image detail with push-back
+  return (
+    <div>
+      <div className="view-header">
+        <button className="btn btn-secondary" onClick={() => setSelectedProductId(null)}>
+          <ArrowLeft size={14} /> {t('products.backToOriginals', { defaultValue: 'Back' })}
+        </button>
+        <h2 className="section-title">
+          Product #{selectedProductId} &middot; {images.length} {t('products.originalsSaved', { defaultValue: 'original(s) saved' })}
+        </h2>
+      </div>
+
+      {loadingImages ? (
+        <div className="empty-state"><Loader2 size={24} className="spin" /></div>
+      ) : (
+        <>
+          <div className="product-images-grid">
+            {images.map(img => (
+              <div
+                key={img.id}
+                className={`product-image-card ${selectedImageIds.has(img.id) ? 'selected' : ''}`}
+                onClick={() => toggleImage(img.id)}
+                style={{ cursor: 'pointer' }}
+              >
+                {img.download_url ? (
+                  <img src={img.download_url} alt={img.filename} />
+                ) : (
+                  <div className="product-card-no-image"><ImageIcon size={32} /></div>
+                )}
+                {selectedImageIds.has(img.id) && (
+                  <div className="product-image-overlay"><Check size={24} /></div>
+                )}
+                <div className="product-image-info">
+                  {img.width && img.height ? `${img.width}×${img.height}` : img.filename}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {pushResults.length === 0 && images.length > 0 && (
+            <div className="push-back-section">
+              <h3>{t('products.restoreToStore', { defaultValue: 'Push to store' })}</h3>
+              <div className="push-back-options">
+                <label className="push-back-option">
+                  <input type="radio" name="origPushMode" value="replace" checked={pushMode === 'replace'} onChange={() => setPushMode('replace')} />
+                  <span>{t('products.restoreReplace', { defaultValue: 'Replace current image' })}</span>
+                </label>
+                <label className="push-back-option">
+                  <input type="radio" name="origPushMode" value="add" checked={pushMode === 'add'} onChange={() => setPushMode('add')} />
+                  <span>{t('products.restoreAdd', { defaultValue: 'Add as new image' })}</span>
+                </label>
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handlePushToStore}
+                disabled={pushing || selectedImageIds.size === 0}
+              >
+                {pushing ? (
+                  <><Loader2 size={14} className="spin" /> {t('integrations.pushing', { defaultValue: 'Pushing...' })}</>
+                ) : (
+                  <><ArrowUpRight size={14} /> {t('products.pushOriginals', { count: selectedImageIds.size, defaultValue: 'Push {{count}} original(s) to store' })}</>
+                )}
+              </button>
+            </div>
+          )}
+
+          {pushResults.length > 0 && (
+            <div className="push-back-results">
+              <h3>{t('products.pushResults', { defaultValue: 'Results' })}</h3>
+              {pushResults.map((r, i) => (
+                <div key={i} className={`push-back-result push-back-${r.status}`}>
+                  {r.status === 'success' ? <Check size={14} /> : <X size={14} />}
+                  <span>{r.id.slice(0, 12)}...: {r.status}</span>
+                  {r.error && <span className="push-back-error">{r.error}</span>}
+                </div>
+              ))}
+              <button className="btn btn-secondary" onClick={() => { setPushResults([]); setSelectedImageIds(new Set()); }} style={{ marginTop: '1rem' }}>
+                {t('common.done', { defaultValue: 'Done' })}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

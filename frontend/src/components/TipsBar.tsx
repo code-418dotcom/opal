@@ -27,7 +27,6 @@ export default function TipsBar({ activePage }: Props) {
     { id: 'results-export', page: 'results', text: t('tips.resultsExport', 'Download all images as a ZIP, or export in platform-specific sizes.') },
     { id: 'brands-tip', page: 'brands', text: t('tips.brandsTip', 'Brand profiles save your preferred style — colors, mood, and scenes are reused automatically.') },
     { id: 'integrations-tip', page: 'integrations', text: t('tips.integrationsTip', 'Connect your store to process and push images back without re-uploading.') },
-    { id: 'ab-tests-tip', page: 'ab-tests', text: t('tips.abTestsTip', 'A/B test different product images on your live store to find what converts best.') },
     { id: 'benchmarks-tip', page: 'benchmarks', text: t('tips.benchmarksTip', 'Upload an image to get an instant quality score and improvement suggestions.') },
     { id: 'billing-tip', page: 'billing', text: t('tips.billingTip', 'Monthly plans save up to 35% compared to one-time packs.') },
   ], [t]);

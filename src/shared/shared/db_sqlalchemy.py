@@ -1857,6 +1857,16 @@ def get_imported_image(
         return _imported_image_to_dict(img) if img else None
 
 
+def get_imported_image_by_id(image_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single imported image by its ID, scoped to user."""
+    with SessionLocal() as session:
+        img = session.query(ImportedImage).filter(
+            ImportedImage.id == image_id,
+            ImportedImage.user_id == user_id,
+        ).first()
+        return _imported_image_to_dict(img) if img else None
+
+
 def list_imported_products(user_id: str, integration_id: str) -> List[Dict[str, Any]]:
     """List distinct products that have imported images."""
     with SessionLocal() as session:

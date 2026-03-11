@@ -391,8 +391,25 @@ class ApiClient {
   async getImportedProductImages(
     integrationId: string,
     productId: number
-  ): Promise<{ images: Array<{ id: string; provider_image_id: string; blob_path: string; width?: number; height?: number }> }> {
+  ): Promise<{ images: Array<{ id: string; provider_product_id: string; provider_image_id: string; blob_path: string; download_url?: string; filename: string; width?: number; height?: number; created_at: string }> }> {
     return this.request(`/v1/integrations/${integrationId}/imported/${productId}`);
+  }
+
+  async listImportedProducts(
+    integrationId: string
+  ): Promise<{ products: Array<{ provider_product_id: string; image_count: number; first_imported: string }> }> {
+    return this.request(`/v1/integrations/${integrationId}/imported`);
+  }
+
+  async pushOriginalImages(
+    integrationId: string,
+    importedImageIds: string[],
+    mode: 'replace' | 'add' = 'replace'
+  ): Promise<{ results: Array<{ id: string; status: string; error?: string }> }> {
+    return this.request(`/v1/integrations/${integrationId}/push-original`, {
+      method: 'POST',
+      body: JSON.stringify({ imported_image_ids: importedImageIds, mode }),
+    });
   }
 
   async processShopifyImages(

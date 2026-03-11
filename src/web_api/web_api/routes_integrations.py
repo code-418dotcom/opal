@@ -14,7 +14,7 @@ from shared.db_sqlalchemy import (
     list_integrations, update_integration_status, delete_integration,
     get_integration_cost, debit_tokens,
     create_imported_image, get_imported_images_for_product,
-    get_imported_image, list_imported_products,
+    get_imported_image, get_imported_image_by_id, list_imported_products,
 )
 from shared.encryption import encrypt, decrypt
 from shared.shopify_client import (
@@ -282,9 +282,55 @@ async def get_imported_product_images(
     product_id: int,
     user: dict = Depends(get_current_user),
 ):
-    """Get imported images for a specific product."""
+    """Get imported images for a specific product with download URLs."""
+    from shared.storage import generate_download_url
     images = get_imported_images_for_product(integration_id, str(product_id))
+    for img in images:
+        img["download_url"] = generate_download_url("raw", img["blob_path"])
     return {"images": images}
+
+
+class PushOriginalIn(BaseModel):
+    imported_image_ids: list[str]
+    mode: str = Field(default="replace", pattern=r'^(replace|add)$')
+
+
+@router.post("/{integration_id}/push-original")
+async def push_original_images(
+    integration_id: str,
+    body: PushOriginalIn,
+    user: dict = Depends(get_current_user),
+):
+    """Push imported original images back to the store (restore originals)."""
+    client = await _get_shopify_client(integration_id, user["user_id"])
+
+    results = []
+    for imp_id in body.imported_image_ids:
+        imp = None
+        # Look up the imported image
+        from shared.db_sqlalchemy import get_imported_image_by_id
+        imp = get_imported_image_by_id(imp_id, user["user_id"])
+        if not imp:
+            results.append({"id": imp_id, "status": "error", "error": "Not found"})
+            continue
+
+        try:
+            image_bytes = download_file("raw", imp["blob_path"])
+            product_id = int(imp["provider_product_id"])
+            image_id = int(imp["provider_image_id"]) if body.mode == "replace" else None
+            filename = imp["filename"]
+
+            if body.mode == "replace" and image_id:
+                shopify_img = await client.update_image(product_id, image_id, image_bytes, filename)
+            else:
+                shopify_img = await client.upload_image(product_id, image_bytes, filename)
+
+            results.append({"id": imp_id, "status": "success", "shopify_image_id": shopify_img["id"]})
+        except Exception as e:
+            LOG.error("Push original failed for %s: %s", imp_id, e)
+            results.append({"id": imp_id, "status": "error", "error": str(e)})
+
+    return {"results": results}
 
 
 # ── Process & Push Back ──────────────────────────────────────────────

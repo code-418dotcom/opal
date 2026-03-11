@@ -4321,6 +4321,34 @@ body {
   gap: 0.75rem;
 }
 
+/* Products tab bar */
+.products-tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(200,205,224,0.1);
+}
+.products-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(200,205,224,0.5);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.products-tab:hover {
+  color: rgba(200,205,224,0.8);
+}
+.products-tab.active {
+  color: var(--color-text-primary, #e0e5f0);
+  border-bottom-color: var(--color-accent, #6c5ce7);
+}
+
 /* Product detail */
 .product-detail-header {
   display: flex;
