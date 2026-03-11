@@ -3,14 +3,14 @@ Pre-defined scene type prompts for multi-scene generation.
 """
 
 SCENE_PROMPTS: dict[str, str] = {
-    "studio": "plain white seamless paper backdrop, single flat surface, soft even studio lighting, shallow depth of field, completely bare scene, nothing on the surface",
-    "lifestyle": "plain wooden tabletop, blurred warm-toned room far in background, single soft light source from the side, shallow depth of field, completely bare surface, nothing on the table",
-    "outdoor": "single flat stone slab, blurred green foliage far in background, warm golden hour sunlight, shallow depth of field, completely bare surface, nothing on the stone",
-    "minimal": "solid soft grey gradient backdrop, single flat matte surface, one directional light with soft shadow, completely bare scene, nothing on the surface",
-    "luxury": "polished dark marble slab, solid dark backdrop, single warm accent light, subtle reflection on surface, completely bare scene, nothing on the marble",
-    "kitchen": "plain light countertop surface, blurred bright window far in background, single natural light source, shallow depth of field, completely bare counter, nothing on the surface",
-    "office": "plain light wooden desk surface, solid soft blurred background, single overhead light, shallow depth of field, completely bare desk, nothing on the surface",
-    "nature": "single rough wooden plank, blurred earthy green tones far in background, soft diffused daylight, shallow depth of field, completely bare surface, nothing on the wood",
+    "studio": "a white seamless paper backdrop with a flat surface, soft even studio lighting, shallow depth of field",
+    "lifestyle": "a wooden tabletop with a blurred warm-toned room in the background, soft side lighting, shallow depth of field",
+    "outdoor": "a flat stone surface with blurred green foliage in the background, warm golden hour sunlight, shallow depth of field",
+    "minimal": "a solid soft grey gradient backdrop with a flat matte surface, one directional light with soft shadow",
+    "luxury": "a polished dark marble slab with a dark backdrop, warm accent light, subtle surface reflection",
+    "kitchen": "a light countertop with a blurred bright window in the background, natural light, shallow depth of field",
+    "office": "a light wooden desk with a soft blurred background, overhead light, shallow depth of field",
+    "nature": "a rough wooden surface with blurred earthy green tones in the background, soft diffused daylight, shallow depth of field",
 }
 
 DEFAULT_SCENE_TYPES: list[str] = [

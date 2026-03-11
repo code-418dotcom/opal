@@ -129,12 +129,14 @@ def _build_edit_prompt(scene_prompt: Optional[str], angle_type: Optional[str] = 
             angle_instruction = f" Show a {angle_desc}."
 
     return (
-        f"Place the product from the image into {scene_desc}."
+        f"Change only the background to {scene_desc}. "
+        "The product in the image must remain completely unchanged — "
+        "same shape, same colors, same proportions, same textures, same labels, same text. "
+        "Do not redraw, reinterpret, or add any details to the product. "
+        "Only replace the empty space around it with the new scene."
         f"{angle_instruction} "
-        "Create natural lighting, soft shadows and reflections. "
-        "Keep the product exactly as-is — do not alter its shape, color, text, labels, or any details. "
-        "Preserve all text and writing on the product without any changes. "
-        "Professional e-commerce product photography style."
+        "Add natural lighting, soft shadows and reflections on the surface beneath the product. "
+        "Professional e-commerce product photography."
     )
 
 
