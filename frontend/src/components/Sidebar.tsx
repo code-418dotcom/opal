@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Palette,
   Store,
+  ShoppingBag,
   FlaskConical,
   Target,
   CreditCard,
@@ -25,6 +26,7 @@ export type Page =
   | 'results'
   | 'brands'
   | 'integrations'
+  | 'products'
   | 'ab-tests'
   | 'benchmarks'
   | 'billing'
@@ -37,6 +39,7 @@ interface Props {
   collapsed: boolean;
   onToggleCollapse: () => void;
   isAdmin: boolean;
+  hasConnectedStores: boolean;
   tokenBalance: number | null;
   userEmail: string;
   onLogout: () => void;
@@ -48,6 +51,7 @@ export default function Sidebar({
   collapsed,
   onToggleCollapse,
   isAdmin,
+  hasConnectedStores,
   tokenBalance,
   userEmail,
   onLogout,
@@ -61,6 +65,7 @@ export default function Sidebar({
     { id: 'results' as Page, icon: ImageIcon, label: t('nav.results', { defaultValue: 'Results' }) },
     { id: 'brands' as Page, icon: Palette, label: t('nav.brands', { defaultValue: 'Brands & Scenes' }) },
     { id: 'integrations' as Page, icon: Store, label: t('nav.integrations', { defaultValue: 'Integrations' }) },
+    ...(hasConnectedStores ? [{ id: 'products' as Page, icon: ShoppingBag, label: t('nav.products', { defaultValue: 'Products' }) }] : []),
     { id: 'ab-tests' as Page, icon: FlaskConical, label: t('nav.abTests', { defaultValue: 'A/B Tests' }) },
     { id: 'benchmarks' as Page, icon: Target, label: t('nav.benchmarks', { defaultValue: 'Image Score' }) },
     { id: 'billing' as Page, icon: CreditCard, label: t('nav.billing', { defaultValue: 'Billing' }) },

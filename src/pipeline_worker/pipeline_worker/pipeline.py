@@ -20,6 +20,28 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 from pipeline_worker.retry import TransientError, PermanentError, classify_and_raise
 
+
+def _detect_image_size(image_bytes: bytes) -> str:
+    """Detect the best fal.ai image_size preset to match input aspect ratio.
+
+    Returns one of the fal.ai presets: square_hd, portrait_4_3, portrait_16_9,
+    landscape_4_3, landscape_16_9.
+    """
+    img = Image.open(BytesIO(image_bytes))
+    w, h = img.size
+    ratio = w / h
+
+    if ratio > 1.5:
+        return "landscape_16_9"
+    elif ratio > 1.15:
+        return "landscape_4_3"
+    elif ratio > 0.87:
+        return "square_hd"
+    elif ratio > 0.67:
+        return "portrait_4_3"
+    else:
+        return "portrait_16_9"
+
 LOG = logging.getLogger(__name__)
 
 
@@ -174,15 +196,19 @@ def execute_pipeline(
             # Save bg-removed product for detail preservation after scene gen
             product_rgba_bytes = current_bytes
 
+            # Match output dimensions to input image orientation
+            image_size = _detect_image_size(raw_bytes)
+            LOG.info("Detected input orientation → image_size=%s", image_size)
+
             # Upload bg-removed product so the API can fetch it
             if upload_tmp_image:
                 product_url = _run_step(
                     "upload_product", upload_tmp_image, current_bytes,
                 )
-                gen_kwargs = {"image_urls": [product_url]}
+                gen_kwargs = {"image_urls": [product_url], "image_size": image_size}
             else:
                 LOG.warning("No upload_tmp_image callback — edit mode without image reference")
-                gen_kwargs = {}
+                gen_kwargs = {"image_size": image_size}
 
             current_bytes = _run_step(
                 "scene_edit", img_gen_provider.generate, edit_prompt, **gen_kwargs,

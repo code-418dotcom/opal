@@ -11,6 +11,7 @@ import BrandProfiles from './components/BrandProfiles';
 import SceneLibrary from './components/SceneLibrary';
 import BillingPage from './components/BillingPage';
 import IntegrationsPage from './components/IntegrationsPage';
+import ProductsPage from './components/ProductsPage';
 import ABTestPage from './components/ABTestPage';
 import BenchmarkPage from './components/BenchmarkPage';
 import AdminPage from './components/AdminPage';
@@ -79,6 +80,12 @@ function AppContent({
     queryFn: () => api.getSubscription(),
   });
 
+  const { data: integrationsData } = useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => api.listIntegrations(),
+  });
+  const hasConnectedStores = (integrationsData ?? []).some(i => i.status === 'active');
+
   const hasSubscription = subData?.subscription?.status === 'active';
   const showOnboarding = brands !== undefined && brands.length === 0 && !onboardingDismissed;
 
@@ -127,6 +134,7 @@ function AppContent({
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(c => !c)}
         isAdmin={isAdmin}
+        hasConnectedStores={hasConnectedStores}
         tokenBalance={tokenBalance}
         userEmail={userEmail}
         onLogout={onLogout}
@@ -186,6 +194,7 @@ function AppContent({
           )}
 
           {activePage === 'integrations' && <IntegrationsPage />}
+          {activePage === 'products' && <ProductsPage />}
           {activePage === 'ab-tests' && <ABTestPage />}
           {activePage === 'benchmarks' && <BenchmarkPage />}
           {activePage === 'billing' && <BillingPage />}

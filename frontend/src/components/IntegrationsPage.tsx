@@ -374,7 +374,10 @@ export default function IntegrationsPage() {
       setProcessingJobId(null);
       setProcessedItems([]);
       setPushBackResults([]);
+      // Go back to the product detail, not the grid
+    } else if (view === 'products' && selectedProduct) {
       setSelectedProduct(null);
+      setSelectedImageIds(new Set());
     } else if (view === 'products' || view === 'catalog') {
       setView('list');
       setActiveIntegration(null);
