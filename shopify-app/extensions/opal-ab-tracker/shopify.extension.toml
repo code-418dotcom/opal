@@ -1,0 +1,21 @@
+api_version = "2024-10"
+
+[[extensions]]
+uid = "eab40c29-6877-3c87-f904-9f68b2cb38b6867327b9"
+type = "web_pixel_extension"
+name = "Opal A/B Image Tracker"
+handle = "opal-ab-tracker"
+runtime_context = "strict"
+
+[extensions.settings]
+type = "object"
+
+  [extensions.settings.fields.opal_api_url]
+  name = "Opal API URL"
+  description = "The base URL of the Opal backend API"
+  type = "single_line_text_field"
+
+  [extensions.settings.fields.opal_pixel_key]
+  name = "Pixel API Key"
+  description = "Authentication key for sending tracking events"
+  type = "single_line_text_field"

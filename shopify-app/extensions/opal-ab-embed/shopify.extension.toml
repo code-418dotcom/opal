@@ -1,0 +1,7 @@
+api_version = "2024-10"
+
+[[extensions]]
+uid = "fb271ff6-b3f1-cb60-c638-e61426be7be6692bb41c"
+type = "theme_app_extension"
+name = "Opal A/B Testing"
+handle = "opal-ab-embed"

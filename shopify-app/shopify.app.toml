@@ -1,0 +1,24 @@
+# Opal A/B Image Testing — Shopify App Configuration
+# Docs: https://shopify.dev/docs/apps/tools/cli/configuration
+
+name = "Opal A/B Image Testing"
+client_id = "e01bcf345cc429fa2e026afd63795014"
+application_url = "https://localhost:3000"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_pixels,write_pixels,read_metaobjects,write_metaobjects"
+
+[auth]
+redirect_urls = [ "https://localhost:3000/auth/callback" ]
+
+[webhooks]
+api_version = "2024-10"
+
+  [webhooks.privacy_compliance]
+  customer_deletion_url = "/webhooks/customers/redact"
+  customer_data_request_url = "/webhooks/customers/data_request"
+  shop_deletion_url = "/webhooks/shop/redact"
+
+[pos]
+embedded = false

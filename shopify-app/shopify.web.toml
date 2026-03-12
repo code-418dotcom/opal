@@ -1,0 +1,2 @@
+[commands]
+dev = "npm exec remix vite:dev"

@@ -1,0 +1,34 @@
+{
+  "name": "opal-shopify-ab",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "shopify app dev",
+    "build": "remix vite:build",
+    "start": "remix-serve build/server/index.js",
+    "lint": "eslint app/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remix-run/node": "^2.15.0",
+    "@remix-run/react": "^2.15.0",
+    "@remix-run/serve": "^2.15.0",
+    "@shopify/app-bridge-react": "^4.1.0",
+    "@shopify/polaris": "^13.0.0",
+    "@shopify/shopify-app-remix": "^3.0.0",
+    "isbot": "^5.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@remix-run/dev": "^2.15.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.0.0",
+    "vite-tsconfig-paths": "^4.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

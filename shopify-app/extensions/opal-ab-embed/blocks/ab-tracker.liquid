@@ -1,0 +1,25 @@
+{% comment %}
+  Opal A/B Image Testing — App Embed Block
+  Target: head (loads on every page, lightweight)
+  Purpose: presence indicator for the tracking pixel.
+  No visible output — the real tracking is done by the Web Pixel extension.
+{% endcomment %}
+
+{% if block.settings.enabled %}
+  {% comment %} Future: client-side variant swap logic could go here {% endcomment %}
+{% endif %}
+
+{% schema %}
+{
+  "name": "Opal A/B Testing",
+  "target": "head",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enabled",
+      "label": "Enable A/B image tracking",
+      "default": true
+    }
+  ]
+}
+{% endschema %}
