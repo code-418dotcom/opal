@@ -11,6 +11,7 @@ from shared.db_sqlalchemy import (
     create_ab_test, get_ab_test, list_ab_tests, update_ab_test,
     get_ab_test_metrics, upsert_ab_test_metric, get_ab_test_aggregated_metrics,
     get_integration, get_integration_with_token, get_job_item,
+    create_variant_log_entry,
 )
 from shared.encryption import decrypt
 from shared.storage import download_file
@@ -130,6 +131,9 @@ async def start_test(
         "started_at": datetime.utcnow(),
     })
 
+    # Log variant activation for pixel event attribution
+    create_variant_log_entry(test_id, "a")
+
     return {"ok": True, "active_variant": "a"}
 
 
@@ -149,6 +153,9 @@ async def swap_variant(
     await _push_variant_to_store(test, new_variant, user["user_id"])
 
     update_ab_test(test_id, {"active_variant": new_variant})
+
+    # Log variant activation for pixel event attribution
+    create_variant_log_entry(test_id, new_variant)
 
     return {"ok": True, "active_variant": new_variant}
 

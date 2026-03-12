@@ -337,6 +337,8 @@ class ABTest(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    tracking_mode = Column(String, nullable=False, default='manual')  # 'manual' or 'pixel'
+
     metrics = relationship('ABTestMetric', back_populates='ab_test', lazy='select')
 
     def __repr__(self):
@@ -362,6 +364,23 @@ class ABTestMetric(Base):
 
     def __repr__(self):
         return f'<ABTestMetric {self.id} test={self.ab_test_id} variant={self.variant}>'
+
+
+class ABTestVariantLog(Base):
+    """Records each variant activation (start or swap) with a timestamp.
+
+    Used to attribute incoming pixel events to the correct variant:
+    find the most recent activation before the event timestamp.
+    """
+    __tablename__ = 'ab_test_variant_log'
+
+    id = Column(String, primary_key=True)
+    test_id = Column(String, ForeignKey('ab_tests.id', ondelete='CASCADE'), nullable=False)
+    variant = Column(String(1), nullable=False)  # 'a' or 'b'
+    activated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ABTestVariantLog test={self.test_id} variant={self.variant} at={self.activated_at}>'
 
 
 class ImageBenchmark(Base):

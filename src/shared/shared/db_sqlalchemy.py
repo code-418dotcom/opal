@@ -12,11 +12,12 @@ from .models import (
     Integration, IntegrationProvider, IntegrationStatus, IntegrationCost,
     AdminSetting, SubscriptionPlan, UserSubscription,
     CatalogJob, CatalogJobStatus, CatalogJobProduct, CatalogProductStatus,
-    ABTest, ABTestStatus, ABTestMetric,
+    ABTest, ABTestStatus, ABTestMetric, ABTestVariantLog,
     ImportedImage,
 )
 from datetime import datetime, timedelta
 import logging
+import secrets
 
 log = logging.getLogger("opal")
 
@@ -2214,3 +2215,135 @@ def _serialize_category_benchmark(cb) -> Dict[str, Any]:
         "sample_size": cb.sample_size,
         "updated_at": cb.updated_at.isoformat(),
     }
+
+
+# ── Pixel Tracking ───────────────────────────────────────────────────
+
+
+def generate_pixel_key(integration_id: str) -> str:
+    """Generate and store a pixel key for an integration."""
+    key = secrets.token_urlsafe(32)
+    with SessionLocal() as session:
+        session.execute(
+            text("UPDATE integrations SET pixel_key = :key WHERE id = :iid"),
+            {"key": key, "iid": integration_id},
+        )
+        session.commit()
+    return key
+
+
+def get_integration_by_pixel_key(pixel_key: str) -> Optional[Dict[str, Any]]:
+    """Look up an integration by its pixel key."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("""
+                SELECT id, user_id, provider, store_url, status, pixel_key
+                FROM integrations
+                WHERE pixel_key = :pk AND status = 'active'
+            """),
+            {"pk": pixel_key},
+        ).mappings().first()
+        return dict(row) if row else None
+
+
+def ensure_pixel_key(integration_id: str) -> str:
+    """Get or create pixel key for an integration."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("SELECT pixel_key FROM integrations WHERE id = :iid"),
+            {"iid": integration_id},
+        ).mappings().first()
+        if row and row["pixel_key"]:
+            return row["pixel_key"]
+    return generate_pixel_key(integration_id)
+
+
+def create_variant_log_entry(test_id: str, variant: str, activated_at: Optional[datetime] = None) -> Dict[str, Any]:
+    """Record a variant activation (test start or swap)."""
+    from .util import new_id
+    with SessionLocal() as session:
+        entry = ABTestVariantLog(
+            id=new_id("vtlog"),
+            test_id=test_id,
+            variant=variant,
+            activated_at=activated_at or datetime.utcnow(),
+        )
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+        return {
+            "id": entry.id,
+            "test_id": entry.test_id,
+            "variant": entry.variant,
+            "activated_at": entry.activated_at.isoformat() if entry.activated_at else None,
+        }
+
+
+def get_active_variant_at(test_id: str, event_time: datetime) -> Optional[str]:
+    """Determine which variant was active for a test at a given timestamp."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("""
+                SELECT variant FROM ab_test_variant_log
+                WHERE test_id = :tid AND activated_at <= :ts
+                ORDER BY activated_at DESC
+                LIMIT 1
+            """),
+            {"tid": test_id, "ts": event_time},
+        ).mappings().first()
+        return row["variant"] if row else None
+
+
+def find_running_test(integration_id: str, product_id: str) -> Optional[Dict[str, Any]]:
+    """Find a running A/B test for a specific product+integration."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("""
+                SELECT id, user_id, integration_id, product_id, active_variant,
+                       status, tracking_mode
+                FROM ab_tests
+                WHERE integration_id = :iid
+                  AND product_id = :pid
+                  AND status = 'running'
+                LIMIT 1
+            """),
+            {"iid": integration_id, "pid": product_id},
+        ).mappings().first()
+        return dict(row) if row else None
+
+
+def increment_ab_test_metric(
+    test_id: str,
+    variant: str,
+    date_str: str,
+    views: int = 0,
+    add_to_carts: int = 0,
+    conversions: int = 0,
+    revenue_cents: int = 0,
+) -> None:
+    """Atomically increment metric counters for a variant on a date."""
+    from .util import new_id
+    with SessionLocal() as session:
+        result = session.execute(
+            text("""
+                UPDATE ab_test_metrics
+                SET views = views + :v,
+                    add_to_carts = add_to_carts + :atc,
+                    conversions = conversions + :c,
+                    revenue_cents = revenue_cents + :rc,
+                    updated_at = NOW()
+                WHERE ab_test_id = :tid AND variant = :var AND date = :d
+            """),
+            {"tid": test_id, "var": variant, "d": date_str,
+             "v": views, "atc": add_to_carts, "c": conversions, "rc": revenue_cents},
+        )
+        if result.rowcount == 0:
+            session.execute(
+                text("""
+                    INSERT INTO ab_test_metrics (id, ab_test_id, variant, date, views, clicks, add_to_carts, conversions, revenue_cents)
+                    VALUES (:id, :tid, :var, :d, :v, 0, :atc, :c, :rc)
+                """),
+                {"id": new_id("abm"), "tid": test_id, "var": variant, "d": date_str,
+                 "v": views, "atc": add_to_carts, "c": conversions, "rc": revenue_cents},
+            )
+        session.commit()
