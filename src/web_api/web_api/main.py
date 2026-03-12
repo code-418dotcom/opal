@@ -23,7 +23,7 @@ from web_api.auth import get_current_user
 
 log = logging.getLogger("opal")
 
-app = FastAPI(title="Opal Web API", version="0.2.0")
+app = FastAPI(title="Opal Web API", version="0.8.1")
 
 app.add_middleware(
     CORSMiddleware,
