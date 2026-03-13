@@ -197,8 +197,12 @@ export async function createTest(data: {
  */
 export async function startTest(
   testId: string,
+  skipPush = false,
 ): Promise<{ ok: boolean; active_variant: string }> {
-  return opalFetch(`/v1/ab-tests/${testId}/start`, { method: "POST" });
+  return opalFetch(`/v1/ab-tests/${testId}/start`, {
+    method: "POST",
+    body: { skip_push: skipPush },
+  });
 }
 
 /**

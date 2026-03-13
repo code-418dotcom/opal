@@ -137,7 +137,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     if (autoStart) {
-      await startTest(test.id);
+      // Push variant A image via Shopify Admin API (we have the session)
+      const variantAGid = formData.get("variant_a_image_gid") as string | null;
+      if (variantAGid) {
+        // Reorder so variant A image is first (position 1)
+        const productGid = `gid://shopify/Product/${productId}`;
+        try {
+          await admin.graphql(
+            `#graphql
+            mutation reorderImages($id: ID!, $moves: [MoveInput!]!) {
+              productReorderImages(id: $id, moves: $moves) {
+                userErrors { field message }
+              }
+            }`,
+            {
+              variables: {
+                id: productGid,
+                moves: [{ id: variantAGid, newPosition: "0" }],
+              },
+            },
+          );
+        } catch (err) {
+          // Non-fatal — test can still run without reorder
+          console.error("Image reorder failed:", err);
+        }
+      }
+
+      // Tell the backend to start (skip_push since we handle it)
+      await startTest(test.id, true);
     }
 
     return redirect(`/app/tests/${test.id}`);
@@ -252,6 +279,8 @@ export default function CreateTest() {
       // Extract numeric ID from gid format
       const numericImageId = variantA.id.split("/").pop() || variantA.id;
       formData.set("original_image_id", numericImageId);
+      // Pass full GID for image reorder
+      formData.set("variant_a_image_gid", variantA.id);
     }
     formData.set("auto_start", "true");
 

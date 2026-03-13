@@ -123,9 +123,14 @@ async def get_test(
 
 # ── Start / Swap / Conclude ──────────────────────────────────────────
 
+class StartTestIn(BaseModel):
+    skip_push: bool = False  # True when the caller handles image push (e.g. Shopify app)
+
+
 @router.post("/{test_id}/start")
 async def start_test(
     test_id: str,
+    body: StartTestIn = StartTestIn(),
     user: dict = Depends(get_current_user),
 ):
     """Start a test: push variant A to the store as the live image."""
@@ -135,8 +140,9 @@ async def start_test(
     if test["status"] not in ("created",):
         raise HTTPException(status_code=400, detail=f"Cannot start test in {test['status']} state")
 
-    # Push variant A to the store
-    await _push_variant_to_store(test, "a", user["user_id"])
+    # Push variant A to the store (unless caller handles it)
+    if not body.skip_push:
+        await _push_variant_to_store(test, "a", user["user_id"])
 
     update_ab_test(test_id, {
         "status": "running",
@@ -150,9 +156,14 @@ async def start_test(
     return {"ok": True, "active_variant": "a"}
 
 
+class SwapTestIn(BaseModel):
+    skip_push: bool = False
+
+
 @router.post("/{test_id}/swap")
 async def swap_variant(
     test_id: str,
+    body: SwapTestIn = SwapTestIn(),
     user: dict = Depends(get_current_user),
 ):
     """Swap which variant is live on the store."""
@@ -163,7 +174,9 @@ async def swap_variant(
         raise HTTPException(status_code=400, detail="Test is not running")
 
     new_variant = "b" if test["active_variant"] == "a" else "a"
-    await _push_variant_to_store(test, new_variant, user["user_id"])
+
+    if not body.skip_push:
+        await _push_variant_to_store(test, new_variant, user["user_id"])
 
     update_ab_test(test_id, {"active_variant": new_variant})
 
