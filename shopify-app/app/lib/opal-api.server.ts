@@ -283,4 +283,18 @@ export async function listProducts(
   return data.products || [];
 }
 
+/**
+ * Auto-provision an integration for a Shopify shop.
+ * Called when a merchant installs the Shopify app but doesn't have
+ * an existing Opal integration. Creates a minimal integration record.
+ */
+export async function provisionIntegration(
+  shopDomain: string,
+): Promise<Integration> {
+  return opalFetch<Integration>("/v1/integrations/shopify-app-provision", {
+    method: "POST",
+    body: { store_url: shopDomain },
+  });
+}
+
 export { OpalApiError };

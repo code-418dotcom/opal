@@ -56,31 +56,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const response = await admin.graphql(
       `#graphql
-      query webPixels {
-        webPixelInstallations(first: 10) {
-          edges {
-            node {
-              id
-              settings
-            }
-          }
+      query webPixel {
+        webPixel {
+          id
+          settings
         }
       }`,
     );
     const body = await response.json();
-    const pixels = body.data?.webPixelInstallations?.edges || [];
+    const pixel = body.data?.webPixel;
 
-    if (pixels.length > 0) {
-      // Check if any pixel has our settings configured
-      const configured = pixels.some((edge: { node: { settings: string } }) => {
-        try {
-          const s = JSON.parse(edge.node.settings);
-          return s.opal_api_url && s.opal_pixel_key;
-        } catch {
-          return false;
-        }
-      });
-      pixelStatus = configured ? "configured" : "not_configured";
+    if (pixel) {
+      try {
+        const s = JSON.parse(pixel.settings);
+        pixelStatus = (s.opal_api_url && s.opal_pixel_key) ? "configured" : "not_configured";
+      } catch {
+        pixelStatus = "not_configured";
+      }
     } else {
       pixelStatus = "not_configured";
     }
@@ -127,93 +119,101 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     opal_pixel_key: pixelKey,
   });
 
-  // 3. Check if a web pixel already exists for this app
+  // 3. Try to create the web pixel first; if it already exists, update it
   try {
-    const listResponse = await admin.graphql(
+    const createResponse = await admin.graphql(
       `#graphql
-      query webPixels {
-        webPixelInstallations(first: 10) {
-          edges {
-            node {
-              id
-              settings
-            }
+      mutation webPixelCreate($webPixel: WebPixelInput!) {
+        webPixelCreate(webPixel: $webPixel) {
+          userErrors {
+            code
+            field
+            message
+          }
+          webPixel {
+            id
+            settings
           }
         }
       }`,
+      {
+        variables: {
+          webPixel: { settings: pixelSettings },
+        },
+      },
     );
-    const listBody = await listResponse.json();
-    const existingPixels = listBody.data?.webPixelInstallations?.edges || [];
+    const createBody = await createResponse.json();
+    const createErrors = createBody.data?.webPixelCreate?.userErrors || [];
 
-    if (existingPixels.length > 0) {
-      // Update the existing web pixel
-      const pixelId = existingPixels[0].node.id;
-      const updateResponse = await admin.graphql(
-        `#graphql
-        mutation webPixelUpdate($id: ID!, $webPixel: WebPixelInput!) {
-          webPixelUpdate(id: $id, webPixel: $webPixel) {
-            userErrors {
-              field
-              message
-            }
-            webPixel {
-              id
-              settings
-            }
-          }
-        }`,
-        {
-          variables: {
-            id: pixelId,
-            webPixel: { settings: pixelSettings },
-          },
-        },
-      );
-      const updateBody = await updateResponse.json();
-      const userErrors = updateBody.data?.webPixelUpdate?.userErrors || [];
-
-      if (userErrors.length > 0) {
-        return json({
-          ok: false,
-          error: `Shopify error: ${userErrors.map((e: { message: string }) => e.message).join(", ")}`,
-        }, { status: 400 });
-      }
-
-      return json({ ok: true, action: "updated" });
-    } else {
-      // Create a new web pixel
-      const createResponse = await admin.graphql(
-        `#graphql
-        mutation webPixelCreate($webPixel: WebPixelInput!) {
-          webPixelCreate(webPixel: $webPixel) {
-            userErrors {
-              field
-              message
-            }
-            webPixel {
-              id
-              settings
-            }
-          }
-        }`,
-        {
-          variables: {
-            webPixel: { settings: pixelSettings },
-          },
-        },
-      );
-      const createBody = await createResponse.json();
-      const userErrors = createBody.data?.webPixelCreate?.userErrors || [];
-
-      if (userErrors.length > 0) {
-        return json({
-          ok: false,
-          error: `Shopify error: ${userErrors.map((e: { message: string }) => e.message).join(", ")}`,
-        }, { status: 400 });
-      }
-
+    if (createErrors.length === 0) {
       return json({ ok: true, action: "created" });
     }
+
+    // If pixel already exists, fetch its ID and update
+    const alreadyExists = createErrors.some(
+      (e: { code?: string; message: string }) =>
+        e.message.toLowerCase().includes("already exists") ||
+        e.code === "WEB_PIXEL_ALREADY_EXISTS",
+    );
+
+    if (!alreadyExists) {
+      return json({
+        ok: false,
+        error: `Shopify error: ${createErrors.map((e: { message: string }) => e.message).join(", ")}`,
+      }, { status: 400 });
+    }
+
+    // Fetch existing pixel ID
+    const queryResponse = await admin.graphql(
+      `#graphql
+      query webPixel {
+        webPixel {
+          id
+        }
+      }`,
+    );
+    const queryBody = await queryResponse.json();
+    const pixelId = queryBody.data?.webPixel?.id;
+
+    if (!pixelId) {
+      return json({
+        ok: false,
+        error: "Pixel already exists but could not retrieve its ID for update.",
+      }, { status: 500 });
+    }
+
+    const updateResponse = await admin.graphql(
+      `#graphql
+      mutation webPixelUpdate($id: ID!, $webPixel: WebPixelInput!) {
+        webPixelUpdate(id: $id, webPixel: $webPixel) {
+          userErrors {
+            field
+            message
+          }
+          webPixel {
+            id
+            settings
+          }
+        }
+      }`,
+      {
+        variables: {
+          id: pixelId,
+          webPixel: { settings: pixelSettings },
+        },
+      },
+    );
+    const updateBody = await updateResponse.json();
+    const updateErrors = updateBody.data?.webPixelUpdate?.userErrors || [];
+
+    if (updateErrors.length > 0) {
+      return json({
+        ok: false,
+        error: `Shopify error: ${updateErrors.map((e: { message: string }) => e.message).join(", ")}`,
+      }, { status: 400 });
+    }
+
+    return json({ ok: true, action: "updated" });
   } catch (err) {
     return json({
       ok: false,
@@ -285,7 +285,7 @@ export default function Settings() {
                 tone="success"
                 onDismiss={() => setShowBanner(false)}
               >
-                Pixel {actionData.action === "created" ? "created" : "updated"} successfully.
+                Pixel {"action" in actionData && actionData.action === "created" ? "created" : "updated"} successfully.
                 Your storefront is now tracking A/B test events automatically.
               </Banner>
             ) : (
@@ -293,7 +293,7 @@ export default function Settings() {
                 tone="critical"
                 onDismiss={() => setShowBanner(false)}
               >
-                {actionData.error || "Failed to configure pixel."}
+                {"error" in actionData ? actionData.error : "Failed to configure pixel."}
               </Banner>
             )}
           </Layout.Section>

@@ -15,6 +15,7 @@ from shared.db_sqlalchemy import (
     get_integration_cost, debit_tokens,
     create_imported_image, get_imported_images_for_product,
     get_imported_image, get_imported_image_by_id, list_imported_products,
+    get_integration_by_store_url,
 )
 from shared.encryption import encrypt, decrypt
 from shared.shopify_client import (
@@ -66,6 +67,44 @@ async def get_costs(
     process_cost = get_integration_cost(provider, "process_image")
     pushback_cost = get_integration_cost(provider, "push_back")
     return {"process_image": process_cost, "push_back": pushback_cost}
+
+
+# ── Shopify App Auto-Provision ────────────────────────────────────────
+
+
+class ShopifyAppProvisionIn(BaseModel):
+    store_url: str = Field(..., description="Shopify shop domain, e.g. my-store.myshopify.com")
+
+
+@router.post("/shopify-app-provision")
+async def shopify_app_provision(
+    body: ShopifyAppProvisionIn,
+    user: dict = Depends(get_current_user),
+):
+    """Auto-provision an integration for a Shopify shop installed via the App Store.
+
+    Called by the Shopify embedded app when a merchant installs but doesn't have
+    an existing Opal integration. Creates a minimal integration without OAuth token
+    (pixel tracking doesn't need store API access).
+    """
+    # Check if integration already exists for this shop
+    existing = get_integration_by_store_url(body.store_url)
+    if existing:
+        return existing
+
+    # Create new integration
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    integ = create_integration({
+        "id": new_id("integ"),
+        "user_id": user["user_id"],
+        "tenant_id": user["tenant_id"],
+        "provider": "shopify",
+        "store_url": body.store_url,
+        "provider_metadata": {"source": "shopify_app", "provisioned_at": now.isoformat()},
+    })
+    LOG.info("Auto-provisioned integration %s for shop %s", integ["id"], body.store_url)
+    return integ
 
 
 # ── Shopify OAuth ────────────────────────────────────────────────────

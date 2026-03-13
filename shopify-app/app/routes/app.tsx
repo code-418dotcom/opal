@@ -34,6 +34,7 @@ export default function AppLayout() {
         <NavMenu>
           <Link to="/app" rel="home">A/B Tests</Link>
           <Link to="/app/tests/new">Create Test</Link>
+          <Link to="/app/billing">Plans</Link>
           <Link to="/app/settings">Settings</Link>
         </NavMenu>
         <Outlet />

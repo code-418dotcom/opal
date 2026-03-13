@@ -2234,6 +2234,21 @@ def generate_pixel_key(integration_id: str) -> str:
     return key
 
 
+def get_integration_by_store_url(store_url: str) -> Optional[Dict[str, Any]]:
+    """Look up an active integration by store URL (any user)."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("""
+                SELECT id, user_id, provider, store_url, status, pixel_key
+                FROM integrations
+                WHERE store_url = :url AND status = 'active'
+                LIMIT 1
+            """),
+            {"url": store_url},
+        ).mappings().first()
+        return dict(row) if row else None
+
+
 def get_integration_by_pixel_key(pixel_key: str) -> Optional[Dict[str, Any]]:
     """Look up an integration by its pixel key."""
     with SessionLocal() as session:

@@ -41,16 +41,22 @@ import {
   createTest,
   startTest,
 } from "~/lib/opal-api.server";
+import { getEntitlements } from "~/lib/entitlements.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const integration = await getIntegrationByShop(session.shop);
 
   if (!integration) {
     return redirect("/app");
   }
 
-  return json({ integrationId: integration.id });
+  const entitlements = await getEntitlements(billing, integration.id);
+  if (!entitlements.canCreateTest) {
+    return redirect("/app/billing");
+  }
+
+  return json({ integrationId: integration.id, autoConcludes: entitlements.autoConcludes });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -98,7 +104,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function CreateTest() {
-  const { integrationId } = useLoaderData<typeof loader>();
+  const { integrationId, autoConcludes } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();

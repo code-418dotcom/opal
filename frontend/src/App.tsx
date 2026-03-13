@@ -16,6 +16,9 @@ import BenchmarkPage from './components/BenchmarkPage';
 import AdminPage from './components/AdminPage';
 import SettingsPage from './components/SettingsPage';
 import LandingPage from './components/LandingPage';
+import PrivacyPage from './components/PrivacyPage';
+import TermsPage from './components/TermsPage';
+import SupportPage from './components/SupportPage';
 import TipsBar from './components/TipsBar';
 import { PreferencesProvider } from './components/PreferencesContext';
 import { api } from './api';
@@ -329,4 +332,13 @@ function App() {
   );
 }
 
-export default App;
+/** Router wrapper — serves standalone public pages at /privacy, /terms, /support */
+function AppRouter() {
+  const path = window.location.pathname;
+  if (path === '/privacy') return <PrivacyPage />;
+  if (path === '/terms') return <TermsPage />;
+  if (path === '/support') return <SupportPage />;
+  return <App />;
+}
+
+export default AppRouter;

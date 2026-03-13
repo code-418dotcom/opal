@@ -12,6 +12,7 @@ import {
   EmptyState,
   IndexTable,
   Badge,
+  Banner,
   Text,
   Button,
   BlockStack,
@@ -22,20 +23,35 @@ import {
 import { useState, useCallback } from "react";
 
 import { authenticate } from "~/shopify.server";
-import { getIntegrationByShop, listTests } from "~/lib/opal-api.server";
+import { getIntegrationByShop, listTests, provisionIntegration } from "~/lib/opal-api.server";
 import type { ABTest } from "~/lib/opal-api.server";
+import { getEntitlements } from "~/lib/entitlements.server";
+import type { Entitlements } from "~/lib/entitlements.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
-  const integration = await getIntegrationByShop(shopDomain);
+  // Auto-provision integration if it doesn't exist
+  let integration = await getIntegrationByShop(shopDomain);
   if (!integration) {
-    return json({ tests: [] as ABTest[], hasIntegration: false, shopDomain });
+    try {
+      integration = await provisionIntegration(shopDomain);
+    } catch {
+      return json({
+        tests: [] as ABTest[],
+        hasIntegration: false,
+        shopDomain,
+        entitlements: null as Entitlements | null,
+      });
+    }
   }
 
-  const tests = await listTests(integration.id);
-  return json({ tests, hasIntegration: true, shopDomain });
+  const [tests, entitlements] = await Promise.all([
+    listTests(integration.id),
+    getEntitlements(billing, integration.id),
+  ]);
+  return json({ tests, hasIntegration: true, shopDomain, entitlements });
 };
 
 const STATUS_BADGE_MAP: Record<string, { tone: "success" | "info" | "attention" | "critical" | undefined; label: string }> = {
@@ -46,7 +62,7 @@ const STATUS_BADGE_MAP: Record<string, { tone: "success" | "info" | "attention" 
 };
 
 export default function Dashboard() {
-  const { tests, hasIntegration, shopDomain } = useLoaderData<typeof loader>();
+  const { tests, hasIntegration, shopDomain, entitlements } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -87,6 +103,8 @@ export default function Dashboard() {
   const filteredTests = statusFilter
     ? tests.filter((t) => t.status === statusFilter)
     : tests;
+
+  const canCreate = entitlements?.canCreateTest !== false;
 
   if (tests.length === 0) {
     return (
@@ -167,11 +185,34 @@ export default function Dashboard() {
     <Page
       title="A/B Image Tests"
       primaryAction={{
-        content: "Create test",
-        onAction: () => navigate("/app/tests/new"),
+        content: canCreate ? "Create test" : "Upgrade to create more",
+        onAction: () => navigate(canCreate ? "/app/tests/new" : "/app/billing"),
       }}
     >
       <Layout>
+        {/* Upgrade banner for free tier at limit */}
+        {entitlements && !canCreate && (
+          <Layout.Section>
+            <Banner
+              tone="warning"
+              action={{ content: "Upgrade to Pro", url: "/app/billing" }}
+            >
+              {entitlements.createTestBlockReason}
+            </Banner>
+          </Layout.Section>
+        )}
+        {/* Plan badge */}
+        {entitlements && entitlements.tier === "free" && tests.length > 0 && canCreate && (
+          <Layout.Section>
+            <Banner
+              tone="info"
+              action={{ content: "See plans", url: "/app/billing" }}
+            >
+              You're on the Free plan ({entitlements.runningTestCount}/{entitlements.maxConcurrentTests} test used).
+              Upgrade for unlimited tests and auto-conclude.
+            </Banner>
+          </Layout.Section>
+        )}
         <Layout.Section>
           <Card padding="0">
             <Box padding="400">
