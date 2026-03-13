@@ -1,6 +1,7 @@
 {
   "name": "opal-shopify-ab",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
   "scripts": {
     "dev": "shopify app dev",
