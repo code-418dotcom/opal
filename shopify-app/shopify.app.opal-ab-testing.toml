@@ -2,7 +2,7 @@
 
 client_id = "7567527eac6fa167c9041c5687f7451e"
 name = "Opal A/B testing"
-application_url = "https://shopify.dev/apps/default-app-home"
+application_url = "https://opal-shopify-app-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io"
 embedded = true
 
 [build]
@@ -16,4 +16,7 @@ api_version = "2026-04"
 scopes = "read_metaobjects,read_pixels,read_products,write_metaobjects,write_pixels,write_products"
 
 [auth]
-redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+redirect_urls = [
+  "https://opal-shopify-app-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io/auth/callback",
+  "https://opal-shopify-app-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io/auth/shopify/callback",
+]

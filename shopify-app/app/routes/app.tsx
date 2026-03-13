@@ -3,21 +3,26 @@
  * Handles authentication check on every navigation.
  * Provides NavMenu for embedded app sidebar navigation.
  */
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { boundary } from "@shopify/shopify-app-remix/server";
 import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 
-import { authenticate } from "~/shopify.server";
+import shopify, { authenticate } from "~/shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
   return json({
     apiKey: process.env.SHOPIFY_API_KEY || "",
   });
+};
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
 };
 
 export default function AppLayout() {
@@ -38,13 +43,5 @@ export default function AppLayout() {
 }
 
 export function ErrorBoundary() {
-  const error = useRouteError();
-  return (
-    <PolarisAppProvider i18n={enTranslations}>
-      <div style={{ padding: "2rem" }}>
-        <h1>Something went wrong</h1>
-        <p>{error instanceof Error ? error.message : "Unknown error"}</p>
-      </div>
-    </PolarisAppProvider>
-  );
+  return boundary.error(useRouteError());
 }
