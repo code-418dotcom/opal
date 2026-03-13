@@ -1,9 +1,9 @@
 /**
- * Settings — pixel key display, auto-conclude config.
+ * Settings — pixel key display, auto-configure pixel, auto-conclude config.
  */
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useActionData, useNavigation, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -16,14 +16,17 @@ import {
   Box,
   InlineStack,
   Button,
+  Badge,
 } from "@shopify/polaris";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 
 import { authenticate } from "~/shopify.server";
 import { getIntegrationByShop, ensurePixelKey } from "~/lib/opal-api.server";
 
+const OPAL_API_URL = process.env.OPAL_API_URL || "https://dev.opaloptics.com";
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const integration = await getIntegrationByShop(shopDomain);
@@ -33,6 +36,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       pixelKey: null,
       integrationId: null,
       shopDomain,
+      opalApiUrl: OPAL_API_URL,
+      pixelStatus: "not_connected" as const,
     });
   }
 
@@ -46,19 +51,197 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
+  // Check if web pixel is already configured
+  let pixelStatus: "not_configured" | "configured" | "unknown" = "unknown";
+  try {
+    const response = await admin.graphql(
+      `#graphql
+      query webPixels {
+        webPixelInstallations(first: 10) {
+          edges {
+            node {
+              id
+              settings
+            }
+          }
+        }
+      }`,
+    );
+    const body = await response.json();
+    const pixels = body.data?.webPixelInstallations?.edges || [];
+
+    if (pixels.length > 0) {
+      // Check if any pixel has our settings configured
+      const configured = pixels.some((edge: { node: { settings: string } }) => {
+        try {
+          const s = JSON.parse(edge.node.settings);
+          return s.opal_api_url && s.opal_pixel_key;
+        } catch {
+          return false;
+        }
+      });
+      pixelStatus = configured ? "configured" : "not_configured";
+    } else {
+      pixelStatus = "not_configured";
+    }
+  } catch {
+    pixelStatus = "unknown";
+  }
+
   return json({
     hasIntegration: true,
     pixelKey,
     integrationId: integration.id,
     shopDomain,
+    opalApiUrl: OPAL_API_URL,
+    pixelStatus,
   });
 };
 
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session, admin } = await authenticate.admin(request);
+  const shopDomain = session.shop;
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent !== "configure_pixel") {
+    return json({ ok: false, error: "Unknown action" }, { status: 400 });
+  }
+
+  // 1. Get integration and pixel key
+  const integration = await getIntegrationByShop(shopDomain);
+  if (!integration) {
+    return json({ ok: false, error: "Store not connected to Opal. Connect from the Opal dashboard first." }, { status: 400 });
+  }
+
+  let pixelKey: string;
+  try {
+    pixelKey = await ensurePixelKey(integration.id);
+  } catch (err) {
+    return json({ ok: false, error: `Failed to get pixel key: ${err instanceof Error ? err.message : "Unknown error"}` }, { status: 500 });
+  }
+
+  // 2. Build the settings JSON
+  const pixelSettings = JSON.stringify({
+    opal_api_url: OPAL_API_URL,
+    opal_pixel_key: pixelKey,
+  });
+
+  // 3. Check if a web pixel already exists for this app
+  try {
+    const listResponse = await admin.graphql(
+      `#graphql
+      query webPixels {
+        webPixelInstallations(first: 10) {
+          edges {
+            node {
+              id
+              settings
+            }
+          }
+        }
+      }`,
+    );
+    const listBody = await listResponse.json();
+    const existingPixels = listBody.data?.webPixelInstallations?.edges || [];
+
+    if (existingPixels.length > 0) {
+      // Update the existing web pixel
+      const pixelId = existingPixels[0].node.id;
+      const updateResponse = await admin.graphql(
+        `#graphql
+        mutation webPixelUpdate($id: ID!, $webPixel: WebPixelInput!) {
+          webPixelUpdate(id: $id, webPixel: $webPixel) {
+            userErrors {
+              field
+              message
+            }
+            webPixel {
+              id
+              settings
+            }
+          }
+        }`,
+        {
+          variables: {
+            id: pixelId,
+            webPixel: { settings: pixelSettings },
+          },
+        },
+      );
+      const updateBody = await updateResponse.json();
+      const userErrors = updateBody.data?.webPixelUpdate?.userErrors || [];
+
+      if (userErrors.length > 0) {
+        return json({
+          ok: false,
+          error: `Shopify error: ${userErrors.map((e: { message: string }) => e.message).join(", ")}`,
+        }, { status: 400 });
+      }
+
+      return json({ ok: true, action: "updated" });
+    } else {
+      // Create a new web pixel
+      const createResponse = await admin.graphql(
+        `#graphql
+        mutation webPixelCreate($webPixel: WebPixelInput!) {
+          webPixelCreate(webPixel: $webPixel) {
+            userErrors {
+              field
+              message
+            }
+            webPixel {
+              id
+              settings
+            }
+          }
+        }`,
+        {
+          variables: {
+            webPixel: { settings: pixelSettings },
+          },
+        },
+      );
+      const createBody = await createResponse.json();
+      const userErrors = createBody.data?.webPixelCreate?.userErrors || [];
+
+      if (userErrors.length > 0) {
+        return json({
+          ok: false,
+          error: `Shopify error: ${userErrors.map((e: { message: string }) => e.message).join(", ")}`,
+        }, { status: 400 });
+      }
+
+      return json({ ok: true, action: "created" });
+    }
+  } catch (err) {
+    return json({
+      ok: false,
+      error: `Failed to configure pixel: ${err instanceof Error ? err.message : "Unknown error"}`,
+    }, { status: 500 });
+  }
+};
+
 export default function Settings() {
-  const { hasIntegration, pixelKey, integrationId, shopDomain } =
+  const { hasIntegration, pixelKey, integrationId, shopDomain, opalApiUrl, pixelStatus } =
     useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+  const submit = useSubmit();
+
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showBanner, setShowBanner] = useState(false);
+
+  const isConfiguring = navigation.state === "submitting" &&
+    navigation.formData?.get("intent") === "configure_pixel";
+
+  // Show success/error banner after action completes
+  useEffect(() => {
+    if (actionData) {
+      setShowBanner(true);
+    }
+  }, [actionData]);
 
   const handleCopy = useCallback(() => {
     if (pixelKey) {
@@ -67,6 +250,12 @@ export default function Settings() {
       setTimeout(() => setCopied(false), 2000);
     }
   }, [pixelKey]);
+
+  const handleConfigurePixel = useCallback(() => {
+    const formData = new FormData();
+    formData.set("intent", "configure_pixel");
+    submit(formData, { method: "post" });
+  }, [submit]);
 
   if (!hasIntegration) {
     return (
@@ -83,25 +272,71 @@ export default function Settings() {
     );
   }
 
-  const opalApiUrl = typeof window !== "undefined"
-    ? ""
-    : (process.env.OPAL_API_URL || "https://dev.opaloptics.com");
+  const currentPixelStatus = actionData?.ok ? "configured" : pixelStatus;
 
   return (
     <Page title="Settings" backAction={{ url: "/app" }}>
       <Layout>
+        {/* Action feedback banner */}
+        {showBanner && actionData && (
+          <Layout.Section>
+            {actionData.ok ? (
+              <Banner
+                tone="success"
+                onDismiss={() => setShowBanner(false)}
+              >
+                Pixel {actionData.action === "created" ? "created" : "updated"} successfully.
+                Your storefront is now tracking A/B test events automatically.
+              </Banner>
+            ) : (
+              <Banner
+                tone="critical"
+                onDismiss={() => setShowBanner(false)}
+              >
+                {actionData.error || "Failed to configure pixel."}
+              </Banner>
+            )}
+          </Layout.Section>
+        )}
+
         {/* Pixel Configuration */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">
-                Pixel tracking
-              </Text>
+              <InlineStack align="space-between" blockAlign="center">
+                <Text variant="headingMd" as="h2">
+                  Pixel tracking
+                </Text>
+                <Badge tone={currentPixelStatus === "configured" ? "success" : "warning"}>
+                  {currentPixelStatus === "configured" ? "Configured" : "Not configured"}
+                </Badge>
+              </InlineStack>
               <Text variant="bodySm" as="p" tone="subdued">
                 The Opal pixel automatically tracks product views, add-to-carts,
-                and conversions on your storefront. These settings are used by
-                the Web Pixel extension.
+                and conversions on your storefront. Configure the pixel below to
+                enable automatic A/B test tracking.
               </Text>
+              <Divider />
+
+              {/* Auto-configure button */}
+              <BlockStack gap="300">
+                <Text variant="headingSm" as="h3">Auto-configure</Text>
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Automatically set up the web pixel with the correct API URL and pixel key.
+                  This creates or updates the pixel extension in your Shopify store.
+                </Text>
+                <Box>
+                  <Button
+                    variant="primary"
+                    onClick={handleConfigurePixel}
+                    loading={isConfiguring}
+                    disabled={!pixelKey}
+                  >
+                    {currentPixelStatus === "configured" ? "Reconfigure Pixel" : "Configure Pixel"}
+                  </Button>
+                </Box>
+              </BlockStack>
+
               <Divider />
 
               <BlockStack gap="300">
@@ -112,7 +347,7 @@ export default function Settings() {
                   value={opalApiUrl}
                   readOnly
                   autoComplete="off"
-                  helpText="Enter this value in the Web Pixel extension settings in your theme editor."
+                  helpText="The Opal API endpoint used by the pixel for tracking events."
                 />
               </BlockStack>
 
@@ -159,18 +394,15 @@ export default function Settings() {
               </Text>
               <BlockStack gap="200">
                 <Text variant="bodyMd" as="p">
-                  <strong>1.</strong> Go to your Shopify Admin {"\u2192"} Online Store {"\u2192"} Themes {"\u2192"} Customize
+                  <strong>1.</strong> Click "Configure Pixel" above to automatically set up the web pixel with your credentials.
                 </Text>
                 <Text variant="bodyMd" as="p">
-                  <strong>2.</strong> Click App embeds in the left sidebar
-                </Text>
-                <Text variant="bodyMd" as="p">
-                  <strong>3.</strong> Enable "Opal A/B Testing"
-                </Text>
-                <Text variant="bodyMd" as="p">
-                  <strong>4.</strong> The Web Pixel settings (API URL and Pixel Key) are configured
-                  in the pixel extension settings. Go to Settings {"\u2192"} Customer events to verify
+                  <strong>2.</strong> Go to your Shopify Admin {"\u2192"} Settings {"\u2192"} Customer events to verify
                   the pixel is active.
+                </Text>
+                <Text variant="bodyMd" as="p">
+                  <strong>3.</strong> Create an A/B test from the Tests page — the pixel will automatically
+                  track views, add-to-carts, and conversions for tested products.
                 </Text>
               </BlockStack>
             </BlockStack>

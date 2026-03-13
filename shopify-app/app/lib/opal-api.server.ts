@@ -249,8 +249,7 @@ export async function ensurePixelKey(
   integrationId: string,
 ): Promise<string> {
   const data = await opalFetch<{ pixel_key: string }>(
-    `/v1/shopify-app/integrations/${integrationId}/pixel-key`,
-    { method: "POST" },
+    `/v1/ab-tests/pixel-key/${integrationId}`,
   );
   return data.pixel_key;
 }
