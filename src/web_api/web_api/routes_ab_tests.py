@@ -29,8 +29,11 @@ class CreateABTestIn(BaseModel):
     integration_id: str
     product_id: str
     product_title: str = ""
-    variant_a_job_item_id: str
-    variant_b_job_item_id: str
+    # Either job_item_ids (Opal processed images) or image_urls (e.g. Shopify CDN)
+    variant_a_job_item_id: str | None = None
+    variant_b_job_item_id: str | None = None
+    variant_a_image_url: str | None = None
+    variant_b_image_url: str | None = None
     variant_a_label: str = "Variant A"
     variant_b_label: str = "Variant B"
     original_image_id: str | None = None
@@ -47,13 +50,21 @@ async def create_test(
     if not integ:
         raise HTTPException(status_code=404, detail="Integration not found")
 
-    # Validate both job items exist and have output
-    item_a = get_job_item(body.variant_a_job_item_id)
-    item_b = get_job_item(body.variant_b_job_item_id)
-    if not item_a or not item_a.get("output_blob_path"):
-        raise HTTPException(status_code=400, detail="Variant A image not found or not processed")
-    if not item_b or not item_b.get("output_blob_path"):
-        raise HTTPException(status_code=400, detail="Variant B image not found or not processed")
+    # Each variant needs either a job_item_id or an image_url
+    has_a = body.variant_a_job_item_id or body.variant_a_image_url
+    has_b = body.variant_b_job_item_id or body.variant_b_image_url
+    if not has_a or not has_b:
+        raise HTTPException(status_code=400, detail="Both variants must have either a job_item_id or image_url")
+
+    # Validate job items if provided
+    if body.variant_a_job_item_id:
+        item_a = get_job_item(body.variant_a_job_item_id)
+        if not item_a or not item_a.get("output_blob_path"):
+            raise HTTPException(status_code=400, detail="Variant A image not found or not processed")
+    if body.variant_b_job_item_id:
+        item_b = get_job_item(body.variant_b_job_item_id)
+        if not item_b or not item_b.get("output_blob_path"):
+            raise HTTPException(status_code=400, detail="Variant B image not found or not processed")
 
     test = create_ab_test({
         "id": new_id("abtest"),
@@ -63,6 +74,8 @@ async def create_test(
         "product_title": body.product_title,
         "variant_a_job_item_id": body.variant_a_job_item_id,
         "variant_b_job_item_id": body.variant_b_job_item_id,
+        "variant_a_image_url": body.variant_a_image_url,
+        "variant_b_image_url": body.variant_b_image_url,
         "variant_a_label": body.variant_a_label,
         "variant_b_label": body.variant_b_label,
         "original_image_id": body.original_image_id,
@@ -272,17 +285,31 @@ async def get_metrics(
 
 async def _push_variant_to_store(test: dict, variant: str, user_id: str):
     """Push a variant image to the store as the product's primary image."""
-    item_id = test[f"variant_{variant}_job_item_id"]
-    item = get_job_item(item_id)
-    if not item or not item.get("output_blob_path"):
-        raise HTTPException(status_code=400, detail=f"Variant {variant} image not available")
+    import httpx
+
+    item_id = test.get(f"variant_{variant}_job_item_id")
+    image_url = test.get(f"variant_{variant}_image_url")
+
+    if item_id:
+        item = get_job_item(item_id)
+        if not item or not item.get("output_blob_path"):
+            raise HTTPException(status_code=400, detail=f"Variant {variant} image not available")
+        image_bytes = download_file("outputs", item["output_blob_path"])
+        filename = f"opal_ab_{variant}_{item['filename']}"
+    elif image_url:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(image_url)
+            resp.raise_for_status()
+            image_bytes = resp.content
+        # Extract filename from URL
+        url_path = image_url.split("?")[0].split("/")[-1]
+        filename = f"opal_ab_{variant}_{url_path}"
+    else:
+        raise HTTPException(status_code=400, detail=f"Variant {variant} has no image source")
 
     integ = get_integration_with_token(test["integration_id"], user_id)
     if not integ:
         raise HTTPException(status_code=404, detail="Integration not found")
-
-    image_bytes = download_file("outputs", item["output_blob_path"])
-    filename = f"opal_ab_{variant}_{item['filename']}"
 
     provider = integ["provider"]
     provider_str = provider.value if hasattr(provider, 'value') else str(provider)

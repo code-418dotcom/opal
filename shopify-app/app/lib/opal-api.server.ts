@@ -178,8 +178,10 @@ export async function createTest(data: {
   integration_id: string;
   product_id: string;
   product_title?: string;
-  variant_a_job_item_id: string;
-  variant_b_job_item_id: string;
+  variant_a_job_item_id?: string;
+  variant_b_job_item_id?: string;
+  variant_a_image_url?: string;
+  variant_b_image_url?: string;
   variant_a_label?: string;
   variant_b_label?: string;
   original_image_id?: string;

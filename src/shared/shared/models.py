@@ -333,6 +333,8 @@ class ABTest(Base):
     active_variant = Column(String, nullable=False, default='a')
     winner = Column(String, nullable=True)
     original_image_id = Column(String, nullable=True)
+    variant_a_image_url = Column(String, nullable=True)
+    variant_b_image_url = Column(String, nullable=True)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
