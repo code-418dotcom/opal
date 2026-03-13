@@ -12,6 +12,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import {
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
   useSubmit,
@@ -60,9 +61,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
+  const intent = formData.get("intent") as string;
 
+  // ── Fetch product images via Admin GraphQL ──
+  if (intent === "fetch_images") {
+    const productGid = formData.get("product_gid") as string;
+    if (!productGid) {
+      return json({ error: "Missing product ID" }, { status: 400 });
+    }
+
+    try {
+      const response = await admin.graphql(
+        `#graphql
+        query productImages($id: ID!) {
+          product(id: $id) {
+            images(first: 50) {
+              edges {
+                node {
+                  id
+                  url
+                  altText
+                  width
+                  height
+                }
+              }
+            }
+          }
+        }`,
+        { variables: { id: productGid } },
+      );
+      const body = await response.json();
+      const images = (body.data?.product?.images?.edges || []).map(
+        (edge: { node: { id: string; url: string; altText?: string } }) => ({
+          id: edge.node.id,
+          url: edge.node.url,
+          alt: edge.node.altText || "",
+        }),
+      );
+      return json({ images });
+    } catch (err) {
+      return json({ error: "Failed to fetch product images" }, { status: 500 });
+    }
+  }
+
+  // ── Create test ──
   const integrationId = formData.get("integration_id") as string;
   const productId = formData.get("product_id") as string;
   const productTitle = formData.get("product_title") as string;
@@ -120,9 +164,15 @@ export default function CreateTest() {
   // Product selection state
   const [selectedProduct, setSelectedProduct] = useState<{
     id: string;
+    gid: string;
     title: string;
-    images: ProductImage[];
+    thumbnail: string;
   } | null>(null);
+
+  // Images fetched via Admin API (not from Resource Picker)
+  const imageFetcher = useFetcher<{ images?: ProductImage[]; error?: string }>();
+  const productImages: ProductImage[] = imageFetcher.data?.images || [];
+  const isLoadingImages = imageFetcher.state === "submitting" || imageFetcher.state === "loading";
 
   // Variant selection — stores the image URL
   const [variantA, setVariantA] = useState<ProductImage | null>(null);
@@ -145,27 +195,32 @@ export default function CreateTest() {
 
       if (selected && selected.length > 0) {
         const product = selected[0];
-        const productGid = product.id;
+        const productGid = product.id; // "gid://shopify/Product/123"
         const numericId = productGid.split("/").pop() || productGid;
+        const firstImage = product.images?.[0];
 
         setSelectedProduct({
           id: numericId,
+          gid: productGid,
           title: product.title,
-          images: (product.images || []).map((img: { id?: string; originalSrc?: string; altText?: string }) => ({
-            id: img.id || "",
-            url: img.originalSrc || "",
-            alt: img.altText || "",
-          })),
+          thumbnail: firstImage?.originalSrc || "",
         });
+
         // Reset variant selections when product changes
         setVariantA(null);
         setVariantB(null);
         setSelectingFor(null);
+
+        // Fetch all images via Admin API
+        const fd = new FormData();
+        fd.set("intent", "fetch_images");
+        fd.set("product_gid", productGid);
+        imageFetcher.submit(fd, { method: "post" });
       }
     } catch {
       // User dismissed the picker
     }
-  }, [shopify]);
+  }, [shopify, imageFetcher]);
 
   const handleImageClick = useCallback(
     (img: ProductImage) => {
@@ -231,9 +286,9 @@ export default function CreateTest() {
               </Text>
               {selectedProduct ? (
                 <InlineStack gap="400" align="start" blockAlign="center">
-                  {selectedProduct.images[0] && (
+                  {selectedProduct.thumbnail && (
                     <Thumbnail
-                      source={selectedProduct.images[0].url}
+                      source={selectedProduct.thumbnail}
                       alt={selectedProduct.title}
                       size="large"
                     />
@@ -243,7 +298,7 @@ export default function CreateTest() {
                       {selectedProduct.title}
                     </Text>
                     <Text variant="bodySm" as="span" tone="subdued">
-                      {selectedProduct.images.length} image(s) available
+                      {isLoadingImages ? "Loading images..." : `${productImages.length} image(s) available`}
                     </Text>
                     <Button onClick={handleProductPicker} size="slim">
                       Change product
@@ -298,7 +353,9 @@ export default function CreateTest() {
                 )}
 
                 {/* Image grid */}
-                {selectedProduct.images.length > 0 ? (
+                {isLoadingImages ? (
+                  <Text as="p" tone="subdued">Loading product images...</Text>
+                ) : productImages.length > 0 ? (
                   <div
                     style={{
                       display: "grid",
@@ -306,7 +363,7 @@ export default function CreateTest() {
                       gap: "12px",
                     }}
                   >
-                    {selectedProduct.images.map((img) => {
+                    {productImages.map((img) => {
                       const isA = variantA?.url === img.url;
                       const isB = variantB?.url === img.url;
                       const isSelected = isA || isB;

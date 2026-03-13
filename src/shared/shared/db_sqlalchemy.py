@@ -2013,6 +2013,8 @@ def _ab_test_to_dict(t: ABTest) -> Dict[str, Any]:
         "active_variant": t.active_variant,
         "winner": t.winner,
         "original_image_id": t.original_image_id,
+        "variant_a_image_url": t.variant_a_image_url,
+        "variant_b_image_url": t.variant_b_image_url,
         "tracking_mode": t.tracking_mode or "manual",
         "auto_conclude": bool(t.auto_conclude),
         "started_at": t.started_at.isoformat() if t.started_at else None,
