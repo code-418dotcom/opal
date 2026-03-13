@@ -1,8 +1,8 @@
 FROM node:18-slim AS builder
 WORKDIR /app
-COPY package*.json ./
+COPY shopify-app/package*.json ./
 RUN npm ci
-COPY . .
+COPY shopify-app/ .
 RUN npm run build
 
 FROM node:18-slim
