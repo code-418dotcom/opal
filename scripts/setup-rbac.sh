@@ -34,6 +34,11 @@ APPS=(
   "opal-export-worker-${ENV_NAME}"
 )
 
+# Apps that only need AcrPull (no storage or service bus access)
+ACR_ONLY_APPS=(
+  "opal-shopify-app-${ENV_NAME}"
+)
+
 # Legacy workers (deactivated — kept for rollback)
 # "opal-orchestrator-${ENV_NAME}"
 # "opal-bg-removal-worker-${ENV_NAME}"
@@ -89,6 +94,40 @@ for APP in "${APPS[@]}"; do
       fi
     fi
   done
+  echo ""
+done
+
+# ACR-only apps (e.g., Shopify app — no storage or service bus needed)
+for APP in "${ACR_ONLY_APPS[@]}"; do
+  PID=$(az containerapp show -g "${RG_NAME}" -n "${APP}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+  if [ -z "${PID}" ]; then
+    echo "WARNING: ${APP} has no system identity — skipping (ensure app exists first)"
+    continue
+  fi
+  echo "--- ${APP} (principal: ${PID}) [AcrPull only]"
+
+  TOTAL=$((TOTAL + 1))
+  COUNT=$(az role assignment list \
+    --scope "${ACR_ID}" \
+    --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
+    -o tsv 2>/dev/null || echo "0")
+
+  if [ "${COUNT:-0}" -gt 0 ]; then
+    echo "  ✓ AcrPull (exists)"
+    EXISTED=$((EXISTED + 1))
+  else
+    echo "  + Assigning AcrPull..."
+    if az role assignment create \
+      --assignee-object-id "${PID}" \
+      --assignee-principal-type ServicePrincipal \
+      --role "AcrPull" \
+      --scope "${ACR_ID}" -o none 2>&1; then
+      CREATED=$((CREATED + 1))
+    else
+      echo "  ✗ FAILED to assign AcrPull"
+      FAILED=$((FAILED + 1))
+    fi
+  fi
   echo ""
 done
 

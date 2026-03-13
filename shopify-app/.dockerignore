@@ -1,0 +1,7 @@
+node_modules
+.shopify
+*.sqlite
+build
+dist
+extensions/*/node_modules
+extensions/*/dist

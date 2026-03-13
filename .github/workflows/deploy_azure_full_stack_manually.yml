@@ -142,6 +142,9 @@ jobs:
           - service: upscale_worker
             image: opal/upscale-worker
             dockerfile: src/upscale_worker/Dockerfile
+          - service: shopify_app
+            image: opal/shopify-app
+            dockerfile: shopify-app/Dockerfile
 
     steps:
       - name: Checkout code
@@ -495,6 +498,7 @@ jobs:
           ensure_app_exists "opal-bg-removal-worker-${ENV_NAME}" "none"    0
           ensure_app_exists "opal-scene-worker-${ENV_NAME}"     "none"     0
           ensure_app_exists "opal-upscale-worker-${ENV_NAME}"   "none"     0
+          ensure_app_exists "opal-shopify-app-${ENV_NAME}"     "external" 3000
 
           # Deploy images.
           # ML worker images (bg-removal, scene, upscale) carry PyTorch + large model
@@ -507,6 +511,22 @@ jobs:
           deploy_image "opal-bg-removal-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/bg-removal-worker:${IMAGE_TAG}" 240
           deploy_image "opal-scene-worker-${ENV_NAME}"      "${ACR_LOGIN}/opal/scene-worker:${IMAGE_TAG}" 240
           deploy_image "opal-upscale-worker-${ENV_NAME}"    "${ACR_LOGIN}/opal/upscale-worker:${IMAGE_TAG}" 240
+
+          # Shopify app uses its own env vars (Node.js app, not Python backend)
+          SHOPIFY_APP="opal-shopify-app-${ENV_NAME}"
+          SHOPIFY_ENV_VARS=(
+            "NODE_ENV=production"
+            "SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}"
+            "SHOPIFY_API_SECRET=${{ secrets.SHOPIFY_API_SECRET }}"
+            "OPAL_API_URL=https://opal-web-api-${ENV_NAME}.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io"
+            "OPAL_SERVICE_KEY=${{ secrets.OPAL_SERVICE_KEY }}"
+          )
+          echo "Deploying ${SHOPIFY_APP} -> ${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}"
+          az containerapp update -g "${RG_NAME}" -n "${SHOPIFY_APP}" \
+            --image "${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}" \
+            --set-env-vars "${SHOPIFY_ENV_VARS[@]}" \
+            --min-replicas 0 --max-replicas 2 >/dev/null
+          wait_ready "${SHOPIFY_APP}"
 
           echo "✅ All Container Apps deployed successfully"
 

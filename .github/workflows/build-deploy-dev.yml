@@ -7,6 +7,7 @@ on:
     paths:
       - "src/**"
       - "migrations/**"
+      - "shopify-app/**"
 
 permissions:
   id-token: write
@@ -29,6 +30,7 @@ jobs:
       pipeline_worker: ${{ steps.filter.outputs.pipeline_worker }}
       billing_service: ${{ steps.filter.outputs.billing_service }}
       aml_sd_stub: ${{ steps.filter.outputs.aml_sd_stub }}
+      shopify_app: ${{ steps.filter.outputs.shopify_app }}
     steps:
       - uses: actions/checkout@v4
       - name: Paths filter
@@ -48,6 +50,8 @@ jobs:
               - 'src/billing_service/**'
             aml_sd_stub:
               - 'src/aml_sd_stub/**'
+            shopify_app:
+              - 'shopify-app/**'
 
   build_and_deploy:
     name: Build + Deploy (dev)
@@ -82,6 +86,7 @@ jobs:
           PIPELINE="${{ needs.changes.outputs.pipeline_worker }}"
           BILLING="${{ needs.changes.outputs.billing_service }}"
           AML="${{ needs.changes.outputs.aml_sd_stub }}"
+          SHOPIFY_APP="${{ needs.changes.outputs.shopify_app }}"
 
           # If shared changed, everything rebuilds/redeploys
           if [ "${SHARED}" = "true" ]; then
@@ -97,6 +102,7 @@ jobs:
           echo "pipeline_worker=${PIPELINE}" >> "$GITHUB_OUTPUT"
           echo "billing_service=${BILLING}" >> "$GITHUB_OUTPUT"
           echo "aml_sd_stub=${AML}" >> "$GITHUB_OUTPUT"
+          echo "shopify_app=${SHOPIFY_APP}" >> "$GITHUB_OUTPUT"
 
       - name: Discover infra in Azure (dev RG)
         run: |
@@ -212,6 +218,9 @@ jobs:
           if [ "${{ steps.decide.outputs.aml_sd_stub }}" = "true" ]; then
             build_push "opal/aml-sd-stub" "src/aml_sd_stub/Dockerfile"
           fi
+          if [ "${{ steps.decide.outputs.shopify_app }}" = "true" ]; then
+            build_push "opal/shopify-app" "shopify-app/Dockerfile"
+          fi
 
       - name: Azure Login (refresh after build)
         uses: azure/login@v2
@@ -231,6 +240,7 @@ jobs:
             "opal-billing-service-${ENV_NAME}"
             "opal-pipeline-worker-${ENV_NAME}"
             "opal-export-worker-${ENV_NAME}"
+            "opal-shopify-app-${ENV_NAME}"
           )
 
           for APP in "${APPS[@]}"; do
@@ -358,6 +368,23 @@ jobs:
 
           [ "${{ steps.decide.outputs.export_worker }}" = "true" ] && \
             deploy_image "${EXPORT}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}"
+
+          # Shopify app has its own env vars (Node.js app, not Python)
+          if [ "${{ steps.decide.outputs.shopify_app }}" = "true" ]; then
+            SHOPIFY="opal-shopify-app-${ENV_NAME}"
+            SHOPIFY_ENV_VARS=(
+              "NODE_ENV=production"
+              "SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}"
+              "SHOPIFY_API_SECRET=${{ secrets.SHOPIFY_API_SECRET }}"
+              "OPAL_API_URL=https://opal-web-api-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io"
+              "OPAL_SERVICE_KEY=${{ secrets.OPAL_SERVICE_KEY }}"
+            )
+            echo "Deploying ${SHOPIFY} -> ${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}"
+            az containerapp update -g "${RG_NAME}" -n "${SHOPIFY}" \
+              --image "${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}" \
+              --set-env-vars "${SHOPIFY_ENV_VARS[@]}" >/dev/null
+            wait_ready "${SHOPIFY}"
+          fi
 
           echo "Deployments complete."
 
