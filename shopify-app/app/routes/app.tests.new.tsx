@@ -32,6 +32,7 @@ import {
   Box,
   Divider,
 } from "@shopify/polaris";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useState } from "react";
 
 import { authenticate } from "~/shopify.server";
@@ -117,14 +118,35 @@ export default function CreateTest() {
   const [variantALabel, setVariantALabel] = useState("Variant A");
   const [variantBLabel, setVariantBLabel] = useState("Variant B");
 
+  const shopify = useAppBridge();
+
   const handleProductPicker = useCallback(async () => {
-    // In a real Shopify embedded app, this uses the Resource Picker:
-    // const selected = await shopify.resourcePicker({ type: "product" });
-    // For now, we show a placeholder — the Resource Picker only works
-    // when running inside Shopify Admin via `shopify app dev`.
-    //
-    // This will be connected when testing on a dev store.
-  }, []);
+    try {
+      const selected = await shopify.resourcePicker({
+        type: "product",
+        multiple: false,
+        action: "select",
+      });
+
+      if (selected && selected.length > 0) {
+        const product = selected[0];
+        const productGid = product.id; // e.g. "gid://shopify/Product/123"
+        const numericId = productGid.split("/").pop() || productGid;
+
+        setSelectedProduct({
+          id: numericId,
+          title: product.title,
+          images: (product.images || []).map((img: { id?: string; originalSrc?: string; altText?: string }) => ({
+            id: img.id || "",
+            url: img.originalSrc || "",
+            alt: img.altText || "",
+          })),
+        });
+      }
+    } catch {
+      // User dismissed the picker
+    }
+  }, [shopify]);
 
   const handleSubmit = useCallback(() => {
     if (!selectedProduct) return;

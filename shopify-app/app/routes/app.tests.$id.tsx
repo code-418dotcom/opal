@@ -37,6 +37,7 @@ import { useCallback, useEffect, useState } from "react";
 import { authenticate } from "~/shopify.server";
 import {
   getTest,
+  startTest,
   swapVariant,
   concludeTest,
   cancelTest,
@@ -65,6 +66,10 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 
   try {
     switch (intent) {
+      case "start":
+        await startTest(testId);
+        return json({ success: "Test started. Variant A is now live on your storefront." });
+
       case "swap":
         await swapVariant(testId);
         return json({ success: "Variant swapped successfully." });
@@ -125,12 +130,19 @@ export default function TestDetail() {
   const significance: Significance | undefined = test.significance;
 
   const badge = STATUS_BADGE[test.status] || { tone: undefined, label: test.status };
+  const isDraft = test.status === "created";
   const isRunning = test.status === "running";
   const isConcluded = test.status === "concluded";
 
   const daysSinceStart = test.started_at
     ? Math.ceil((Date.now() - new Date(test.started_at).getTime()) / 86_400_000)
     : 0;
+
+  const handleStart = useCallback(() => {
+    const formData = new FormData();
+    formData.set("intent", "start");
+    submit(formData, { method: "post" });
+  }, [submit]);
 
   const handleSwap = useCallback(() => {
     const formData = new FormData();
@@ -216,7 +228,38 @@ export default function TestDetail() {
           <SignificanceGauge significance={significance} />
         </Layout.Section>
 
-        {/* Actions */}
+        {/* Actions — Draft */}
+        {isDraft && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="300">
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Starting the test will push Variant A to your storefront and
+                  begin tracking views, add-to-carts, and conversions.
+                </Text>
+                <InlineStack align="end" gap="300">
+                  <Button
+                    onClick={() => setShowCancelModal(true)}
+                    tone="critical"
+                    disabled={isActing}
+                  >
+                    Delete test
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleStart}
+                    loading={isActing}
+                    disabled={isActing}
+                  >
+                    Start test
+                  </Button>
+                </InlineStack>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
+
+        {/* Actions — Running */}
         {isRunning && (
           <Layout.Section>
             <Card>

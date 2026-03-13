@@ -2013,6 +2013,8 @@ def _ab_test_to_dict(t: ABTest) -> Dict[str, Any]:
         "active_variant": t.active_variant,
         "winner": t.winner,
         "original_image_id": t.original_image_id,
+        "tracking_mode": t.tracking_mode or "manual",
+        "auto_conclude": bool(t.auto_conclude),
         "started_at": t.started_at.isoformat() if t.started_at else None,
         "ended_at": t.ended_at.isoformat() if t.ended_at else None,
         "created_at": t.created_at.isoformat() if t.created_at else None,
@@ -2300,7 +2302,7 @@ def find_running_test(integration_id: str, product_id: str) -> Optional[Dict[str
         row = session.execute(
             text("""
                 SELECT id, user_id, integration_id, product_id, active_variant,
-                       status, tracking_mode
+                       status, tracking_mode, auto_conclude
                 FROM ab_tests
                 WHERE integration_id = :iid
                   AND product_id = :pid

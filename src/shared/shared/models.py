@@ -230,6 +230,7 @@ class Integration(Base):
     scopes = Column(String, nullable=True)
     status = Column(SQLEnum(IntegrationStatus), nullable=False, default=IntegrationStatus.active)
     provider_metadata = Column(JSON, nullable=True)
+    pixel_key = Column(String(64), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -338,6 +339,7 @@ class ABTest(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tracking_mode = Column(String, nullable=False, default='manual')  # 'manual' or 'pixel'
+    auto_conclude = Column(Boolean, nullable=False, default=False)
 
     metrics = relationship('ABTestMetric', back_populates='ab_test', lazy='select')
 

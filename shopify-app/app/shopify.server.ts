@@ -8,6 +8,7 @@ import {
   shopifyApp,
   LATEST_API_VERSION,
 } from "@shopify/shopify-app-remix/server";
+import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY!,
@@ -21,7 +22,8 @@ const shopify = shopifyApp({
     "read_metaobjects",
     "write_metaobjects",
   ],
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  appUrl: process.env.SHOPIFY_APP_URL || process.env.HOST || "https://localhost",
+  sessionStorage: new SQLiteSessionStorage("sessions.sqlite"),
   authPathPrefix: "/auth",
   distribution: AppDistribution.AppStore,
   future: {

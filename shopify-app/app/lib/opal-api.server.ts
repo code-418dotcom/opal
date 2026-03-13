@@ -255,4 +255,33 @@ export async function ensurePixelKey(
   return data.pixel_key;
 }
 
+/**
+ * Get statistical significance data for a test.
+ */
+export async function getSignificance(testId: string): Promise<Significance> {
+  return opalFetch<Significance>(`/v1/ab-tests/${testId}/significance`);
+}
+
+/**
+ * List all integrations for the service account.
+ */
+export async function listIntegrations(): Promise<Integration[]> {
+  const data = await opalFetch<{ integrations: Integration[] }>(
+    "/v1/integrations",
+  );
+  return data.integrations || [];
+}
+
+/**
+ * List products from a connected store integration.
+ */
+export async function listProducts(
+  integrationId: string,
+): Promise<Array<{ id: string; title: string; images: Array<{ id: string; src: string }> }>> {
+  const data = await opalFetch<{
+    products: Array<{ id: string; title: string; images: Array<{ id: string; src: string }> }>;
+  }>(`/v1/integrations/${integrationId}/products`);
+  return data.products || [];
+}
+
 export { OpalApiError };

@@ -1,10 +1,12 @@
 /**
  * App layout — wraps all /app/* routes with Shopify AppProvider + Polaris.
  * Handles authentication check on every navigation.
+ * Provides NavMenu for embedded app sidebar navigation.
  */
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
@@ -24,6 +26,11 @@ export default function AppLayout() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <PolarisAppProvider i18n={enTranslations}>
+        <NavMenu>
+          <Link to="/app" rel="home">A/B Tests</Link>
+          <Link to="/app/tests/new">Create Test</Link>
+          <Link to="/app/settings">Settings</Link>
+        </NavMenu>
         <Outlet />
       </PolarisAppProvider>
     </AppProvider>

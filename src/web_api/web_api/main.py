@@ -13,7 +13,7 @@ from web_api.routes_billing import router as billing_router, public_router as bi
 from web_api.routes_integrations import router as integrations_router, oauth_callback_router, gdpr_router
 from web_api.routes_catalog import router as catalog_router
 from web_api.routes_ab_tests import router as ab_tests_router
-from web_api.routes_pixel_events import router as pixel_events_router
+from web_api.routes_pixel_events import router as pixel_events_router, pixel_key_router
 from web_api.routes_benchmarks import router as benchmarks_router
 from web_api.routes_admin import router as admin_router
 from web_api.routes_gdpr import router as gdpr_privacy_router, public_router as gdpr_public_router
@@ -46,6 +46,7 @@ app.include_router(integrations_router, dependencies=[Depends(get_current_user)]
 app.include_router(catalog_router, dependencies=[Depends(get_current_user)])
 app.include_router(ab_tests_router, dependencies=[Depends(get_current_user)])
 app.include_router(pixel_events_router)  # Pixel endpoint uses X-Pixel-Key header, no JWT
+app.include_router(pixel_key_router, dependencies=[Depends(get_current_user)])  # Pixel key mgmt (auth required)
 app.include_router(benchmarks_router, dependencies=[Depends(get_current_user)])
 app.include_router(gdpr_privacy_router, dependencies=[Depends(get_current_user)])  # GDPR user data rights
 app.include_router(api_keys_router, prefix="/v1", dependencies=[Depends(get_current_user)])

@@ -8,17 +8,20 @@ import math
 from datetime import datetime
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from shared.db_sqlalchemy import (
     get_integration_by_pixel_key,
+    get_integration,
+    ensure_pixel_key,
     find_running_test,
     get_active_variant_at,
     increment_ab_test_metric,
     get_ab_test_aggregated_metrics,
     update_ab_test,
 )
+from web_api.auth import get_current_user
 
 LOG = logging.getLogger(__name__)
 
@@ -44,7 +47,6 @@ class PixelEventsIn(BaseModel):
 
 @router.post("/pixel-events", status_code=202)
 async def receive_pixel_events(
-    request: Request,
     body: PixelEventsIn,
     x_pixel_key: str = Header(..., alias="X-Pixel-Key"),
 ):
@@ -55,9 +57,6 @@ async def receive_pixel_events(
 
     Returns 202 Accepted (fire-and-forget from pixel's perspective).
     """
-    from web_api.rate_limit import check_ip_rate_limit
-    check_ip_rate_limit(request, limit=120)  # higher limit for pixel traffic
-
     # 1. Validate pixel key → find integration
     integration = get_integration_by_pixel_key(x_pixel_key)
     if not integration:
@@ -130,7 +129,7 @@ def _check_auto_conclude_batch(integration_id: str, events: list[PixelEvent]) ->
 
     for product_id in product_ids:
         test = find_running_test(integration_id, product_id)
-        if not test or test.get("tracking_mode") != "pixel":
+        if not test or not test.get("auto_conclude"):
             continue
 
         aggregated = get_ab_test_aggregated_metrics(test["id"])
@@ -192,3 +191,21 @@ def _compute_significance_quick(aggregated: dict) -> dict:
 
 def _normal_cdf(x: float) -> float:
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+# ── Pixel key management (auth-protected) ────────────────────────────
+
+pixel_key_router = APIRouter(prefix="/v1/ab-tests", tags=["ab-tests-pixel"])
+
+
+@pixel_key_router.get("/pixel-key/{integration_id}")
+async def get_pixel_key(
+    integration_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get or create a pixel key for an integration."""
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    key = ensure_pixel_key(integration_id)
+    return {"pixel_key": key, "integration_id": integration_id}
