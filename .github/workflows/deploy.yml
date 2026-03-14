@@ -391,9 +391,11 @@ jobs:
               az containerapp registry set -g "${RG}" -n "${NAME}" \
                 --server "${ACR_LOGIN}" --identity system >/dev/null 2>&1 || true
               sleep 15
-              STATE=$(az containerapp show -g "${RG}" -n "${NAME}" \
+              local STATE=$(az containerapp show -g "${RG}" -n "${NAME}" \
                 --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
-              [ "${STATE}" != "Failed" ] && return 0
+              if [ "${STATE}" = "Succeeded" ] || [ "${STATE}" = "InProgress" ]; then
+                return 0
+              fi
               sleep 30
             done
           }
