@@ -1040,6 +1040,42 @@ def get_integration(integration_id: str, user_id: str) -> Optional[Dict[str, Any
         return _integration_to_dict(i) if i else None
 
 
+def get_integration_ga_config(integration_id: str) -> Optional[Dict[str, str]]:
+    """Get GA4 Measurement Protocol config from integration's provider_metadata."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(Integration.id == integration_id).first()
+        if not i or not i.provider_metadata:
+            return None
+        meta = i.provider_metadata
+        mid = meta.get("ga_measurement_id")
+        secret = meta.get("ga_api_secret")
+        if mid and secret:
+            return {"ga_measurement_id": mid, "ga_api_secret": secret}
+        return None
+
+
+def set_integration_ga_config(
+    integration_id: str, measurement_id: Optional[str], api_secret: Optional[str],
+) -> Dict[str, Any]:
+    """Set or clear GA4 config in integration's provider_metadata."""
+    with SessionLocal() as session:
+        i = session.query(Integration).filter(Integration.id == integration_id).first()
+        if not i:
+            raise ValueError("Integration not found")
+        meta = dict(i.provider_metadata or {})
+        if measurement_id and api_secret:
+            meta["ga_measurement_id"] = measurement_id
+            meta["ga_api_secret"] = api_secret
+        else:
+            meta.pop("ga_measurement_id", None)
+            meta.pop("ga_api_secret", None)
+        i.provider_metadata = meta
+        i.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(i)
+        return _integration_to_dict(i)
+
+
 def get_integration_by_store(user_id: str, provider: str, store_url: str) -> Optional[Dict[str, Any]]:
     """Get integration by user + provider + store URL."""
     with SessionLocal() as session:
@@ -2256,7 +2292,7 @@ def get_integration_by_pixel_key(pixel_key: str) -> Optional[Dict[str, Any]]:
     with SessionLocal() as session:
         row = session.execute(
             text("""
-                SELECT id, user_id, provider, store_url, status, pixel_key
+                SELECT id, user_id, provider, store_url, status, pixel_key, provider_metadata
                 FROM integrations
                 WHERE pixel_key = :pk AND status = 'active'
             """),

@@ -326,4 +326,31 @@ export async function updateEventLimit(
   });
 }
 
+/**
+ * Get GA4 Measurement Protocol config for an integration.
+ */
+export async function getGAConfig(
+  integrationId: string,
+): Promise<{ configured: boolean; ga_measurement_id: string | null; ga_api_secret_set: boolean }> {
+  return opalFetch(`/v1/ab-tests/ga-config/${integrationId}`);
+}
+
+/**
+ * Set or clear GA4 Measurement Protocol config for an integration.
+ * Pass null values to clear.
+ */
+export async function updateGAConfig(
+  integrationId: string,
+  measurementId: string | null,
+  apiSecret: string | null,
+): Promise<{ ok: boolean; configured: boolean }> {
+  return opalFetch(`/v1/ab-tests/ga-config/${integrationId}`, {
+    method: "PUT",
+    body: {
+      ga_measurement_id: measurementId,
+      ga_api_secret: apiSecret,
+    },
+  });
+}
+
 export { OpalApiError };

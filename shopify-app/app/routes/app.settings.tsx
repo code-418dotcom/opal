@@ -21,12 +21,13 @@ import {
 import { useCallback, useState, useEffect } from "react";
 
 import { authenticate } from "~/shopify.server";
-import { getIntegrationByShop, ensurePixelKey } from "~/lib/opal-api.server";
+import { getIntegrationByShop, ensurePixelKey, getGAConfig, updateGAConfig } from "~/lib/opal-api.server";
+import { getEntitlements } from "~/lib/entitlements.server";
 
 const OPAL_API_URL = process.env.OPAL_API_URL || "https://dev.opaloptics.com";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, billing } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const integration = await getIntegrationByShop(shopDomain);
@@ -38,6 +39,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shopDomain,
       opalApiUrl: OPAL_API_URL,
       pixelStatus: "not_connected" as const,
+      gaConfigured: false,
+      gaMeasurementId: null as string | null,
+      tier: "free" as const,
     });
   }
 
@@ -80,6 +84,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pixelStatus = "unknown";
   }
 
+  // Get GA4 config and entitlements
+  let gaConfigured = false;
+  let gaMeasurementId: string | null = null;
+  let tier: "free" | "pro" | "unlimited" = "free";
+
+  try {
+    const [gaConfig, entitlements] = await Promise.all([
+      getGAConfig(integration.id),
+      getEntitlements(billing, integration.id),
+    ]);
+    gaConfigured = gaConfig.configured;
+    gaMeasurementId = gaConfig.ga_measurement_id;
+    tier = entitlements.tier;
+  } catch {
+    // Non-critical — defaults are fine
+  }
+
   return json({
     hasIntegration: true,
     pixelKey,
@@ -87,6 +108,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopDomain,
     opalApiUrl: OPAL_API_URL,
     pixelStatus,
+    gaConfigured,
+    gaMeasurementId,
+    tier,
   });
 };
 
@@ -95,6 +119,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const shopDomain = session.shop;
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "save_ga_config") {
+    const integration = await getIntegrationByShop(shopDomain);
+    if (!integration) {
+      return json({ ok: false, error: "Store not connected" }, { status: 400 });
+    }
+    const measurementId = formData.get("ga_measurement_id") as string | null;
+    const apiSecret = formData.get("ga_api_secret") as string | null;
+    try {
+      const result = await updateGAConfig(integration.id, measurementId || null, apiSecret || null);
+      return json({ ok: true, gaAction: result.configured ? "saved" : "cleared" });
+    } catch (err) {
+      return json({ ok: false, error: `Failed to save GA config: ${err instanceof Error ? err.message : "Unknown"}` }, { status: 500 });
+    }
+  }
 
   if (intent !== "configure_pixel") {
     return json({ ok: false, error: "Unknown action" }, { status: 400 });
@@ -223,8 +262,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Settings() {
-  const { hasIntegration, pixelKey, integrationId, shopDomain, opalApiUrl, pixelStatus } =
-    useLoaderData<typeof loader>();
+  const {
+    hasIntegration, pixelKey, integrationId, shopDomain, opalApiUrl, pixelStatus,
+    gaConfigured, gaMeasurementId, tier,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
   const navigation = useNavigation();
@@ -234,8 +275,15 @@ export default function Settings() {
   const [copied, setCopied] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
 
+  // GA config state
+  const [gaMid, setGaMid] = useState(gaMeasurementId || "");
+  const [gaSecret, setGaSecret] = useState("");
+
   const isConfiguring = navigation.state === "submitting" &&
     navigation.formData?.get("intent") === "configure_pixel";
+
+  const isSavingGA = navigation.state === "submitting" &&
+    navigation.formData?.get("intent") === "save_ga_config";
 
   // Show success/error banner after action completes
   useEffect(() => {
@@ -256,6 +304,24 @@ export default function Settings() {
     const formData = new FormData();
     formData.set("intent", "configure_pixel");
     submit(formData, { method: "post" });
+  }, [submit]);
+
+  const handleSaveGA = useCallback(() => {
+    const formData = new FormData();
+    formData.set("intent", "save_ga_config");
+    formData.set("ga_measurement_id", gaMid);
+    formData.set("ga_api_secret", gaSecret);
+    submit(formData, { method: "post" });
+  }, [submit, gaMid, gaSecret]);
+
+  const handleClearGA = useCallback(() => {
+    const formData = new FormData();
+    formData.set("intent", "save_ga_config");
+    formData.set("ga_measurement_id", "");
+    formData.set("ga_api_secret", "");
+    submit(formData, { method: "post" });
+    setGaMid("");
+    setGaSecret("");
   }, [submit]);
 
   if (!hasIntegration) {
@@ -286,8 +352,11 @@ export default function Settings() {
                 tone="success"
                 onDismiss={() => setShowBanner(false)}
               >
-                Pixel {"action" in actionData && actionData.action === "created" ? "created" : "updated"} successfully.
-                Your storefront is now tracking A/B test events automatically.
+                {"gaAction" in actionData
+                  ? (actionData.gaAction === "saved"
+                    ? "Google Analytics connected. Events will be relayed to your GA4 property."
+                    : "Google Analytics disconnected.")
+                  : `Pixel ${"action" in actionData && actionData.action === "created" ? "created" : "updated"} successfully. Your storefront is now tracking A/B test events automatically.`}
               </Banner>
             ) : (
               <Banner
@@ -406,6 +475,78 @@ export default function Settings() {
                   track views, add-to-carts, and conversions for tested products.
                 </Text>
               </BlockStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Google Analytics (Unlimited tier only) */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <Text variant="headingMd" as="h2">
+                  Google Analytics
+                </Text>
+                {tier === "unlimited" ? (
+                  <Badge tone={gaConfigured || (actionData && "gaAction" in actionData && actionData.gaAction === "saved") ? "success" : "info"}>
+                    {gaConfigured || (actionData && "gaAction" in actionData && actionData.gaAction === "saved") ? "Connected" : "Not connected"}
+                  </Badge>
+                ) : (
+                  <Badge tone="warning">Unlimited plan</Badge>
+                )}
+              </InlineStack>
+
+              {tier !== "unlimited" ? (
+                <Banner tone="info">
+                  Upgrade to the Unlimited plan to relay A/B test events to your Google Analytics 4 property.
+                  This lets you analyze test performance alongside your other store analytics.
+                </Banner>
+              ) : (
+                <BlockStack gap="300">
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Connect your GA4 property to automatically relay A/B test events
+                    (product views, add-to-carts, conversions) to Google Analytics.
+                    No personal customer data is sent.
+                  </Text>
+                  <Divider />
+                  <TextField
+                    label="Measurement ID"
+                    value={gaMid}
+                    onChange={setGaMid}
+                    autoComplete="off"
+                    placeholder="G-XXXXXXXXXX"
+                    helpText="Find this in GA4 → Admin → Data Streams → your stream."
+                  />
+                  <TextField
+                    label="API Secret"
+                    value={gaSecret}
+                    onChange={setGaSecret}
+                    autoComplete="off"
+                    type="password"
+                    placeholder={gaConfigured ? "••••••••  (secret is set, enter new value to update)" : "Enter your Measurement Protocol API secret"}
+                    helpText="Create one in GA4 → Admin → Data Streams → Measurement Protocol API secrets."
+                  />
+                  <InlineStack gap="200">
+                    <Button
+                      variant="primary"
+                      onClick={handleSaveGA}
+                      loading={isSavingGA}
+                      disabled={!gaMid || (!gaSecret && !gaConfigured)}
+                    >
+                      {gaConfigured ? "Update" : "Connect"}
+                    </Button>
+                    {gaConfigured && (
+                      <Button
+                        tone="critical"
+                        onClick={handleClearGA}
+                        disabled={isSavingGA}
+                      >
+                        Disconnect
+                      </Button>
+                    )}
+                  </InlineStack>
+                </BlockStack>
+              )}
             </BlockStack>
           </Card>
         </Layout.Section>

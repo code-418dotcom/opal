@@ -8,6 +8,7 @@ import math
 from datetime import datetime
 from typing import Literal, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,8 @@ from shared.db_sqlalchemy import (
     get_monthly_view_count,
     get_integration_event_limit,
     update_integration_event_limit,
+    get_integration_ga_config,
+    set_integration_ga_config,
 )
 from web_api.auth import get_current_user
 
@@ -125,6 +128,14 @@ async def receive_pixel_events(
     # 3. Check auto-conclude for any tests that received events
     # (lightweight — only runs significance check, not a full background job)
     _check_auto_conclude_batch(integration_id, body.events)
+
+    # 4. Relay events to GA4 if configured (fire-and-forget, non-blocking)
+    ga_config = integration.get("provider_metadata") or {}
+    if ga_config.get("ga_measurement_id") and ga_config.get("ga_api_secret"):
+        try:
+            await _relay_events_to_ga4(ga_config, body.events, body.shop_domain)
+        except Exception:
+            LOG.warning("GA4 relay failed for integration=%s", integration_id, exc_info=True)
 
     LOG.info("Pixel events: integration=%s processed=%d skipped=%d",
              integration_id, processed, skipped)
@@ -264,3 +275,109 @@ async def get_view_usage(
         "monthly_views": monthly_views,
         "monthly_limit": monthly_limit,
     }
+
+
+# ── GA4 Measurement Protocol relay ──────────────────────────────────
+
+GA4_MP_URL = "https://www.google-analytics.com/mp/collect"
+
+# Map Opal event types to GA4 event names
+GA4_EVENT_MAP = {
+    "view": "view_item",
+    "add_to_cart": "add_to_cart",
+    "conversion": "purchase",
+}
+
+
+async def _relay_events_to_ga4(
+    ga_config: dict,
+    events: list[PixelEvent],
+    shop_domain: str,
+) -> None:
+    """Fire-and-forget relay of pixel events to GA4 Measurement Protocol.
+
+    Uses anonymous client_id (shop domain hash) — no PII is sent.
+    """
+    measurement_id = ga_config["ga_measurement_id"]
+    api_secret = ga_config["ga_api_secret"]
+
+    ga4_events = []
+    for event in events:
+        ga4_name = GA4_EVENT_MAP.get(event.event_type)
+        if not ga4_name:
+            continue
+
+        params: dict = {
+            "product_id": event.product_id,
+        }
+        if event.variant_id:
+            params["variant_id"] = event.variant_id
+        if event.event_type == "conversion" and event.revenue_cents:
+            params["value"] = event.revenue_cents / 100
+            params["currency"] = "USD"
+
+        ga4_events.append({
+            "name": ga4_name,
+            "params": params,
+        })
+
+    if not ga4_events:
+        return
+
+    # Use shop domain as anonymous client_id
+    payload = {
+        "client_id": f"shop.{shop_domain}",
+        "events": ga4_events,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                GA4_MP_URL,
+                params={"measurement_id": measurement_id, "api_secret": api_secret},
+                json=payload,
+            )
+            if resp.status_code >= 400:
+                LOG.warning("GA4 relay failed: status=%d body=%s", resp.status_code, resp.text[:200])
+    except Exception:
+        LOG.warning("GA4 relay error", exc_info=True)
+
+
+# ── GA4 config endpoints (auth-protected) ────────────────────────────
+
+class GAConfigIn(BaseModel):
+    ga_measurement_id: Optional[str] = None  # e.g. "G-XXXXXXXXXX"
+    ga_api_secret: Optional[str] = None
+
+
+@pixel_key_router.get("/ga-config/{integration_id}")
+async def get_ga_config(
+    integration_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get GA4 Measurement Protocol config for an integration."""
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    config = get_integration_ga_config(integration_id)
+    return {
+        "configured": config is not None,
+        "ga_measurement_id": config["ga_measurement_id"] if config else None,
+        # Never return the full secret — just indicate it's set
+        "ga_api_secret_set": bool(config),
+    }
+
+
+@pixel_key_router.put("/ga-config/{integration_id}")
+async def update_ga_config(
+    integration_id: str,
+    body: GAConfigIn,
+    user: dict = Depends(get_current_user),
+):
+    """Set or clear GA4 Measurement Protocol config for an integration."""
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    set_integration_ga_config(integration_id, body.ga_measurement_id, body.ga_api_secret)
+    configured = bool(body.ga_measurement_id and body.ga_api_secret)
+    return {"ok": True, "configured": configured}
