@@ -22,7 +22,8 @@ jobs:
   deploy:
     name: Build & Deploy Frontend
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+    # TODO: uncomment after setting up GitHub Environments + Azure OIDC federated credentials
+    # environment: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +46,7 @@ jobs:
       - name: Build And Deploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_AMBITIOUS_SMOKE_04D5B1703 }}
           action: "upload"
           app_location: "./frontend"
           api_location: ""
