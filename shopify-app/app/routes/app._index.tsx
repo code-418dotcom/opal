@@ -201,7 +201,8 @@ export default function Dashboard() {
 
   return (
     <Page
-      title="A/B Image Tests"
+      title="Opal A/B"
+      subtitle="A/B image testing for your store"
       primaryAction={{
         content: canCreate ? "Create test" : "Upgrade to create more",
         onAction: () => navigate(canCreate ? "/app/tests/new" : "/app/billing"),
