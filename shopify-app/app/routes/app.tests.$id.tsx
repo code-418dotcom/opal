@@ -399,6 +399,32 @@ export default function TestDetail() {
           </Layout.Section>
         )}
 
+        {/* Tips — shown while running, before significance */}
+        {isRunning && !significance?.confident && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="300">
+                <Text variant="headingSm" as="h3">Tips for better results</Text>
+                <Divider />
+                <BlockStack gap="200">
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    <strong>Be patient.</strong> Let your test run until statistical significance
+                    is reached — usually 200+ views per variant. Ending early may lead to wrong conclusions.
+                  </Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    <strong>Use the swap button.</strong> Periodically swapping variants helps account
+                    for time-of-day and day-of-week patterns in your traffic.
+                  </Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    <strong>Test meaningful differences.</strong> The best A/B tests compare images
+                    that are meaningfully different — e.g. lifestyle vs. white background, or different angles.
+                  </Text>
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
+
         {/* Test info */}
         <Layout.Section>
           <Card>

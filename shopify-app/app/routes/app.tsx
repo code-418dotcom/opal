@@ -36,6 +36,7 @@ export default function AppLayout() {
           <Link to="/app/tests/new">Create Test</Link>
           <Link to="/app/billing">Plans</Link>
           <Link to="/app/settings">Settings</Link>
+          <Link to="https://opaloptics.com/support" target="_blank">Help</Link>
         </NavMenu>
         <Outlet />
       </PolarisAppProvider>

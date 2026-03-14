@@ -25,6 +25,7 @@ import { useCallback } from "react";
 import { authenticate, MONTHLY_PRO, ANNUAL_PRO, MONTHLY_UNLIMITED, ANNUAL_UNLIMITED } from "~/shopify.server";
 import { getIntegrationByShop } from "~/lib/opal-api.server";
 import { getEntitlements } from "~/lib/entitlements.server";
+import { OpalLogo } from "~/components/OpalLogo";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
@@ -123,6 +124,7 @@ const PRO_FEATURES = [
   "Full metrics + revenue tracking",
   "Unlimited test duration",
   "Auto-conclude with statistical significance",
+  "Priority email support",
   "7-day free trial",
 ];
 
@@ -133,6 +135,8 @@ const UNLIMITED_FEATURES = [
   "Full metrics + revenue tracking",
   "Unlimited test duration",
   "Auto-conclude with statistical significance",
+  "Google Analytics integration",
+  "Priority email support",
   "7-day free trial",
 ];
 
@@ -381,6 +385,29 @@ export default function Billing() {
                 </Text>
               </BlockStack>
             </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Cross-sell: Opal Image Studio */}
+        <Layout.Section>
+          <Card>
+            <InlineStack gap="400" blockAlign="center">
+              <OpalLogo size={36} />
+              <BlockStack gap="100">
+                <Text variant="headingSm" as="h3">
+                  Generate winning images with Opal
+                </Text>
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Use AI to create studio-quality product photos — remove backgrounds,
+                  generate scenes, and upscale. Then A/B test them right here.
+                </Text>
+                <Box>
+                  <Button url="https://opaloptics.com" external size="slim">
+                    Try Opal Image Studio
+                  </Button>
+                </Box>
+              </BlockStack>
+            </InlineStack>
           </Card>
         </Layout.Section>
       </Layout>

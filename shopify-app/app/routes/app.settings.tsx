@@ -369,6 +369,90 @@ export default function Settings() {
           </Layout.Section>
         )}
 
+        {/* Getting Started */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text variant="headingMd" as="h2">
+                Getting started
+              </Text>
+              <Text variant="bodySm" as="p" tone="subdued">
+                Set up A/B image testing in 4 simple steps:
+              </Text>
+              <BlockStack gap="300">
+                <InlineStack gap="300" blockAlign="start">
+                  <Badge tone="info">1</Badge>
+                  <BlockStack gap="050">
+                    <Text variant="headingSm" as="h3">Configure pixel</Text>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      Click "Configure Pixel" below to enable automatic storefront tracking.
+                    </Text>
+                  </BlockStack>
+                </InlineStack>
+                <InlineStack gap="300" blockAlign="start">
+                  <Badge tone="info">2</Badge>
+                  <BlockStack gap="050">
+                    <Text variant="headingSm" as="h3">Create a test</Text>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      Pick a product and select two images to compare (e.g. lifestyle vs. white background).
+                    </Text>
+                  </BlockStack>
+                </InlineStack>
+                <InlineStack gap="300" blockAlign="start">
+                  <Badge tone="info">3</Badge>
+                  <BlockStack gap="050">
+                    <Text variant="headingSm" as="h3">Watch the results</Text>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      Opal tracks views, add-to-carts, and conversions for each variant automatically.
+                    </Text>
+                  </BlockStack>
+                </InlineStack>
+                <InlineStack gap="300" blockAlign="start">
+                  <Badge tone="info">4</Badge>
+                  <BlockStack gap="050">
+                    <Text variant="headingSm" as="h3">Pick the winner</Text>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      Once results are statistically significant, conclude the test and the winning image is set permanently.
+                    </Text>
+                  </BlockStack>
+                </InlineStack>
+              </BlockStack>
+              <Divider />
+              <BlockStack gap="300">
+                <Text variant="headingSm" as="h3">Common questions</Text>
+                <BlockStack gap="200">
+                  <Text variant="bodySm" as="p" fontWeight="semibold">How does tracking work?</Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    The Opal pixel runs in Shopify's sandboxed web pixel environment. It captures product views,
+                    add-to-carts, and checkout conversions — no personal customer data is collected.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="200">
+                  <Text variant="bodySm" as="p" fontWeight="semibold">How many visitors do I need?</Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    A good A/B test typically needs 200+ views per variant to reach statistical significance.
+                    For products with lower traffic, tests may need to run longer.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="200">
+                  <Text variant="bodySm" as="p" fontWeight="semibold">How long should I run a test?</Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Run until Opal tells you the results are statistically significant. This usually takes
+                    1-4 weeks depending on your traffic. Don't end tests early — you might pick the wrong winner.
+                  </Text>
+                </BlockStack>
+              </BlockStack>
+              <Divider />
+              <Text variant="bodySm" as="p" tone="subdued">
+                Need help?{" "}
+                <a href="https://opaloptics.com/support" target="_blank" rel="noopener noreferrer">
+                  Contact support
+                </a>
+              </Text>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
         {/* Pixel Configuration */}
         <Layout.Section>
           <Card>

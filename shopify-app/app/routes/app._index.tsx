@@ -9,6 +9,7 @@ import {
   Page,
   Layout,
   Card,
+  CalloutCard,
   EmptyState,
   IndexTable,
   Badge,
@@ -28,6 +29,7 @@ import { getIntegrationByShop, listTests, provisionIntegration } from "~/lib/opa
 import type { ABTest } from "~/lib/opal-api.server";
 import { getEntitlements } from "~/lib/entitlements.server";
 import type { Entitlements } from "~/lib/entitlements.server";
+import { OpalLogo } from "~/components/OpalLogo";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
@@ -52,6 +54,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     listTests(integration.id),
     getEntitlements(billing, integration.id),
   ]);
+
+  // Redirect first-time users to the welcome wizard
+  if (tests.length === 0) {
+    const url = new URL(request.url);
+    // Avoid redirect loop — only redirect if not coming from welcome
+    if (!url.searchParams.has("from_welcome")) {
+      const { redirect } = await import("@remix-run/node");
+      return redirect("/app/welcome");
+    }
+  }
+
   return json({ tests, hasIntegration: true, shopDomain, entitlements });
 };
 
@@ -122,16 +135,20 @@ export default function Dashboard() {
               <EmptyState
                 heading="Run your first A/B image test"
                 action={{
-                  content: "Create test",
+                  content: "Create your first test",
                   onAction: () => navigate("/app/tests/new"),
                 }}
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+                image=""
               >
-                <p>
-                  Test different product images to find which ones drive more
-                  sales. Opal automatically tracks views, add-to-carts, and
-                  conversions.
-                </p>
+                <BlockStack gap="200">
+                  <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0" }}>
+                    <OpalLogo size={56} />
+                  </div>
+                  <p>
+                    Find out which product images drive more sales. Pick two images,
+                    and Opal automatically tracks which one converts better — no code needed.
+                  </p>
+                </BlockStack>
               </EmptyState>
             </Card>
           </Layout.Section>
@@ -318,6 +335,24 @@ export default function Dashboard() {
               {rowMarkup}
             </IndexTable>
           </Card>
+        </Layout.Section>
+
+        {/* Cross-sell: Opal Image Studio */}
+        <Layout.Section>
+          <CalloutCard
+            title="Need better product images?"
+            illustration="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+            primaryAction={{
+              content: "Try Opal Image Studio",
+              url: "https://opaloptics.com",
+              external: true,
+            }}
+          >
+            <p>
+              Generate studio-quality product photos with AI. Remove backgrounds,
+              create professional scenes, and upscale — directly from your catalog.
+            </p>
+          </CalloutCard>
         </Layout.Section>
       </Layout>
     </Page>
