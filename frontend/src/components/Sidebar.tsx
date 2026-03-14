@@ -17,6 +17,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
+import OpalLogo from './OpalLogo';
 
 export type Page =
   | 'dashboard'
@@ -74,7 +75,7 @@ export default function Sidebar({
     <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-logo" onClick={() => onNavigate('dashboard')}>
-          <span className="sidebar-logo-icon">&#9670;</span>
+          <span className="sidebar-logo-icon"><OpalLogo size={22} /></span>
           {!collapsed && <span className="sidebar-logo-text">OPAL</span>}
         </div>
         <button className="sidebar-toggle" onClick={onToggleCollapse}>

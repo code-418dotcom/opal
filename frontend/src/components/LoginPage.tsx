@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LogIn } from 'lucide-react';
 import { login } from '../auth';
+import OpalLogo from './OpalLogo';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -32,7 +33,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <span className="logo-icon">&#9670;</span>
+          <span className="logo-icon"><OpalLogo size={48} /></span>
           <h1>OPAL</h1>
           <p className="login-subtitle">{t('login.subtitle')}</p>
         </div>

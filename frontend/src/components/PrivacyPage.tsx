@@ -3,6 +3,7 @@
  * Renders the full privacy policy for direct linking (e.g., Shopify App Store).
  */
 import { useTranslation } from 'react-i18next';
+import OpalLogo from './OpalLogo';
 import './LegalPage.css';
 
 export default function PrivacyPage() {
@@ -14,7 +15,7 @@ export default function PrivacyPage() {
     <div className="legal-page">
       <div className="legal-page-header">
         <a href="/" className="legal-logo">
-          <span className="legal-logo-icon">&#9670;</span> OPAL
+          <span className="legal-logo-icon"><OpalLogo size={22} /></span> OPAL
         </a>
       </div>
       <div className="legal-page-content">

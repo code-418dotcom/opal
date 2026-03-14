@@ -23,6 +23,7 @@ import TipsBar from './components/TipsBar';
 import { PreferencesProvider } from './components/PreferencesContext';
 import { api } from './api';
 import { initializeMsal, isAuthConfigured, getAccount, getAccessToken, login, logout } from './auth';
+import OpalLogo from './components/OpalLogo';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -157,7 +158,7 @@ function AppContent({
               </svg>
             </button>
             <span className="mobile-logo">
-              <span className="mobile-logo-icon">&#9670;</span> OPAL
+              <span className="mobile-logo-icon"><OpalLogo size={20} /></span> OPAL
             </span>
             <span className="mobile-balance">{tokenBalance ?? '—'}</span>
           </div>
@@ -314,7 +315,7 @@ function App() {
     return (
       <div className="app-loading">
         <div className="app-loading-content">
-          <span className="app-loading-logo">&#9670;</span>
+          <span className="app-loading-logo"><OpalLogo size={48} /></span>
           <p>Loading...</p>
         </div>
       </div>

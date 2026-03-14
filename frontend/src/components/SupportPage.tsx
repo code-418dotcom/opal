@@ -2,6 +2,7 @@
  * Support & Contact page — accessible at /support
  * Required for Shopify App Store submission.
  */
+import OpalLogo from './OpalLogo';
 import './LegalPage.css';
 
 export default function SupportPage() {
@@ -9,7 +10,7 @@ export default function SupportPage() {
     <div className="legal-page">
       <div className="legal-page-header">
         <a href="/" className="legal-logo">
-          <span className="legal-logo-icon">&#9670;</span> OPAL
+          <span className="legal-logo-icon"><OpalLogo size={22} /></span> OPAL
         </a>
       </div>
       <div className="legal-page-content">

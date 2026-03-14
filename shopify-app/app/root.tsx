@@ -13,6 +13,7 @@ import { addDocumentResponseHeaders } from "~/shopify.server";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: polarisStyles },
+  { rel: "icon", type: "image/svg+xml", href: "/opal-logo.svg" },
 ];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

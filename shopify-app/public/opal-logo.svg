@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="a" x1="0%" y1="10%" x2="90%" y2="95%">
+      <stop offset="0%" stop-color="#7ae0ff"/>
+      <stop offset="30%" stop-color="#4dc9f6"/>
+      <stop offset="65%" stop-color="#7c6cf7"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </linearGradient>
+    <linearGradient id="b" x1="100%" y1="10%" x2="10%" y2="95%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="25%" stop-color="#f97316"/>
+      <stop offset="60%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#0e7490"/>
+    </linearGradient>
+    <radialGradient id="c" cx="48%" cy="35%" r="28%">
+      <stop offset="0%" stop-color="#fff" stop-opacity=".35"/>
+      <stop offset="30%" stop-color="#e0e7ff" stop-opacity=".15"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="s" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#fff" stop-opacity=".7"/>
+      <stop offset="40%" stop-color="#fff" stop-opacity=".05"/>
+      <stop offset="60%" stop-color="#fff" stop-opacity=".05"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity=".6"/>
+    </linearGradient>
+    <linearGradient id="r" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9" stop-opacity=".6"/>
+      <stop offset="50%" stop-color="#fff" stop-opacity=".08"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity=".5"/>
+    </linearGradient>
+    <clipPath id="g">
+      <path d="M256 62C300 62 340 82 368 118C396 154 410 206 410 268C410 330 396 382 368 418C340 454 300 474 256 474C212 474 172 454 144 418C116 382 102 330 102 268C102 206 116 154 144 118C172 82 212 62 256 62Z"/>
+    </clipPath>
+  </defs>
+  <path d="M256 62C212 62 172 82 144 118C116 154 102 206 102 268C102 330 116 382 144 418C172 454 212 474 256 474Z" fill="url(#a)"/>
+  <path d="M256 62C300 62 340 82 368 118C396 154 410 206 410 268C410 330 396 382 368 418C340 454 300 474 256 474Z" fill="url(#b)"/>
+  <ellipse cx="246" cy="205" rx="120" ry="100" fill="url(#c)" clip-path="url(#g)"/>
+  <line x1="256" y1="62" x2="256" y2="474" stroke="url(#s)" stroke-width="2"/>
+  <path d="M256 62C300 62 340 82 368 118C396 154 410 206 410 268C410 330 396 382 368 418C340 454 300 474 256 474C212 474 172 454 144 418C116 382 102 330 102 268C102 206 116 154 144 118C172 82 212 62 256 62Z" fill="none" stroke="url(#r)" stroke-width="2"/>
+</svg>

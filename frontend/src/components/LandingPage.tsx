@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
+import OpalLogo from './OpalLogo';
 
 interface TokenPackage {
   id: string;
@@ -128,7 +129,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       <nav className="landing-nav">
         <div className="landing-nav-inner">
           <div className="landing-nav-logo">
-            <span className="landing-nav-diamond">&#9670;</span>
+            <span className="landing-nav-diamond"><OpalLogo size={20} /></span>
             OPAL
           </div>
           <div className="landing-nav-links">
@@ -616,7 +617,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         <div className="landing-footer-inner landing-footer-columns">
           <div className="landing-footer-col landing-footer-col-brand">
             <div className="landing-footer-brand">
-              <span className="landing-nav-diamond">&#9670;</span>
+              <span className="landing-nav-diamond"><OpalLogo size={20} /></span>
               OPAL
             </div>
             <p className="landing-footer-text">{t('landing.footer.tagline')}</p>

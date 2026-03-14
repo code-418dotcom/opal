@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Concept 4g: Tall oval cabochon gem — narrower sides, taller -->
+  <defs>
+    <linearGradient id="a-base" x1="0%" y1="10%" x2="90%" y2="95%">
+      <stop offset="0%" stop-color="#7ae0ff"/>
+      <stop offset="30%" stop-color="#4dc9f6"/>
+      <stop offset="65%" stop-color="#7c6cf7"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </linearGradient>
+    <linearGradient id="b-base" x1="100%" y1="10%" x2="10%" y2="95%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="25%" stop-color="#f97316"/>
+      <stop offset="60%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#0e7490"/>
+    </linearGradient>
+
+    <radialGradient id="caustic-main" cx="48%" cy="35%" r="28%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="30%" stop-color="#e0e7ff" stop-opacity="0.15"/>
+      <stop offset="70%" stop-color="#c4b5fd" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="caustic-secondary" cx="55%" cy="58%" r="20%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="50%" stop-color="#a5f3fc" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="caustic-warm" cx="68%" cy="30%" r="18%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2"/>
+      <stop offset="40%" stop-color="#fde68a" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="spec-a" x1="20%" y1="0%" x2="60%" y2="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="spec-b" x1="80%" y1="0%" x2="40%" y2="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2"/>
+      <stop offset="35%" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="depth-dark-a" x1="50%" y1="55%" x2="40%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="60%" stop-color="#1e1b4b" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#0f0a2a" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="depth-dark-b" x1="50%" y1="55%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="60%" stop-color="#1a1a2e" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0.35"/>
+    </linearGradient>
+
+    <radialGradient id="bg-glow" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="#7c6cf7" stop-opacity="0.15"/>
+      <stop offset="50%" stop-color="#4dc9f6" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#080b16" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="split" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
+      <stop offset="20%" stop-color="#e0e7ff" stop-opacity="0.2"/>
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.03"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="80%" stop-color="#e0e7ff" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.6"/>
+    </linearGradient>
+
+    <linearGradient id="rim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9" stop-opacity="0.6"/>
+      <stop offset="25%" stop-color="#a78bfa" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="75%" stop-color="#fb923c" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <linearGradient id="dispersion-top" x1="30%" y1="0%" x2="70%" y2="30%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.15"/>
+      <stop offset="30%" stop-color="#a78bfa" stop-opacity="0.1"/>
+      <stop offset="60%" stop-color="#fb7185" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.06"/>
+    </linearGradient>
+
+    <!-- Tall oval gem — taller than wide, narrower at top/bottom -->
+    <clipPath id="gem-clip">
+      <path d="M256 62
+               C 300 62, 340 82, 368 118
+               C 396 154, 410 206, 410 268
+               C 410 330, 396 382, 368 418
+               C 340 454, 300 474, 256 474
+               C 212 474, 172 454, 144 418
+               C 116 382, 102 330, 102 268
+               C 102 206, 116 154, 144 118
+               C 172 82, 212 62, 256 62Z"/>
+    </clipPath>
+
+    <filter id="spark-glow">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="spark-glow-lg">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft-glow">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+    <filter id="caustic-blur">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+  </defs>
+
+  <!-- Dark background -->
+  <rect width="512" height="512" rx="96" fill="#080b16"/>
+
+  <!-- Ambient glow behind gem -->
+  <ellipse cx="256" cy="268" rx="190" ry="230" fill="url(#bg-glow)"/>
+
+  <!-- Soft colored light spill -->
+  <ellipse cx="200" cy="245" rx="110" ry="135" fill="#4dc9f6" opacity="0.03" filter="url(#caustic-blur)"/>
+  <ellipse cx="320" cy="255" rx="100" ry="125" fill="#f97316" opacity="0.025" filter="url(#caustic-blur)"/>
+
+  <!-- ═══ GEM BODY (tall oval) ═══ -->
+
+  <!-- Side A - left half -->
+  <path d="M256 62
+           C 212 62, 172 82, 144 118
+           C 116 154, 102 206, 102 268
+           C 102 330, 116 382, 144 418
+           C 172 454, 212 474, 256 474
+           Z"
+        fill="url(#a-base)"/>
+
+  <!-- Side B - right half -->
+  <path d="M256 62
+           C 300 62, 340 82, 368 118
+           C 396 154, 410 206, 410 268
+           C 410 330, 396 382, 368 418
+           C 340 454, 300 474, 256 474
+           Z"
+        fill="url(#b-base)"/>
+
+  <!-- ═══ DEPTH & DIMENSION ═══ -->
+
+  <!-- Bottom depth darkening — A side -->
+  <path d="M256 320
+           C 212 360, 155 400, 144 418
+           C 172 454, 212 474, 256 474
+           Z"
+        fill="url(#depth-dark-a)"/>
+
+  <!-- Bottom depth darkening — B side -->
+  <path d="M256 320
+           C 300 360, 357 400, 368 418
+           C 340 454, 300 474, 256 474
+           Z"
+        fill="url(#depth-dark-b)"/>
+
+  <!-- ═══ INTERNAL CAUSTIC LIGHT ═══ -->
+  <g clip-path="url(#gem-clip)">
+    <ellipse cx="246" cy="205" rx="120" ry="100" fill="url(#caustic-main)"/>
+    <ellipse cx="330" cy="190" rx="75" ry="65" fill="url(#caustic-warm)"/>
+    <ellipse cx="268" cy="325" rx="85" ry="70" fill="url(#caustic-secondary)"/>
+    <ellipse cx="256" cy="105" rx="120" ry="50" fill="url(#dispersion-top)"/>
+    <ellipse cx="168" cy="245" rx="45" ry="80" fill="#4dc9f6" opacity="0.04" transform="rotate(-12 168 245)"/>
+    <ellipse cx="340" cy="255" rx="40" ry="70" fill="#f97316" opacity="0.03" transform="rotate(12 340 255)"/>
+    <ellipse cx="256" cy="370" rx="55" ry="40" fill="#a78bfa" opacity="0.04"/>
+  </g>
+
+  <!-- ═══ SPECULAR HIGHLIGHTS ═══ -->
+
+  <!-- Top specular sweep — A side -->
+  <path d="M256 62
+           C 212 62, 172 82, 144 118
+           C 130 138, 118 168, 112 200
+           L 256 190
+           Z"
+        fill="url(#spec-a)"/>
+
+  <!-- Top specular sweep — B side -->
+  <path d="M256 62
+           C 300 62, 340 82, 368 118
+           C 382 138, 394 168, 400 200
+           L 256 190
+           Z"
+        fill="url(#spec-b)"/>
+
+  <!-- Sharp specular catch on A upper curve -->
+  <path d="M210 82 C 188 95, 168 118, 155 142 C 172 125, 195 105, 220 90 Z"
+        fill="#ffffff" opacity="0.12" clip-path="url(#gem-clip)"/>
+
+  <!-- ═══ CENTER SPLIT ═══ -->
+  <line x1="256" y1="62" x2="256" y2="474" stroke="url(#split)" stroke-width="2"/>
+
+  <!-- ═══ RIM LIGHT ═══ -->
+  <path d="M256 62
+           C 300 62, 340 82, 368 118
+           C 396 154, 410 206, 410 268
+           C 410 330, 396 382, 368 418
+           C 340 454, 300 474, 256 474
+           C 212 474, 172 454, 144 418
+           C 116 382, 102 330, 102 268
+           C 102 206, 116 154, 144 118
+           C 172 82, 212 62, 256 62Z"
+        fill="none" stroke="url(#rim)" stroke-width="2"/>
+
+  <!-- ═══ SPARKLES ═══ -->
+
+  <!-- Main sparkle — upper right -->
+  <g filter="url(#spark-glow-lg)" transform="translate(350, 135)">
+    <circle r="3.5" fill="#ffffff" opacity="0.95"/>
+    <line x1="0" y1="-14" x2="0" y2="14" stroke="#ffffff" stroke-width="1.2" opacity="0.75"/>
+    <line x1="-14" y1="0" x2="14" y2="0" stroke="#ffffff" stroke-width="1.2" opacity="0.75"/>
+    <line x1="-6" y1="-6" x2="6" y2="6" stroke="#ffffff" stroke-width="0.6" opacity="0.35"/>
+    <line x1="6" y1="-6" x2="-6" y2="6" stroke="#ffffff" stroke-width="0.6" opacity="0.35"/>
+  </g>
+
+  <!-- Secondary sparkle — upper left -->
+  <g filter="url(#spark-glow)" transform="translate(165, 165)">
+    <circle r="2.5" fill="#ffffff" opacity="0.8"/>
+    <line x1="0" y1="-9" x2="0" y2="9" stroke="#ffffff" stroke-width="0.9" opacity="0.55"/>
+    <line x1="-9" y1="0" x2="9" y2="0" stroke="#ffffff" stroke-width="0.9" opacity="0.55"/>
+  </g>
+
+  <!-- Small sparkle — top center -->
+  <g filter="url(#spark-glow)" transform="translate(256, 78)">
+    <circle r="2" fill="#ffffff" opacity="0.85"/>
+    <line x1="0" y1="-7" x2="0" y2="7" stroke="#ffffff" stroke-width="0.7" opacity="0.55"/>
+    <line x1="-7" y1="0" x2="7" y2="0" stroke="#ffffff" stroke-width="0.7" opacity="0.55"/>
+  </g>
+
+  <!-- Tiny colored sparkle — left mid -->
+  <g filter="url(#spark-glow)" transform="translate(118, 268)">
+    <circle r="1.8" fill="#67e8f9" opacity="0.6"/>
+    <line x1="0" y1="-5" x2="0" y2="5" stroke="#67e8f9" stroke-width="0.5" opacity="0.35"/>
+    <line x1="-5" y1="0" x2="5" y2="0" stroke="#67e8f9" stroke-width="0.5" opacity="0.35"/>
+  </g>
+
+  <!-- Tiny colored sparkle — right mid -->
+  <g filter="url(#spark-glow)" transform="translate(396, 260)">
+    <circle r="1.8" fill="#fbbf24" opacity="0.55"/>
+    <line x1="0" y1="-5" x2="0" y2="5" stroke="#fbbf24" stroke-width="0.5" opacity="0.35"/>
+    <line x1="-5" y1="0" x2="5" y2="0" stroke="#fbbf24" stroke-width="0.5" opacity="0.35"/>
+  </g>
+
+  <!-- Tiny sparkle — bottom -->
+  <g filter="url(#spark-glow)" transform="translate(200, 415)">
+    <circle r="1.3" fill="#c4b5fd" opacity="0.45"/>
+  </g>
+
+  <!-- ═══ FLOATING PARTICLES ═══ -->
+  <g opacity="0.3">
+    <circle cx="140" cy="120" r="1" fill="#67e8f9" filter="url(#spark-glow)"/>
+    <circle cx="380" cy="130" r="0.9" fill="#fbbf24" filter="url(#spark-glow)"/>
+    <circle cx="110" cy="340" r="0.7" fill="#a78bfa" filter="url(#spark-glow)"/>
+    <circle cx="410" cy="350" r="0.7" fill="#22d3ee" filter="url(#spark-glow)"/>
+    <circle cx="180" cy="465" r="0.6" fill="#67e8f9" filter="url(#spark-glow)"/>
+    <circle cx="340" cy="460" r="0.6" fill="#fb923c" filter="url(#spark-glow)"/>
+  </g>
+
+  <!-- ═══ OUTER HALO ═══ -->
+  <path d="M256 62
+           C 300 62, 340 82, 368 118
+           C 396 154, 410 206, 410 268
+           C 410 330, 396 382, 368 418
+           C 340 454, 300 474, 256 474
+           C 212 474, 172 454, 144 418
+           C 116 382, 102 330, 102 268
+           C 102 206, 116 154, 144 118
+           C 172 82, 212 62, 256 62Z"
+        fill="none" stroke="rgba(180,200,255,0.05)" stroke-width="8" filter="url(#soft-glow)"/>
+</svg>
