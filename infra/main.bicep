@@ -32,6 +32,15 @@ param postgresTier string = 'Burstable'
 @description('Storage account SKU')
 param storageSku string = 'Standard_LRS'
 
+@description('Postgres backup retention in days (7-35)')
+param postgresBackupRetentionDays int = 7
+
+@description('Postgres geo-redundant backup (Enabled or Disabled)')
+param postgresGeoRedundantBackup string = 'Disabled'
+
+@description('Postgres high availability mode (Disabled or ZoneRedundant)')
+param postgresHighAvailability string = 'Disabled'
+
 var rgName = resourceGroup().name
 var suffix = toLower('${uniqueString(subscription().id, rgName, envName)}')
 var baseName = toLower('${namePrefix}-${envName}-${suffix}')
@@ -176,8 +185,8 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview'
     administratorLoginPassword: postgresAdminPassword
     version: '15'
     storage: { storageSizeGB: 64 }
-    backup: { backupRetentionDays: 7, geoRedundantBackup: 'Disabled' }
-    highAvailability: { mode: 'Disabled' }
+    backup: { backupRetentionDays: postgresBackupRetentionDays, geoRedundantBackup: postgresGeoRedundantBackup }
+    highAvailability: { mode: postgresHighAvailability }
   }
 }
 

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "envName": { "value": "dev" },
+    "location": { "value": "westeurope" },
+    "monitoringLocation": { "value": "westeurope" },
+    "postgresLocation": { "value": "northeurope" },
+    "postgresNameSuffix": { "value": "ne" },
+    "namePrefix": { "value": "opal" },
+    "postgresAdminPassword": { "value": "" },
+    "postgresSkuName": { "value": "Standard_B1ms" },
+    "postgresTier": { "value": "Burstable" },
+    "storageSku": { "value": "Standard_LRS" },
+    "budgetAmount": { "value": 100 },
+    "postgresBackupRetentionDays": { "value": 7 },
+    "postgresGeoRedundantBackup": { "value": "Disabled" },
+    "postgresHighAvailability": { "value": "Disabled" }
+  }
+}

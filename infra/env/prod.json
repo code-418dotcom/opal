@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "envName": { "value": "prod" },
+    "location": { "value": "westeurope" },
+    "monitoringLocation": { "value": "westeurope" },
+    "postgresLocation": { "value": "westeurope" },
+    "postgresNameSuffix": { "value": "" },
+    "namePrefix": { "value": "opal" },
+    "postgresAdminPassword": { "value": "" },
+    "postgresSkuName": { "value": "Standard_D2ds_v4" },
+    "postgresTier": { "value": "GeneralPurpose" },
+    "storageSku": { "value": "Standard_ZRS" },
+    "budgetAmount": { "value": 400 },
+    "budgetAlertEmails": { "value": [] },
+    "postgresBackupRetentionDays": { "value": 35 },
+    "postgresGeoRedundantBackup": { "value": "Enabled" },
+    "postgresHighAvailability": { "value": "ZoneRedundant" }
+  }
+}
