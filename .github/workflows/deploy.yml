@@ -455,12 +455,22 @@ jobs:
             fi
           }
 
+          update_app () {
+            local NAME="$1"; shift
+            for attempt in 1 2 3 4 5; do
+              if az containerapp update -g "${RG}" -n "${NAME}" "$@" --no-wait >/dev/null 2>&1; then
+                return 0
+              fi
+              echo "  ${NAME}: update attempt ${attempt} failed (likely InProgress), waiting 30s..."
+              sleep 30
+            done
+            echo "WARN: ${NAME} update failed after 5 attempts, continuing..."
+          }
+
           deploy_python () {
             local NAME="$1" IMAGE="$2" MAX="${3:-30}"
             echo "Deploying ${NAME} → ${IMAGE}"
-            az containerapp update -g "${RG}" -n "${NAME}" \
-              --image "${IMAGE}" \
-              --set-env-vars "${PYTHON_ENV_VARS[@]}" --no-wait >/dev/null
+            update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}"
             sleep 10
             wait_ready "${NAME}" "${MAX}"
           }
@@ -468,9 +478,7 @@ jobs:
           deploy_shopify () {
             local NAME="$1" IMAGE="$2"
             echo "Deploying ${NAME} → ${IMAGE}"
-            az containerapp update -g "${RG}" -n "${NAME}" \
-              --image "${IMAGE}" \
-              --set-env-vars "${SHOPIFY_ENV_VARS[@]}" --no-wait >/dev/null
+            update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${SHOPIFY_ENV_VARS[@]}"
             sleep 10
             wait_ready "${NAME}"
           }
