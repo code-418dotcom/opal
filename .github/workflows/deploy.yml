@@ -280,6 +280,18 @@ jobs:
           done
           echo "RG=${RG}" >> "$GITHUB_ENV"
 
+      - name: Whitelist runner IP on Postgres firewall
+        run: |
+          set -euo pipefail
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "RUNNER_IP=${RUNNER_IP}" >> "$GITHUB_ENV"
+          echo "Adding runner IP ${RUNNER_IP} to Postgres firewall..."
+          az postgres flexible-server firewall-rule create \
+            -g "${RG}" -n "${PG_SERVER}" \
+            --rule-name "GHActions-${GITHUB_RUN_ID}" \
+            --start-ip-address "${RUNNER_IP}" --end-ip-address "${RUNNER_IP}" \
+            -o none
+
       - name: Run DB migrations
         env:
           PGPASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
@@ -292,6 +304,13 @@ jobs:
             psql "host=${PG_HOST} port=5432 dbname=opal user=opaladmin sslmode=require" \
               -f "${SQL_FILE}" -v ON_ERROR_STOP=1
           done
+
+      - name: Remove runner IP from Postgres firewall
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            -g "${RG}" -n "${PG_SERVER}" \
+            --rule-name "GHActions-${GITHUB_RUN_ID}" --yes -o none 2>/dev/null || true
 
       - name: Ensure Service Bus queues
         run: |
