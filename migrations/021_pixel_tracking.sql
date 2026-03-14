@@ -7,7 +7,7 @@ ALTER TABLE integrations ADD COLUMN IF NOT EXISTS pixel_key VARCHAR(64);
 -- Log of variant activations (start / swap) for attributing pixel events
 CREATE TABLE IF NOT EXISTS ab_test_variant_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    test_id UUID NOT NULL REFERENCES ab_tests(id) ON DELETE CASCADE,
+    test_id VARCHAR NOT NULL REFERENCES ab_tests(id) ON DELETE CASCADE,
     variant VARCHAR(1) NOT NULL CHECK (variant IN ('a', 'b')),
     activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (test_id, activated_at)
