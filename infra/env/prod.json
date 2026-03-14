@@ -16,6 +16,6 @@
     "budgetAlertEmails": { "value": [] },
     "postgresBackupRetentionDays": { "value": 35 },
     "postgresGeoRedundantBackup": { "value": "Disabled" },
-    "postgresHighAvailability": { "value": "ZoneRedundant" }
+    "postgresHighAvailability": { "value": "Disabled" }
   }
 }
