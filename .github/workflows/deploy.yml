@@ -345,13 +345,20 @@ jobs:
           wait_ready () {
             local NAME="$1" MAX="${2:-60}" SLEEP="${3:-5}"
             for i in $(seq 1 "${MAX}"); do
-              STATE=$(az containerapp show -g "${RG}" -n "${NAME}" \
-                --query "properties.provisioningState" -o tsv 2>/dev/null || true)
+              local INFO
+              INFO=$(az containerapp show -g "${RG}" -n "${NAME}" \
+                --query "{p:properties.provisioningState, r:properties.runningStatus}" -o json 2>/dev/null || echo '{}')
+              local STATE=$(echo "${INFO}" | jq -r '.p // empty')
+              local RUNNING=$(echo "${INFO}" | jq -r '.r // empty')
               [ "${STATE}" = "Succeeded" ] && echo "${NAME} ready." && return 0
+              # Accept InProgress if the app is actually running
+              if [ "${STATE}" = "InProgress" ] && [ "${RUNNING}" = "Running" ]; then
+                echo "${NAME} ready (running, provisioning in progress)." && return 0
+              fi
               if [ "${STATE}" = "Failed" ]; then
                 echo "ERROR: ${NAME} Failed"; return 1
               fi
-              echo "  ${NAME}: ${STATE:-pending} (${i}/${MAX})"
+              echo "  ${NAME}: ${STATE:-pending} running=${RUNNING:-unknown} (${i}/${MAX})"
               sleep "${SLEEP}"
             done
             echo "ERROR: Timeout ${NAME}"; return 1
