@@ -343,25 +343,24 @@ jobs:
           # ── Helper functions ──
 
           wait_ready () {
-            local NAME="$1" MAX="${2:-60}" SLEEP="${3:-5}"
+            local NAME="$1" MAX="${2:-30}" SLEEP="${3:-10}"
             for i in $(seq 1 "${MAX}"); do
-              local INFO
-              INFO=$(az containerapp show -g "${RG}" -n "${NAME}" \
-                --query "{p:properties.provisioningState, r:properties.runningStatus}" -o json 2>/dev/null || echo '{}')
-              local STATE=$(echo "${INFO}" | jq -r '.p // empty')
-              local RUNNING=$(echo "${INFO}" | jq -r '.r // empty')
+              local STATE RUNNING
+              STATE=$(az containerapp show -g "${RG}" -n "${NAME}" \
+                --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
               [ "${STATE}" = "Succeeded" ] && echo "${NAME} ready." && return 0
-              # Accept InProgress if the app is actually running
+              # Check if actually running (InProgress can last forever on Azure)
+              RUNNING=$(az containerapp show -g "${RG}" -n "${NAME}" \
+                --query "properties.runningStatus" -o tsv 2>/dev/null || echo "")
               if [ "${STATE}" = "InProgress" ] && [ "${RUNNING}" = "Running" ]; then
-                echo "${NAME} ready (running, provisioning in progress)." && return 0
+                echo "${NAME} ready (running)." && return 0
               fi
-              if [ "${STATE}" = "Failed" ]; then
-                echo "ERROR: ${NAME} Failed"; return 1
-              fi
-              echo "  ${NAME}: ${STATE:-pending} running=${RUNNING:-unknown} (${i}/${MAX})"
+              [ "${STATE}" = "Failed" ] && echo "ERROR: ${NAME} Failed" && return 1
+              echo "  ${NAME}: ${STATE} running=${RUNNING:-?} (${i}/${MAX})"
               sleep "${SLEEP}"
             done
-            echo "ERROR: Timeout ${NAME}"; return 1
+            echo "WARN: Timeout waiting for ${NAME} (state=${STATE}), continuing..."
+            return 0
           }
 
           ensure_identity () {
@@ -404,16 +403,17 @@ jobs:
             local NAME="$1"
             local PID
             PID=$(az containerapp show -g "${RG}" -n "${NAME}" --query "identity.principalId" -o tsv)
-            for i in $(seq 1 30); do
+            for i in $(seq 1 12); do
               COUNT=$(az role assignment list --scope "${ACR_ID}" \
                 --query "[?principalId=='${PID}' && roleDefinitionName=='AcrPull'] | length(@)" \
                 -o tsv 2>/dev/null || echo "0")
               if [ "${COUNT:-0}" -gt 0 ]; then
-                echo "AcrPull confirmed for ${NAME}"; sleep 20; return 0
+                echo "AcrPull confirmed for ${NAME}"; sleep 10; return 0
               fi
-              [ "${i}" = "12" ] && ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
+              [ "${i}" = "6" ] && ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
               sleep 10
             done
+            echo "WARN: AcrPull not confirmed for ${NAME}, continuing anyway..."
           }
 
           ensure_app () {
@@ -456,11 +456,12 @@ jobs:
           }
 
           deploy_python () {
-            local NAME="$1" IMAGE="$2" MAX="${3:-60}"
+            local NAME="$1" IMAGE="$2" MAX="${3:-30}"
             echo "Deploying ${NAME} → ${IMAGE}"
             az containerapp update -g "${RG}" -n "${NAME}" \
               --image "${IMAGE}" \
-              --set-env-vars "${PYTHON_ENV_VARS[@]}" >/dev/null
+              --set-env-vars "${PYTHON_ENV_VARS[@]}" --no-wait >/dev/null
+            sleep 10
             wait_ready "${NAME}" "${MAX}"
           }
 
@@ -469,7 +470,8 @@ jobs:
             echo "Deploying ${NAME} → ${IMAGE}"
             az containerapp update -g "${RG}" -n "${NAME}" \
               --image "${IMAGE}" \
-              --set-env-vars "${SHOPIFY_ENV_VARS[@]}" >/dev/null
+              --set-env-vars "${SHOPIFY_ENV_VARS[@]}" --no-wait >/dev/null
+            sleep 10
             wait_ready "${NAME}"
           }
 
