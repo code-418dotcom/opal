@@ -24,7 +24,7 @@ export default function Auth() {
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
       <div style={{ maxWidth: "400px", width: "100%" }}>
-        <h1 style={{ marginBottom: "1rem" }}>Opal A/B Image Testing</h1>
+        <h1 style={{ marginBottom: "1rem" }}>Opal A/B</h1>
         <Form method="post">
           <label htmlFor="shop" style={{ display: "block", marginBottom: "0.5rem" }}>
             Shop domain

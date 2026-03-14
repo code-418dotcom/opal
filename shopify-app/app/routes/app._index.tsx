@@ -77,7 +77,7 @@ export default function Dashboard() {
 
   if (!hasIntegration) {
     return (
-      <Page title="Opal A/B Image Testing">
+      <Page title="Opal A/B">
         <Layout>
           <Layout.Section>
             <Card>

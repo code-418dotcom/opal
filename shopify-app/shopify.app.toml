@@ -1,7 +1,7 @@
-# Opal A/B Image Testing — Shopify App Configuration
+# Opal A/B — Shopify App Configuration
 # Docs: https://shopify.dev/docs/apps/tools/cli/configuration
 
-name = "Opal A/B Image Testing"
+name = "Opal A/B"
 client_id = "e01bcf345cc429fa2e026afd63795014"
 application_url = "https://opal-shopify-app-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io"
 embedded = true

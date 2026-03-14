@@ -3,7 +3,7 @@ api_version = "2024-10"
 [[extensions]]
 uid = "eab40c29-6877-3c87-f904-9f68b2cb38b6867327b9"
 type = "web_pixel_extension"
-name = "Opal A/B Image Tracker"
+name = "Opal A/B Tracker"
 handle = "opal-ab-tracker"
 runtime_context = "strict"
 

@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "7567527eac6fa167c9041c5687f7451e"
-name = "Opal A/B testing"
+name = "Opal A/B"
 application_url = "https://opal-shopify-app-dev.victoriousmoss-91bcd75e.westeurope.azurecontainerapps.io"
 embedded = true
 

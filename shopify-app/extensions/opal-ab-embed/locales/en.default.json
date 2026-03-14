@@ -1,6 +1,6 @@
 {
   "opal_ab_testing": {
-    "name": "Opal A/B Testing",
+    "name": "Opal A/B",
     "settings": {
       "enabled": {
         "label": "Enable A/B image tracking"
