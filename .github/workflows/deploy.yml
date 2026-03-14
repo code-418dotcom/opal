@@ -89,11 +89,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       (inputs.scope == 'all' || inputs.scope == 'infra-only')
-    # TODO: uncomment after adding Azure OIDC federated credentials for environment subjects
-    # and creating GitHub Environments with scoped secrets:
-    #   az ad app federated-credential create --id <app-id> --parameters '{"name":"github-env-dev","issuer":"https://token.actions.githubusercontent.com","subject":"repo:code-418dotcom/opal:environment:dev","audiences":["api://AzureADTokenExchange"]}'
-    #   az ad app federated-credential create --id <app-id> --parameters '{"name":"github-env-prod","issuer":"https://token.actions.githubusercontent.com","subject":"repo:code-418dotcom/opal:environment:prod","audiences":["api://AzureADTokenExchange"]}'
-    # environment: ${{ needs.resolve.outputs.environment }}
+    environment: ${{ needs.resolve.outputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -238,11 +234,7 @@ jobs:
       always() &&
       needs.build.result == 'success' &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped')
-    # TODO: uncomment after adding Azure OIDC federated credentials for environment subjects
-    # and creating GitHub Environments with scoped secrets:
-    #   az ad app federated-credential create --id <app-id> --parameters '{"name":"github-env-dev","issuer":"https://token.actions.githubusercontent.com","subject":"repo:code-418dotcom/opal:environment:dev","audiences":["api://AzureADTokenExchange"]}'
-    #   az ad app federated-credential create --id <app-id> --parameters '{"name":"github-env-prod","issuer":"https://token.actions.githubusercontent.com","subject":"repo:code-418dotcom/opal:environment:prod","audiences":["api://AzureADTokenExchange"]}'
-    # environment: ${{ needs.resolve.outputs.environment }}
+    environment: ${{ needs.resolve.outputs.environment }}
 
     steps:
       - uses: actions/checkout@v4

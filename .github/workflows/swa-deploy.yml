@@ -22,8 +22,7 @@ jobs:
   deploy:
     name: Build & Deploy Frontend
     runs-on: ubuntu-latest
-    # TODO: uncomment after setting up GitHub Environments + Azure OIDC federated credentials
-    # environment: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+    environment: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
