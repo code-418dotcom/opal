@@ -166,9 +166,10 @@ export default function Billing() {
   }, [submit, currentSubscription]);
 
   const tier = entitlements.tier;
+  const isAnnualPlan = currentSubscription?.name?.includes("Annual") ?? false;
 
   return (
-    <Page title="Plans & Billing" backAction={{ onAction: () => navigate("/app") }}>
+    <Page title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Plans & Billing</InlineStack> as any} backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
         {/* Action feedback */}
         {actionData && "action" in actionData && actionData.action === "canceled" && (
@@ -223,11 +224,12 @@ export default function Billing() {
                     <List.Item key={f}>{f}</List.Item>
                   ))}
                 </List>
-                <Box>
+                <BlockStack gap="200">
                   <Button disabled fullWidth>
                     {tier === "free" ? "Current plan" : "Downgrade"}
                   </Button>
-                </Box>
+                  <Box minHeight="36px" />
+                </BlockStack>
               </BlockStack>
             </Card>
 
@@ -253,37 +255,49 @@ export default function Billing() {
                     <List.Item key={f}>{f}</List.Item>
                   ))}
                 </List>
-                {tier === "free" ? (
-                  <BlockStack gap="200">
-                    <Button
-                      variant="primary"
-                      onClick={() => handleSubscribe("subscribe_monthly_pro")}
-                      loading={isSubmitting}
-                      fullWidth
-                    >
-                      Start 7-day free trial
-                    </Button>
-                    <Button
-                      onClick={() => handleSubscribe("subscribe_annual_pro")}
-                      loading={isSubmitting}
-                      fullWidth
-                    >
-                      Subscribe annually — 2 months free
-                    </Button>
-                  </BlockStack>
-                ) : tier === "pro" ? (
-                  <Box>
-                    <Button disabled fullWidth>
-                      Current plan
-                    </Button>
-                  </Box>
-                ) : (
-                  <Box>
-                    <Button disabled fullWidth>
-                      Downgrade
-                    </Button>
-                  </Box>
-                )}
+                <BlockStack gap="200">
+                  {tier === "free" ? (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() => handleSubscribe("subscribe_monthly_pro")}
+                        loading={isSubmitting}
+                        fullWidth
+                      >
+                        Start 7-day free trial
+                      </Button>
+                      <Button
+                        onClick={() => handleSubscribe("subscribe_annual_pro")}
+                        loading={isSubmitting}
+                        fullWidth
+                      >
+                        Subscribe annually — 2 months free
+                      </Button>
+                    </>
+                  ) : tier === "pro" ? (
+                    <>
+                      <Button disabled fullWidth>
+                        Current plan
+                      </Button>
+                      <Button
+                        onClick={() => handleSubscribe(
+                          isAnnualPlan ? "subscribe_monthly_pro" : "subscribe_annual_pro"
+                        )}
+                        loading={isSubmitting}
+                        fullWidth
+                      >
+                        {isAnnualPlan ? "Switch to monthly" : "Switch to annual — 2 months free"}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button disabled fullWidth>
+                        Downgrade
+                      </Button>
+                      <Box minHeight="36px" />
+                    </>
+                  )}
+                </BlockStack>
               </BlockStack>
             </Card>
 
@@ -313,31 +327,42 @@ export default function Billing() {
                     <List.Item key={f}>{f}</List.Item>
                   ))}
                 </List>
-                {tier === "unlimited" ? (
-                  <Box>
-                    <Button disabled fullWidth>
-                      Current plan
-                    </Button>
-                  </Box>
-                ) : (
-                  <BlockStack gap="200">
-                    <Button
-                      variant="primary"
-                      onClick={() => handleSubscribe("subscribe_monthly_unlimited")}
-                      loading={isSubmitting}
-                      fullWidth
-                    >
-                      Start 7-day free trial
-                    </Button>
-                    <Button
-                      onClick={() => handleSubscribe("subscribe_annual_unlimited")}
-                      loading={isSubmitting}
-                      fullWidth
-                    >
-                      Subscribe annually — 2 months free
-                    </Button>
-                  </BlockStack>
-                )}
+                <BlockStack gap="200">
+                  {tier === "unlimited" ? (
+                    <>
+                      <Button disabled fullWidth>
+                        Current plan
+                      </Button>
+                      <Button
+                        onClick={() => handleSubscribe(
+                          isAnnualPlan ? "subscribe_monthly_unlimited" : "subscribe_annual_unlimited"
+                        )}
+                        loading={isSubmitting}
+                        fullWidth
+                      >
+                        {isAnnualPlan ? "Switch to monthly" : "Switch to annual — 2 months free"}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() => handleSubscribe("subscribe_monthly_unlimited")}
+                        loading={isSubmitting}
+                        fullWidth
+                      >
+                        Start 7-day free trial
+                      </Button>
+                      <Button
+                        onClick={() => handleSubscribe("subscribe_annual_unlimited")}
+                        loading={isSubmitting}
+                        fullWidth
+                      >
+                        Subscribe annually — 2 months free
+                      </Button>
+                    </>
+                  )}
+                </BlockStack>
               </BlockStack>
             </Card>
           </InlineGrid>

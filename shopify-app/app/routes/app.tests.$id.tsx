@@ -37,6 +37,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { authenticate } from "~/shopify.server";
+import { OpalLogo } from "~/components/OpalLogo";
 import {
   getTest,
   getIntegrationByShop,
@@ -198,7 +199,7 @@ export default function TestDetail() {
 
   return (
     <Page
-      title={test.product_title || `Product ${test.product_id}`}
+      title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> {test.product_title || `Product ${test.product_id}`}</InlineStack> as any}
       titleMetadata={<Badge tone={badge.tone}>{badge.label}</Badge>}
       subtitle={
         test.started_at

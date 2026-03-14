@@ -23,6 +23,7 @@ import { useCallback, useState, useEffect } from "react";
 import { authenticate } from "~/shopify.server";
 import { getIntegrationByShop, ensurePixelKey, getGAConfig, updateGAConfig } from "~/lib/opal-api.server";
 import { getEntitlements } from "~/lib/entitlements.server";
+import { OpalLogo } from "~/components/OpalLogo";
 
 const OPAL_API_URL = process.env.OPAL_API_URL || "https://dev.opaloptics.com";
 
@@ -326,7 +327,7 @@ export default function Settings() {
 
   if (!hasIntegration) {
     return (
-      <Page title="Settings" backAction={{ onAction: () => navigate("/app") }}>
+      <Page title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Settings</InlineStack> as any} backAction={{ onAction: () => navigate("/app") }}>
         <Layout>
           <Layout.Section>
             <Banner tone="warning">
@@ -342,7 +343,7 @@ export default function Settings() {
   const currentPixelStatus = actionData?.ok ? "configured" : pixelStatus;
 
   return (
-    <Page title="Settings" backAction={{ onAction: () => navigate("/app") }}>
+    <Page title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Settings</InlineStack> as any} backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
         {/* Action feedback banner */}
         {showBanner && actionData && (

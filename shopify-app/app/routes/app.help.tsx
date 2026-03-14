@@ -23,7 +23,7 @@ export default function Help() {
   const navigate = useNavigate();
 
   return (
-    <Page title="Help & Support" backAction={{ onAction: () => navigate("/app") }}>
+    <Page title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Help & Support</InlineStack> as any} backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
         {/* Quick start */}
         <Layout.Section>
@@ -37,62 +37,62 @@ export default function Help() {
               </InlineStack>
               <Divider />
               <BlockStack gap="300">
-                <InlineStack gap="300" blockAlign="start">
-                  <Badge tone="info">1</Badge>
-                  <BlockStack gap="050">
+                <BlockStack gap="050">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="info">1</Badge>
                     <Text variant="headingSm" as="h3">Configure the pixel</Text>
-                    <Text variant="bodySm" as="p" tone="subdued">
-                      Go to Settings and click "Configure Pixel." This installs a lightweight
-                      tracking pixel on your storefront that captures product views, add-to-carts,
-                      and conversions. It runs in Shopify's sandboxed environment and collects no
-                      personal customer data.
-                    </Text>
-                  </BlockStack>
-                </InlineStack>
-                <InlineStack gap="300" blockAlign="start">
-                  <Badge tone="info">2</Badge>
-                  <BlockStack gap="050">
+                  </InlineStack>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Go to Settings and click "Configure Pixel." This installs a lightweight
+                    tracking pixel on your storefront that captures product views, add-to-carts,
+                    and conversions. It runs in Shopify's sandboxed environment and collects no
+                    personal customer data.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="050">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="info">2</Badge>
                     <Text variant="headingSm" as="h3">Create a test</Text>
-                    <Text variant="bodySm" as="p" tone="subdued">
-                      Pick a product and select two images to compare. For example, test a lifestyle
-                      shot against a white-background image, or try different angles. Give each variant
-                      a descriptive label.
-                    </Text>
-                  </BlockStack>
-                </InlineStack>
-                <InlineStack gap="300" blockAlign="start">
-                  <Badge tone="info">3</Badge>
-                  <BlockStack gap="050">
+                  </InlineStack>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Pick a product and select two images to compare. For example, test a lifestyle
+                    shot against a white-background image, or try different angles. Give each variant
+                    a descriptive label.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="050">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="info">3</Badge>
                     <Text variant="headingSm" as="h3">Start the test</Text>
-                    <Text variant="bodySm" as="p" tone="subdued">
-                      When you start, Variant A is pushed to your storefront as the primary product
-                      image. The pixel begins tracking how it performs. Use the "Swap variant" button
-                      to switch to Variant B periodically.
-                    </Text>
-                  </BlockStack>
-                </InlineStack>
-                <InlineStack gap="300" blockAlign="start">
-                  <Badge tone="info">4</Badge>
-                  <BlockStack gap="050">
+                  </InlineStack>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    When you start, Variant A is pushed to your storefront as the primary product
+                    image. The pixel begins tracking how it performs. Use the "Swap variant" button
+                    to switch to Variant B periodically.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="050">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="info">4</Badge>
                     <Text variant="headingSm" as="h3">Watch the results</Text>
-                    <Text variant="bodySm" as="p" tone="subdued">
-                      Opal tracks views, add-to-carts, conversions, and revenue for each variant.
-                      The statistical significance gauge shows how confident you can be in the results.
-                      Wait until it reaches 95% before making a decision.
-                    </Text>
-                  </BlockStack>
-                </InlineStack>
-                <InlineStack gap="300" blockAlign="start">
-                  <Badge tone="info">5</Badge>
-                  <BlockStack gap="050">
+                  </InlineStack>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Opal tracks views, add-to-carts, conversions, and revenue for each variant.
+                    The statistical significance gauge shows how confident you can be in the results.
+                    Wait until it reaches 95% before making a decision.
+                  </Text>
+                </BlockStack>
+                <BlockStack gap="050">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="info">5</Badge>
                     <Text variant="headingSm" as="h3">Pick the winner</Text>
-                    <Text variant="bodySm" as="p" tone="subdued">
-                      When significance is reached, conclude the test and pick the winning image.
-                      It stays as your product's primary image on your storefront.
-                      On Pro/Unlimited plans, tests can auto-conclude when a clear winner emerges.
-                    </Text>
-                  </BlockStack>
-                </InlineStack>
+                  </InlineStack>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    When significance is reached, conclude the test and pick the winning image.
+                    It stays as your product's primary image on your storefront.
+                    On Pro/Unlimited plans, tests can auto-conclude when a clear winner emerges.
+                  </Text>
+                </BlockStack>
               </BlockStack>
             </BlockStack>
           </Card>

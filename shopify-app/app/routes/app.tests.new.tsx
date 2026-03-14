@@ -38,6 +38,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useCallback, useState } from "react";
 
 import { authenticate } from "~/shopify.server";
+import { OpalLogo } from "~/components/OpalLogo";
 import {
   getIntegrationByShop,
   createTest,
@@ -300,11 +301,11 @@ export default function CreateTest() {
   const canStart = selectedProduct && variantA && variantB && variantA.url !== variantB.url;
 
   return (
-    <Page title="Create A/B Test" backAction={{ onAction: () => navigate("/app") }}>
+    <Page title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Create A/B Test</InlineStack> as any} backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
-        {actionData?.error && (
+        {"error" in (actionData ?? {}) && (actionData as any).error && (
           <Layout.Section>
-            <Banner tone="critical">{actionData.error}</Banner>
+            <Banner tone="critical">{(actionData as any).error}</Banner>
           </Layout.Section>
         )}
 

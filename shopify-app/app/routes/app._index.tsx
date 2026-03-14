@@ -90,7 +90,7 @@ export default function Dashboard() {
 
   if (!hasIntegration) {
     return (
-      <Page title="Opal A/B">
+      <Page title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Opal A/B</InlineStack> as any}>
         <Layout>
           <Layout.Section>
             <Card>
@@ -123,7 +123,7 @@ export default function Dashboard() {
   if (tests.length === 0) {
     return (
       <Page
-        title="A/B Image Tests"
+        title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Opal A/B</InlineStack> as any}
         primaryAction={{
           content: "Create test",
           onAction: () => navigate("/app/tests/new"),
@@ -201,7 +201,7 @@ export default function Dashboard() {
 
   return (
     <Page
-      title="Opal A/B"
+      title={<InlineStack gap="200" blockAlign="center"><OpalLogo size={24} /> Opal A/B</InlineStack> as any}
       subtitle="A/B image testing for your store"
       primaryAction={{
         content: canCreate ? "Create test" : "Upgrade to create more",
