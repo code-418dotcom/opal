@@ -2319,7 +2319,7 @@ def find_running_test(integration_id: str, product_id: str) -> Optional[Dict[str
         row = session.execute(
             text("""
                 SELECT id, user_id, integration_id, product_id, active_variant,
-                       status, tracking_mode, auto_conclude
+                       status, tracking_mode, auto_conclude, started_at
                 FROM ab_tests
                 WHERE integration_id = :iid
                   AND product_id = :pid
@@ -2365,4 +2365,40 @@ def increment_ab_test_metric(
                 {"id": new_id("abm"), "tid": test_id, "var": variant, "d": date_str,
                  "v": views, "atc": add_to_carts, "c": conversions, "rc": revenue_cents},
             )
+        session.commit()
+
+
+def get_monthly_view_count(integration_id: str) -> int:
+    """Count total views across all tests for an integration in the current calendar month."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("""
+                SELECT COALESCE(SUM(m.views), 0) AS total_views
+                FROM ab_test_metrics m
+                JOIN ab_tests t ON t.id = m.ab_test_id
+                WHERE t.integration_id = :iid
+                  AND m.date >= date_trunc('month', CURRENT_DATE)::date
+            """),
+            {"iid": integration_id},
+        ).mappings().first()
+        return int(row["total_views"]) if row else 0
+
+
+def get_integration_event_limit(integration_id: str) -> Optional[int]:
+    """Get the monthly event limit for an integration. NULL = unlimited."""
+    with SessionLocal() as session:
+        row = session.execute(
+            text("SELECT monthly_event_limit FROM integrations WHERE id = :iid"),
+            {"iid": integration_id},
+        ).mappings().first()
+        return row["monthly_event_limit"] if row else 1000
+
+
+def update_integration_event_limit(integration_id: str, limit: Optional[int]) -> None:
+    """Update the monthly event limit for an integration. NULL = unlimited."""
+    with SessionLocal() as session:
+        session.execute(
+            text("UPDATE integrations SET monthly_event_limit = :lim, updated_at = NOW() WHERE id = :iid"),
+            {"iid": integration_id, "lim": limit},
+        )
         session.commit()

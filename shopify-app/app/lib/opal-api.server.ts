@@ -303,4 +303,27 @@ export async function provisionIntegration(
   });
 }
 
+/**
+ * Get monthly view usage and limit for an integration.
+ */
+export async function getViewUsage(
+  integrationId: string,
+): Promise<{ monthly_views: number; monthly_limit: number | null }> {
+  return opalFetch(`/v1/ab-tests/view-usage/${integrationId}`);
+}
+
+/**
+ * Update the monthly event limit for an integration.
+ * null = unlimited (paid plans), 1000 = free tier default.
+ */
+export async function updateEventLimit(
+  integrationId: string,
+  limit: number | null,
+): Promise<{ ok: boolean }> {
+  return opalFetch(`/v1/ab-tests/event-limit/${integrationId}`, {
+    method: "PUT",
+    body: { monthly_event_limit: limit },
+  });
+}
+
 export { OpalApiError };

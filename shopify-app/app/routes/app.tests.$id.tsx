@@ -6,6 +6,7 @@
  * - Conversion rate + lift percentage
  * - Statistical significance progress bar
  * - Action buttons: Swap, Conclude, Cancel
+ * - Free tier limit warnings (views & duration)
  */
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
@@ -15,6 +16,7 @@ import {
   useNavigation,
   useSubmit,
   useRevalidator,
+  useNavigate,
 } from "@remix-run/react";
 import {
   Page,
@@ -37,22 +39,29 @@ import { useCallback, useEffect, useState } from "react";
 import { authenticate } from "~/shopify.server";
 import {
   getTest,
+  getIntegrationByShop,
   startTest,
   swapVariant,
   concludeTest,
   cancelTest,
 } from "~/lib/opal-api.server";
 import type { ABTest, VariantMetrics, Significance } from "~/lib/opal-api.server";
+import { getEntitlements } from "~/lib/entitlements.server";
+import type { Entitlements } from "~/lib/entitlements.server";
 import { SignificanceGauge } from "~/components/SignificanceGauge";
 import { VariantCard } from "~/components/VariantCard";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const testId = params.id!;
 
   try {
-    const test = await getTest(testId);
-    return json({ test });
+    const integration = await getIntegrationByShop(session.shop);
+    const [test, entitlements] = await Promise.all([
+      getTest(testId),
+      getEntitlements(billing, integration?.id || null),
+    ]);
+    return json({ test, entitlements });
   } catch {
     throw new Response("Test not found", { status: 404 });
   }
@@ -83,7 +92,7 @@ export const action = async ({ params, request }: ActionFunctionArgs) => {
 
       case "cancel":
         await cancelTest(testId);
-        return json({ success: "Test canceled." });
+        return redirect("/app");
 
       default:
         return json({ error: "Unknown action." }, { status: 400 });
@@ -102,10 +111,11 @@ const STATUS_BADGE: Record<string, { tone: "success" | "info" | "attention" | "c
 };
 
 export default function TestDetail() {
-  const { test } = useLoaderData<typeof loader>();
+  const { test, entitlements } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
+  const navigate = useNavigate();
   const revalidator = useRevalidator();
 
   const isActing = navigation.state === "submitting";
@@ -137,6 +147,24 @@ export default function TestDetail() {
   const daysSinceStart = test.started_at
     ? Math.ceil((Date.now() - new Date(test.started_at).getTime()) / 86_400_000)
     : 0;
+
+  // ── Free tier limit calculations ──────────────────────────────────
+  const isFree = entitlements.tier === "free";
+  const maxDays = entitlements.maxTestDays;
+  const viewLimit = entitlements.monthlyViewLimit;
+  const viewsUsed = entitlements.monthlyViews;
+
+  const viewPercent = viewLimit ? Math.round((viewsUsed / viewLimit) * 100) : 0;
+  const dayPercent = maxDays && daysSinceStart > 0 ? Math.round((daysSinceStart / maxDays) * 100) : 0;
+
+  const viewLimitReached = isFree && viewLimit !== null && viewsUsed >= viewLimit;
+  const dayLimitReached = isFree && maxDays !== null && daysSinceStart >= maxDays;
+  const trackingPaused = viewLimitReached || dayLimitReached;
+
+  const viewWarning75 = isFree && !viewLimitReached && viewPercent >= 75 && viewPercent < 90;
+  const viewWarning90 = isFree && !viewLimitReached && viewPercent >= 90;
+  const dayWarning75 = isFree && !dayLimitReached && dayPercent >= 75 && dayPercent < 90;
+  const dayWarning90 = isFree && !dayLimitReached && dayPercent >= 90;
 
   const handleStart = useCallback(() => {
     const formData = new FormData();
@@ -177,7 +205,7 @@ export default function TestDetail() {
           ? `Started ${new Date(test.started_at).toLocaleDateString()} \u00B7 Day ${daysSinceStart}`
           : "Not started"
       }
-      backAction={{ url: "/app" }}
+      backAction={{ onAction: () => navigate("/app") }}
     >
       <Layout>
         {/* Feedback banners */}
@@ -189,6 +217,91 @@ export default function TestDetail() {
         {actionData && "error" in actionData && (
           <Layout.Section>
             <Banner tone="critical">{actionData.error}</Banner>
+          </Layout.Section>
+        )}
+
+        {/* Tracking paused — limit reached */}
+        {isRunning && trackingPaused && (
+          <Layout.Section>
+            <Banner
+              tone="warning"
+              title="Tracking paused — free plan limit reached"
+              action={{ content: "Start free trial", onAction: () => navigate("/app/billing") }}
+            >
+              <BlockStack gap="200">
+                <Text as="p" variant="bodySm">
+                  {viewLimitReached && dayLimitReached
+                    ? `You've used all ${viewLimit?.toLocaleString()} monthly visitors and exceeded the ${maxDays}-day test duration.`
+                    : viewLimitReached
+                      ? `You've used all ${viewLimit?.toLocaleString()} monthly visitors included in your free plan.`
+                      : `Your test has exceeded the ${maxDays}-day duration limit on the free plan.`}
+                  {" "}New metrics are no longer being collected. Your existing results are still available below.
+                </Text>
+                <Text as="p" variant="bodySm">
+                  Upgrade to Pro or Unlimited for unlimited visitors and test duration.
+                </Text>
+              </BlockStack>
+            </Banner>
+          </Layout.Section>
+        )}
+
+        {/* View limit warnings (75% / 90%) */}
+        {isRunning && viewWarning90 && (
+          <Layout.Section>
+            <Banner
+              tone="critical"
+              action={{ content: "Start free trial", onAction: () => navigate("/app/billing") }}
+            >
+              <BlockStack gap="100">
+                <Text as="p" variant="bodySm">
+                  You've used {viewsUsed.toLocaleString()} of {viewLimit?.toLocaleString()} monthly visitors ({viewPercent}%).
+                  Tracking will pause when the limit is reached.
+                </Text>
+                <ProgressBar progress={Math.min(viewPercent, 100)} tone="critical" size="small" />
+              </BlockStack>
+            </Banner>
+          </Layout.Section>
+        )}
+        {isRunning && viewWarning75 && (
+          <Layout.Section>
+            <Banner
+              tone="warning"
+              action={{ content: "See plans", onAction: () => navigate("/app/billing") }}
+            >
+              <BlockStack gap="100">
+                <Text as="p" variant="bodySm">
+                  You've used {viewsUsed.toLocaleString()} of {viewLimit?.toLocaleString()} monthly visitors ({viewPercent}%).
+                </Text>
+                <ProgressBar progress={viewPercent} tone="highlight" size="small" />
+              </BlockStack>
+            </Banner>
+          </Layout.Section>
+        )}
+
+        {/* Day limit warnings (75% / 90%) */}
+        {isRunning && dayWarning90 && (
+          <Layout.Section>
+            <Banner
+              tone="critical"
+              action={{ content: "Start free trial", onAction: () => navigate("/app/billing") }}
+            >
+              <Text as="p" variant="bodySm">
+                Day {daysSinceStart} of {maxDays} — your test is about to reach the free plan duration limit.
+                Tracking will pause after day {maxDays}. Upgrade for unlimited test duration.
+              </Text>
+            </Banner>
+          </Layout.Section>
+        )}
+        {isRunning && dayWarning75 && (
+          <Layout.Section>
+            <Banner
+              tone="warning"
+              action={{ content: "See plans", onAction: () => navigate("/app/billing") }}
+            >
+              <Text as="p" variant="bodySm">
+                Day {daysSinceStart} of {maxDays} — you're approaching the free plan duration limit.
+              </Text>
+            </Banner>
           </Layout.Section>
         )}
 
@@ -300,7 +413,9 @@ export default function TestDetail() {
                 <BlockStack gap="100">
                   <Text variant="bodySm" as="span" tone="subdued">Tracking</Text>
                   <Text variant="bodyMd" as="span">
-                    {test.tracking_mode === "pixel" ? "Automatic (pixel)" : "Manual"}
+                    {trackingPaused
+                      ? "Paused (limit reached)"
+                      : test.tracking_mode === "pixel" ? "Automatic (pixel)" : "Manual"}
                   </Text>
                 </BlockStack>
                 <BlockStack gap="100">

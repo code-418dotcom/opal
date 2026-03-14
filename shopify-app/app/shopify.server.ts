@@ -12,12 +12,17 @@ import {
 
 // ── Billing Plans ───────────────────────────────────────────────────
 // Free tier: 1 concurrent test, manual conclude, 30-day max (no plan needed)
-// Pro tier: unlimited tests, auto-conclude, full analytics
+// Pro tier: 10 concurrent tests, auto-conclude, full analytics ($19/mo)
+// Unlimited tier: unlimited tests, auto-conclude, full analytics ($29/mo)
 export const MONTHLY_PRO = "Opal A/B Pro";
 export const ANNUAL_PRO = "Opal A/B Pro Annual";
+export const MONTHLY_UNLIMITED = "Opal A/B Unlimited";
+export const ANNUAL_UNLIMITED = "Opal A/B Unlimited Annual";
 
 export const FREE_TIER_MAX_TESTS = 1;
+export const PRO_TIER_MAX_TESTS = 10;
 export const FREE_TIER_MAX_DAYS = 30;
+export const FREE_TIER_MAX_MONTHLY_VIEWS = 1000;
 import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
 
 const shopify = shopifyApp({
@@ -52,6 +57,26 @@ const shopify = shopifyApp({
       lineItems: [
         {
           amount: 190,
+          currencyCode: "USD",
+          interval: BillingInterval.Annual,
+        },
+      ],
+      trialDays: 7,
+    },
+    [MONTHLY_UNLIMITED]: {
+      lineItems: [
+        {
+          amount: 29,
+          currencyCode: "USD",
+          interval: BillingInterval.Every30Days,
+        },
+      ],
+      trialDays: 7,
+    },
+    [ANNUAL_UNLIMITED]: {
+      lineItems: [
+        {
+          amount: 290,
           currencyCode: "USD",
           interval: BillingInterval.Annual,
         },

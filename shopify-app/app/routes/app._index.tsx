@@ -19,6 +19,7 @@ import {
   InlineStack,
   Box,
   Filters,
+  ProgressBar,
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 
@@ -190,12 +191,12 @@ export default function Dashboard() {
       }}
     >
       <Layout>
-        {/* Upgrade banner for free tier at limit */}
+        {/* Upgrade banner when at test limit */}
         {entitlements && !canCreate && (
           <Layout.Section>
             <Banner
               tone="warning"
-              action={{ content: "Upgrade to Pro", url: "/app/billing" }}
+              action={{ content: "Upgrade", url: "/app/billing" }}
             >
               {entitlements.createTestBlockReason}
             </Banner>
@@ -209,10 +210,68 @@ export default function Dashboard() {
               action={{ content: "See plans", url: "/app/billing" }}
             >
               You're on the Free plan ({entitlements.runningTestCount}/{entitlements.maxConcurrentTests} test used).
-              Upgrade for unlimited tests and auto-conclude.
+              Upgrade for more tests and auto-conclude.
             </Banner>
           </Layout.Section>
         )}
+        {/* Monthly view usage warnings (free tier only) */}
+        {entitlements && entitlements.tier === "free" && entitlements.monthlyViewLimit !== null && (() => {
+          const pct = Math.round((entitlements.monthlyViews / entitlements.monthlyViewLimit) * 100);
+          if (pct >= 100) {
+            return (
+              <Layout.Section>
+                <Banner
+                  tone="critical"
+                  action={{ content: "Start free trial", url: "/app/billing" }}
+                >
+                  <BlockStack gap="100">
+                    <Text as="p" variant="bodySm">
+                      Monthly visitor limit reached ({entitlements.monthlyViews.toLocaleString()}/{entitlements.monthlyViewLimit.toLocaleString()}).
+                      Tracking is paused for all tests. Upgrade for unlimited visitors.
+                    </Text>
+                    <ProgressBar progress={100} tone="critical" size="small" />
+                  </BlockStack>
+                </Banner>
+              </Layout.Section>
+            );
+          }
+          if (pct >= 90) {
+            return (
+              <Layout.Section>
+                <Banner
+                  tone="critical"
+                  action={{ content: "Start free trial", url: "/app/billing" }}
+                >
+                  <BlockStack gap="100">
+                    <Text as="p" variant="bodySm">
+                      {entitlements.monthlyViews.toLocaleString()} of {entitlements.monthlyViewLimit.toLocaleString()} monthly visitors used ({pct}%).
+                      Tracking will pause when the limit is reached.
+                    </Text>
+                    <ProgressBar progress={pct} tone="critical" size="small" />
+                  </BlockStack>
+                </Banner>
+              </Layout.Section>
+            );
+          }
+          if (pct >= 75) {
+            return (
+              <Layout.Section>
+                <Banner
+                  tone="warning"
+                  action={{ content: "See plans", url: "/app/billing" }}
+                >
+                  <BlockStack gap="100">
+                    <Text as="p" variant="bodySm">
+                      {entitlements.monthlyViews.toLocaleString()} of {entitlements.monthlyViewLimit.toLocaleString()} monthly visitors used ({pct}%).
+                    </Text>
+                    <ProgressBar progress={pct} tone="highlight" size="small" />
+                  </BlockStack>
+                </Banner>
+              </Layout.Section>
+            );
+          }
+          return null;
+        })()}
         <Layout.Section>
           <Card padding="0">
             <Box padding="400">

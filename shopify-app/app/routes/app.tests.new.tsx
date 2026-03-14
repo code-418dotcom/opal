@@ -14,6 +14,7 @@ import {
   useActionData,
   useFetcher,
   useLoaderData,
+  useNavigate,
   useNavigation,
   useSubmit,
 } from "@remix-run/react";
@@ -183,6 +184,7 @@ interface ProductImage {
 export default function CreateTest() {
   const { integrationId, autoConcludes } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const navigate = useNavigate();
   const navigation = useNavigation();
   const submit = useSubmit();
 
@@ -298,7 +300,7 @@ export default function CreateTest() {
   const canStart = selectedProduct && variantA && variantB && variantA.url !== variantB.url;
 
   return (
-    <Page title="Create A/B Test" backAction={{ url: "/app" }}>
+    <Page title="Create A/B Test" backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
         {actionData?.error && (
           <Layout.Section>

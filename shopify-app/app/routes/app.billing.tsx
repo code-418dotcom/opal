@@ -3,7 +3,7 @@
  */
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
+import { useActionData, useLoaderData, useNavigation, useNavigate, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -22,7 +22,7 @@ import {
 } from "@shopify/polaris";
 import { useCallback } from "react";
 
-import { authenticate, MONTHLY_PRO, ANNUAL_PRO } from "~/shopify.server";
+import { authenticate, MONTHLY_PRO, ANNUAL_PRO, MONTHLY_UNLIMITED, ANNUAL_UNLIMITED } from "~/shopify.server";
 import { getIntegrationByShop } from "~/lib/opal-api.server";
 import { getEntitlements } from "~/lib/entitlements.server";
 
@@ -36,7 +36,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let currentSubscription: { id: string; name: string; status: string } | null = null;
   try {
     const { appSubscriptions } = await (billing as any).check({
-      plans: [MONTHLY_PRO, ANNUAL_PRO],
+      plans: [MONTHLY_PRO, ANNUAL_PRO, MONTHLY_UNLIMITED, ANNUAL_UNLIMITED],
       isTest: true,
     });
     if (appSubscriptions.length > 0) {
@@ -59,18 +59,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
-  if (intent === "subscribe_monthly") {
+  if (intent === "subscribe_monthly_pro") {
     await billing.request({
       plan: MONTHLY_PRO,
       isTest: true,
     });
-    // billing.request redirects — this won't be reached
     return json({ ok: true });
   }
 
-  if (intent === "subscribe_annual") {
+  if (intent === "subscribe_annual_pro") {
     await billing.request({
       plan: ANNUAL_PRO,
+      isTest: true,
+    });
+    return json({ ok: true });
+  }
+
+  if (intent === "subscribe_monthly_unlimited") {
+    await billing.request({
+      plan: MONTHLY_UNLIMITED,
+      isTest: true,
+    });
+    return json({ ok: true });
+  }
+
+  if (intent === "subscribe_annual_unlimited") {
+    await billing.request({
+      plan: ANNUAL_UNLIMITED,
       isTest: true,
     });
     return json({ ok: true });
@@ -94,6 +109,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 const FREE_FEATURES = [
   "1 concurrent A/B test",
+  "Up to 1,000 monthly visitors",
   "Automatic pixel tracking",
   "Basic metrics (views, ATC, conversions)",
   "30-day max test duration",
@@ -101,7 +117,18 @@ const FREE_FEATURES = [
 ];
 
 const PRO_FEATURES = [
+  "10 concurrent A/B tests",
+  "Unlimited monthly visitors",
+  "Automatic pixel tracking",
+  "Full metrics + revenue tracking",
+  "Unlimited test duration",
+  "Auto-conclude with statistical significance",
+  "7-day free trial",
+];
+
+const UNLIMITED_FEATURES = [
   "Unlimited concurrent A/B tests",
+  "Unlimited monthly visitors",
   "Automatic pixel tracking",
   "Full metrics + revenue tracking",
   "Unlimited test duration",
@@ -114,12 +141,13 @@ export default function Billing() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
+  const navigate = useNavigate();
   const isSubmitting = navigation.state === "submitting";
 
   const handleSubscribe = useCallback(
-    (plan: "monthly" | "annual") => {
+    (intent: string) => {
       const formData = new FormData();
-      formData.set("intent", plan === "monthly" ? "subscribe_monthly" : "subscribe_annual");
+      formData.set("intent", intent);
       submit(formData, { method: "post" });
     },
     [submit],
@@ -133,16 +161,16 @@ export default function Billing() {
     submit(formData, { method: "post" });
   }, [submit, currentSubscription]);
 
-  const isPro = entitlements.tier === "pro";
+  const tier = entitlements.tier;
 
   return (
-    <Page title="Plans & Billing" backAction={{ url: "/app" }}>
+    <Page title="Plans & Billing" backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
         {/* Action feedback */}
         {actionData && "action" in actionData && actionData.action === "canceled" && (
           <Layout.Section>
             <Banner tone="info">
-              Your subscription has been canceled. You'll retain Pro features until the end of your billing period.
+              Your subscription has been canceled. You've been downgraded to the Free plan. Your existing tests and data are preserved.
             </Banner>
           </Layout.Section>
         )}
@@ -153,10 +181,10 @@ export default function Billing() {
         )}
 
         {/* Current plan status */}
-        {isPro && currentSubscription && (
+        {tier !== "free" && currentSubscription && (
           <Layout.Section>
             <CalloutCard
-              title="You're on the Pro plan"
+              title={`You're on the ${tier === "unlimited" ? "Unlimited" : "Pro"} plan`}
               illustration="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               primaryAction={{
                 content: "Cancel subscription",
@@ -173,13 +201,13 @@ export default function Billing() {
 
         {/* Plan cards */}
         <Layout.Section>
-          <InlineGrid columns={2} gap="400">
+          <InlineGrid columns={3} gap="400">
             {/* Free Plan */}
             <Card>
               <BlockStack gap="400">
                 <InlineStack align="space-between" blockAlign="center">
                   <Text variant="headingMd" as="h2">Free</Text>
-                  {!isPro && <Badge>Current plan</Badge>}
+                  {tier === "free" && <Badge>Current plan</Badge>}
                 </InlineStack>
                 <BlockStack gap="200">
                   <Text variant="headingXl" as="p">$0</Text>
@@ -193,7 +221,7 @@ export default function Billing() {
                 </List>
                 <Box>
                   <Button disabled fullWidth>
-                    {!isPro ? "Current plan" : "Downgrade"}
+                    {tier === "free" ? "Current plan" : "Downgrade"}
                   </Button>
                 </Box>
               </BlockStack>
@@ -204,7 +232,7 @@ export default function Billing() {
               <BlockStack gap="400">
                 <InlineStack align="space-between" blockAlign="center">
                   <Text variant="headingMd" as="h2">Pro</Text>
-                  {isPro && <Badge tone="success">Current plan</Badge>}
+                  {tier === "pro" && <Badge tone="success">Current plan</Badge>}
                 </InlineStack>
                 <BlockStack gap="200">
                   <InlineStack gap="200" blockAlign="baseline">
@@ -212,7 +240,7 @@ export default function Billing() {
                     <Text variant="bodySm" as="span" tone="subdued">/month</Text>
                   </InlineStack>
                   <Text variant="bodySm" as="p" tone="subdued">
-                    or $190/year (save ~17%)
+                    or $190/year (2 months free)
                   </Text>
                 </BlockStack>
                 <Divider />
@@ -221,30 +249,90 @@ export default function Billing() {
                     <List.Item key={f}>{f}</List.Item>
                   ))}
                 </List>
-                {!isPro ? (
+                {tier === "free" ? (
                   <BlockStack gap="200">
                     <Button
                       variant="primary"
-                      onClick={() => handleSubscribe("monthly")}
+                      onClick={() => handleSubscribe("subscribe_monthly_pro")}
                       loading={isSubmitting}
                       fullWidth
                     >
                       Start 7-day free trial
                     </Button>
                     <Button
-                      onClick={() => handleSubscribe("annual")}
+                      onClick={() => handleSubscribe("subscribe_annual_pro")}
                       loading={isSubmitting}
                       fullWidth
                     >
-                      Subscribe annually ($190/yr)
+                      Subscribe annually — 2 months free
                     </Button>
                   </BlockStack>
-                ) : (
+                ) : tier === "pro" ? (
                   <Box>
                     <Button disabled fullWidth>
                       Current plan
                     </Button>
                   </Box>
+                ) : (
+                  <Box>
+                    <Button disabled fullWidth>
+                      Downgrade
+                    </Button>
+                  </Box>
+                )}
+              </BlockStack>
+            </Card>
+
+            {/* Unlimited Plan */}
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text variant="headingMd" as="h2">Unlimited</Text>
+                  {tier === "unlimited" ? (
+                    <Badge tone="success">Current plan</Badge>
+                  ) : (
+                    <Badge tone="attention">Best value</Badge>
+                  )}
+                </InlineStack>
+                <BlockStack gap="200">
+                  <InlineStack gap="200" blockAlign="baseline">
+                    <Text variant="headingXl" as="p">$29</Text>
+                    <Text variant="bodySm" as="span" tone="subdued">/month</Text>
+                  </InlineStack>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    or $290/year (2 months free)
+                  </Text>
+                </BlockStack>
+                <Divider />
+                <List type="bullet">
+                  {UNLIMITED_FEATURES.map((f) => (
+                    <List.Item key={f}>{f}</List.Item>
+                  ))}
+                </List>
+                {tier === "unlimited" ? (
+                  <Box>
+                    <Button disabled fullWidth>
+                      Current plan
+                    </Button>
+                  </Box>
+                ) : (
+                  <BlockStack gap="200">
+                    <Button
+                      variant="primary"
+                      onClick={() => handleSubscribe("subscribe_monthly_unlimited")}
+                      loading={isSubmitting}
+                      fullWidth
+                    >
+                      Start 7-day free trial
+                    </Button>
+                    <Button
+                      onClick={() => handleSubscribe("subscribe_annual_unlimited")}
+                      loading={isSubmitting}
+                      fullWidth
+                    >
+                      Subscribe annually — 2 months free
+                    </Button>
+                  </BlockStack>
                 )}
               </BlockStack>
             </Card>
@@ -260,21 +348,36 @@ export default function Billing() {
               <BlockStack gap="200">
                 <Text variant="headingSm" as="h3">What happens when my free trial ends?</Text>
                 <Text variant="bodySm" as="p" tone="subdued">
-                  After your 7-day trial, you'll be charged $19/month (or $190/year) through your Shopify bill.
-                  Cancel anytime before the trial ends to avoid charges.
+                  After your 7-day trial, you'll be charged through your Shopify bill.
+                  Cancel anytime before the trial ends to avoid charges — you'll be
+                  automatically moved to the Free plan.
                 </Text>
               </BlockStack>
               <BlockStack gap="200">
-                <Text variant="headingSm" as="h3">Can I switch between monthly and annual?</Text>
+                <Text variant="headingSm" as="h3">What if I cancel my subscription?</Text>
                 <Text variant="bodySm" as="p" tone="subdued">
-                  Yes! Cancel your current plan and subscribe to the other. You'll receive a prorated credit.
+                  You'll be downgraded to the Free plan automatically. The app stays installed
+                  and all your existing tests and data are preserved. You can upgrade again anytime.
+                </Text>
+              </BlockStack>
+              <BlockStack gap="200">
+                <Text variant="headingSm" as="h3">Can I switch between plans?</Text>
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Yes! Cancel your current plan and subscribe to a different one. You'll receive a prorated credit.
                 </Text>
               </BlockStack>
               <BlockStack gap="200">
                 <Text variant="headingSm" as="h3">What happens to my tests if I downgrade?</Text>
                 <Text variant="bodySm" as="p" tone="subdued">
-                  Your existing tests and data are preserved. You'll be limited to 1 concurrent test
-                  and won't have access to auto-conclude on the free plan.
+                  Your existing tests and data are preserved. You'll be limited to the concurrent test
+                  limit and monthly visitor cap of the Free plan, and won't have access to auto-conclude.
+                </Text>
+              </BlockStack>
+              <BlockStack gap="200">
+                <Text variant="headingSm" as="h3">Why subscribe annually?</Text>
+                <Text variant="bodySm" as="p" tone="subdued">
+                  Annual plans give you 2 months free compared to monthly billing.
+                  That's $190/year instead of $228 on Pro, or $290/year instead of $348 on Unlimited.
                 </Text>
               </BlockStack>
             </BlockStack>

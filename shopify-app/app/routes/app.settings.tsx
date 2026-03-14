@@ -3,7 +3,7 @@
  */
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useNavigation, useSubmit } from "@remix-run/react";
+import { useLoaderData, useActionData, useNavigate, useNavigation, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -226,6 +226,7 @@ export default function Settings() {
   const { hasIntegration, pixelKey, integrationId, shopDomain, opalApiUrl, pixelStatus } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const navigate = useNavigate();
   const navigation = useNavigation();
   const submit = useSubmit();
 
@@ -259,7 +260,7 @@ export default function Settings() {
 
   if (!hasIntegration) {
     return (
-      <Page title="Settings" backAction={{ url: "/app" }}>
+      <Page title="Settings" backAction={{ onAction: () => navigate("/app") }}>
         <Layout>
           <Layout.Section>
             <Banner tone="warning">
@@ -275,7 +276,7 @@ export default function Settings() {
   const currentPixelStatus = actionData?.ok ? "configured" : pixelStatus;
 
   return (
-    <Page title="Settings" backAction={{ url: "/app" }}>
+    <Page title="Settings" backAction={{ onAction: () => navigate("/app") }}>
       <Layout>
         {/* Action feedback banner */}
         {showBanner && actionData && (

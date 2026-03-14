@@ -23,7 +23,25 @@ from web_api.auth import get_current_user
 
 log = logging.getLogger("opal")
 
-app = FastAPI(title="Opal Web API", version="0.8.1")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    """Run pending migrations on startup."""
+    try:
+        from shared.db_sqlalchemy import SessionLocal
+        from sqlalchemy import text
+        with SessionLocal() as session:
+            session.execute(text(
+                "ALTER TABLE integrations ADD COLUMN IF NOT EXISTS monthly_event_limit INT DEFAULT 1000"
+            ))
+            session.commit()
+            log.info("Startup migration check complete")
+    except Exception as e:
+        log.warning("Startup migration check failed (non-fatal): %s", e)
+    yield
+
+app = FastAPI(title="Opal Web API", version="0.8.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

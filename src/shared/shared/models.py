@@ -231,6 +231,7 @@ class Integration(Base):
     status = Column(SQLEnum(IntegrationStatus), nullable=False, default=IntegrationStatus.active)
     provider_metadata = Column(JSON, nullable=True)
     pixel_key = Column(String(64), nullable=True)
+    monthly_event_limit = Column(Integer, nullable=True, default=1000)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

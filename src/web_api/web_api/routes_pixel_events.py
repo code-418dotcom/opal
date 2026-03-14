@@ -20,6 +20,9 @@ from shared.db_sqlalchemy import (
     increment_ab_test_metric,
     get_ab_test_aggregated_metrics,
     update_ab_test,
+    get_monthly_view_count,
+    get_integration_event_limit,
+    update_integration_event_limit,
 )
 from web_api.auth import get_current_user
 
@@ -66,13 +69,30 @@ async def receive_pixel_events(
     processed = 0
     skipped = 0
 
-    # 2. Process each event
+    # 2. Check monthly view limit
+    event_limit = get_integration_event_limit(integration_id)
+    if event_limit is not None:
+        monthly_views = get_monthly_view_count(integration_id)
+        if monthly_views >= event_limit:
+            LOG.info("Pixel events: integration=%s over monthly limit (%d/%d), dropping batch",
+                     integration_id, monthly_views, event_limit)
+            return {"accepted": 0, "skipped": len(body.events), "limit_reached": True}
+
+    # 3. Process each event
+    is_free_tier = event_limit is not None
     for event in body.events:
         # Find running test for this product
         test = find_running_test(integration_id, event.product_id)
         if not test:
             skipped += 1
             continue
+
+        # Free tier: skip events for tests running longer than 30 days
+        if is_free_tier and test.get("started_at"):
+            days_running = (datetime.utcnow() - test["started_at"]).days
+            if days_running >= 30:
+                skipped += 1
+                continue
 
         # Parse event timestamp
         try:
@@ -209,3 +229,38 @@ async def get_pixel_key(
         raise HTTPException(status_code=404, detail="Integration not found")
     key = ensure_pixel_key(integration_id)
     return {"pixel_key": key, "integration_id": integration_id}
+
+
+class UpdateEventLimitIn(BaseModel):
+    monthly_event_limit: Optional[int] = None  # None = unlimited
+
+
+@pixel_key_router.put("/event-limit/{integration_id}")
+async def set_event_limit(
+    integration_id: str,
+    body: UpdateEventLimitIn,
+    user: dict = Depends(get_current_user),
+):
+    """Set the monthly event limit for an integration. null = unlimited (paid plans)."""
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    update_integration_event_limit(integration_id, body.monthly_event_limit)
+    return {"ok": True, "monthly_event_limit": body.monthly_event_limit}
+
+
+@pixel_key_router.get("/view-usage/{integration_id}")
+async def get_view_usage(
+    integration_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get monthly view usage and limit for an integration."""
+    integ = get_integration(integration_id, user["user_id"])
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    monthly_views = get_monthly_view_count(integration_id)
+    monthly_limit = get_integration_event_limit(integration_id)
+    return {
+        "monthly_views": monthly_views,
+        "monthly_limit": monthly_limit,
+    }

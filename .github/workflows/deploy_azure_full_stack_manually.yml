@@ -525,7 +525,7 @@ jobs:
           az containerapp update -g "${RG_NAME}" -n "${SHOPIFY_APP}" \
             --image "${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}" \
             --set-env-vars "${SHOPIFY_ENV_VARS[@]}" \
-            --min-replicas 0 --max-replicas 2 >/dev/null
+            --min-replicas 1 --max-replicas 2 >/dev/null
           wait_ready "${SHOPIFY_APP}"
 
           echo "✅ All Container Apps deployed successfully"
