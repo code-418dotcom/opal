@@ -31,7 +31,7 @@ export default function TermsPage() {
         ))}
       </div>
       <div className="legal-page-footer">
-        <p>&copy; {new Date().getFullYear()} Opal Optics. {t('landing.footer.copyright')}</p>
+        <p>&copy; {new Date().getFullYear()} Aardvark Hosting. {t('landing.footer.copyright')}</p>
         <div className="legal-footer-links">
           <a href="/privacy">Privacy Policy</a>
           <a href="/support">Support</a>

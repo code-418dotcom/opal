@@ -9,7 +9,7 @@ import './LegalPage.css';
 export default function PrivacyPage() {
   const { t } = useTranslation();
 
-  const sections = Array.from({ length: 12 }, (_, i) => i + 1);
+  const sections = Array.from({ length: 13 }, (_, i) => i + 1);
 
   return (
     <div className="legal-page">
@@ -33,6 +33,18 @@ export default function PrivacyPage() {
                 <p>{t('landing.privacy.section2c')}</p>
                 <p>{t('landing.privacy.section2d')}</p>
                 <p>{t('landing.privacy.section2e')}</p>
+                <p>{t('landing.privacy.section2f')}</p>
+              </div>
+            ) : n === 13 ? (
+              <div>
+                <p>{t('landing.privacy.section13a')}</p>
+                <p>{t('landing.privacy.section13b')}</p>
+                <p>{t('landing.privacy.section13c')}</p>
+                <p>{t('landing.privacy.section13d')}</p>
+                <p>{t('landing.privacy.section13e')}</p>
+                <p>{t('landing.privacy.section13f')}</p>
+                <p>{t('landing.privacy.section13g')}</p>
+                <p>{t('landing.privacy.section13h')}</p>
               </div>
             ) : (
               <p>{t(`landing.privacy.section${n}`)}</p>
@@ -41,7 +53,7 @@ export default function PrivacyPage() {
         ))}
       </div>
       <div className="legal-page-footer">
-        <p>&copy; {new Date().getFullYear()} Opal Optics. {t('landing.footer.copyright')}</p>
+        <p>&copy; {new Date().getFullYear()} Aardvark Hosting. {t('landing.footer.copyright')}</p>
         <div className="legal-footer-links">
           <a href="/terms">Terms of Service</a>
           <a href="/support">Support</a>

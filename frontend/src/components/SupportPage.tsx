@@ -52,7 +52,7 @@ export default function SupportPage() {
             <details>
               <summary>How do I connect my Shopify store?</summary>
               <p>
-                Install the Opal A/B Testing app from the Shopify App Store. Your store
+                Install the Opal A/B app from the Shopify App Store. Your store
                 will be automatically connected when you open the app. Go to Settings
                 to configure the tracking pixel.
               </p>
@@ -100,14 +100,15 @@ export default function SupportPage() {
         <section>
           <h2>Business Information</h2>
           <p>
-            Opal Optics<br />
+            Aardvark Hosting<br />
             The Netherlands<br />
-            KvK: [Registration pending]
+            KvK: 68957157<br />
+            BTW: NL001778406B98
           </p>
         </section>
       </div>
       <div className="legal-page-footer">
-        <p>&copy; {new Date().getFullYear()} Opal Optics. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} Aardvark Hosting. All rights reserved.</p>
         <div className="legal-footer-links">
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms of Service</a>
