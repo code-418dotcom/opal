@@ -19,6 +19,7 @@ from web_api.routes_admin import router as admin_router
 from web_api.routes_gdpr import router as gdpr_privacy_router, public_router as gdpr_public_router
 from web_api.routes_api_keys import router as api_keys_router
 from web_api.routes_preferences import router as preferences_router
+from web_api.routes_account import router as account_router
 from web_api.auth import get_current_user
 
 log = logging.getLogger("opal")
@@ -69,6 +70,7 @@ app.include_router(benchmarks_router, dependencies=[Depends(get_current_user)])
 app.include_router(gdpr_privacy_router, dependencies=[Depends(get_current_user)])  # GDPR user data rights
 app.include_router(api_keys_router, prefix="/v1", dependencies=[Depends(get_current_user)])
 app.include_router(preferences_router, dependencies=[Depends(get_current_user)])
+app.include_router(account_router, dependencies=[Depends(get_current_user)])
 app.include_router(admin_router)  # Admin routes have their own require_admin dependency
 app.include_router(oauth_callback_router)  # OAuth callbacks are browser redirects (state-verified, no auth header)
 app.include_router(gdpr_router)  # Shopify GDPR webhooks are unauthenticated (HMAC-verified)

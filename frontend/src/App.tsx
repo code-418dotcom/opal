@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import Sidebar, { type Page } from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import OnboardingWizard from './components/OnboardingWizard';
+import OnboardingModal from './components/OnboardingModal';
 import UploadSection from './components/UploadSection';
 import JobMonitor from './components/JobMonitor';
 import ResultsGallery from './components/ResultsGallery';
@@ -218,17 +219,30 @@ function AppContent({
 }
 
 function AuthenticatedApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
+  const queryClient = useQueryClient();
   const { data: balance } = useQuery({
     queryKey: ['balance'],
     queryFn: () => api.getBalance(),
     refetchInterval: 30000,
   });
 
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => api.getProfile(),
+  });
+
   const isAdmin = balance?.is_admin ?? false;
   const tokenBalance = balance?.token_balance ?? null;
+  const needsOnboarding = profile && !profile.onboarding_completed;
 
   return (
     <PreferencesProvider>
+      {needsOnboarding && profile && (
+        <OnboardingModal
+          profile={profile}
+          onComplete={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
+        />
+      )}
       <AppContent
         isAdmin={isAdmin}
         tokenBalance={tokenBalance}

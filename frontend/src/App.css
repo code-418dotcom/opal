@@ -1009,6 +1009,139 @@ body {
   cursor: not-allowed;
 }
 
+/* ── Business Onboarding Modal ────────────────────────── */
+
+.onboarding-modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.onboarding-subtitle {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+}
+
+.onboarding-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-top: 1rem;
+}
+
+.onboarding-step-line {
+  width: 3rem;
+  height: 2px;
+  background: var(--color-border);
+}
+
+.onboarding-modal .onboarding-step {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  border: 2px solid var(--color-border);
+  transition: all 0.2s;
+}
+
+.onboarding-modal .onboarding-step.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.onboarding-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.onboarding-body h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.onboarding-section-icon {
+  color: var(--color-primary);
+}
+
+.onboarding-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.onboarding-label .onboarding-input {
+  margin-top: 0;
+}
+
+.onboarding-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.onboarding-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.onboarding-modal .onboarding-error {
+  color: #ef4444;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.onboarding-modal select.onboarding-input {
+  appearance: auto;
+}
+
+@media (max-width: 600px) {
+  .onboarding-modal {
+    padding: 1.5rem;
+    max-width: 100%;
+  }
+  .onboarding-row {
+    flex-direction: column;
+  }
+}
+
 /* ── Legacy compat ────────────────────────────────────── */
 .app {
   min-height: 100vh;

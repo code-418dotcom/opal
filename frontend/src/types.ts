@@ -402,3 +402,17 @@ export interface PipelinePerformance {
   total_items: number;
   daily_averages: Array<Record<string, number | string>>;
 }
+
+export interface UserProfile {
+  display_name: string | null;
+  email: string;
+  company_name: string | null;
+  vat_number: string | null;
+  phone: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  postal_code: string | null;
+  country: string | null;
+  onboarding_completed: boolean;
+}

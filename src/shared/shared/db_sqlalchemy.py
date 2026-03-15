@@ -278,6 +278,15 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
         "display_name": u.display_name,
         "token_balance": u.token_balance,
         "is_admin": u.is_admin,
+        "company_name": u.company_name,
+        "vat_number": u.vat_number,
+        "phone": u.phone,
+        "address_line1": u.address_line1,
+        "address_line2": u.address_line2,
+        "city": u.city,
+        "postal_code": u.postal_code,
+        "country": u.country,
+        "onboarding_completed": u.onboarding_completed,
         "created_at": u.created_at.isoformat() if u.created_at else None,
         "updated_at": u.updated_at.isoformat() if u.updated_at else None,
     }
@@ -333,6 +342,30 @@ def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
             updated_at=datetime.utcnow(),
         )
         session.add(u)
+        session.commit()
+        session.refresh(u)
+        return _user_to_dict(u)
+
+
+_PROFILE_FIELDS = {
+    "display_name", "company_name", "vat_number", "phone",
+    "address_line1", "address_line2", "city", "postal_code", "country",
+    "onboarding_completed",
+}
+
+
+def update_user_profile(user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update user profile fields. Only whitelisted fields are accepted."""
+    updates = {k: v for k, v in data.items() if k in _PROFILE_FIELDS}
+    if not updates:
+        return get_user_by_id(user_id)
+    with SessionLocal() as session:
+        u = session.get(User, user_id)
+        if not u:
+            return None
+        for k, v in updates.items():
+            setattr(u, k, v)
+        u.updated_at = datetime.utcnow()
         session.commit()
         session.refresh(u)
         return _user_to_dict(u)

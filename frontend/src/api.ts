@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse, PipelinePerformance } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse, PipelinePerformance, UserProfile } from './types';
 
 const API_URL = (import.meta.env.VITE_API_URL as string) || '';
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -645,6 +645,19 @@ class ApiClient {
 
   async listBenchmarkCategories(): Promise<{ categories: CategoryBenchmark[] }> {
     return this.request('/v1/benchmarks/categories');
+  }
+
+  // ── Account Profile ──────────────────────────────────────────────
+
+  async getProfile(): Promise<UserProfile> {
+    return this.request('/v1/account/profile');
+  }
+
+  async updateProfile(data: Partial<UserProfile>): Promise<UserProfile> {
+    return this.request('/v1/account/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // ── Admin ─────────────────────────────────────────────────────────
