@@ -1297,10 +1297,27 @@ function IntegrationsPanel() {
 
 function SystemPanel() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [switching, setSwitching] = useState(false);
   const { data: system, isLoading } = useQuery({
     queryKey: ['admin-system'],
     queryFn: () => api.getSystemInfo(),
   });
+
+  const handleMollieToggle = async () => {
+    if (!system?.mollie_mode) return;
+    const target = system.mollie_mode === 'test' ? 'live' : 'test';
+    if (target === 'live' && !confirm('Switch Mollie to LIVE mode? Real payments will be processed.')) return;
+    setSwitching(true);
+    try {
+      await api.setMollieMode(target);
+      queryClient.invalidateQueries({ queryKey: ['admin-system'] });
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to switch Mollie mode');
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   if (isLoading) {
     return <div className="empty-state"><Loader2 size={24} className="spin" /> {t('common.loading')}</div>;
@@ -1321,7 +1338,6 @@ function SystemPanel() {
 
   const statusItems = [
     { label: t('admin.system.entraAuth'), configured: system.has_entra_config },
-    { label: t('admin.system.molliePayments'), configured: system.has_mollie_config },
     { label: t('admin.system.shopify'), configured: system.has_shopify_config },
     { label: t('admin.system.falAi'), configured: system.has_fal_config },
     { label: t('admin.system.encryptionKey'), configured: system.has_encryption_key },
@@ -1349,6 +1365,33 @@ function SystemPanel() {
             </span>
           </div>
         ))}
+
+        {/* Mollie test/live toggle */}
+        <div className="system-item">
+          <span className="system-label">{t('admin.system.molliePayments')}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {system.has_mollie_config ? (
+              <>
+                <span className={`system-status ${system.mollie_mode === 'live' ? 'status-ok' : 'status-missing'}`}>
+                  <Check size={14} /> {system.mollie_mode === 'live' ? 'Live' : 'Test'}
+                </span>
+                <button
+                  className={`btn btn-sm ${system.mollie_mode === 'live' ? 'btn-danger' : 'btn-primary'}`}
+                  onClick={handleMollieToggle}
+                  disabled={switching}
+                  style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}
+                >
+                  {switching ? <Loader2 size={12} className="spin" /> :
+                    system.mollie_mode === 'live' ? 'Switch to Test' : 'Switch to Live'}
+                </button>
+              </>
+            ) : (
+              <span className="system-status status-missing">
+                <X size={14} /> {t('admin.system.notConfigured')}
+              </span>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   );

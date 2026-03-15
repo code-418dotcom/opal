@@ -330,6 +330,60 @@ async def get_all_payments(
     return {"payments": payments, "limit": limit, "offset": offset}
 
 
+# ── Mollie Test/Live Toggle ───────────────────────────────────────────
+
+def _mollie_mode() -> str | None:
+    """Return 'test', 'live', or None based on the active MOLLIE_API_KEY prefix."""
+    from shared.settings_service import get_setting
+    key = get_setting('MOLLIE_API_KEY') or ''
+    if key.startswith('test_'):
+        return 'test'
+    if key.startswith('live_'):
+        return 'live'
+    return None
+
+
+class MollieModeIn(BaseModel):
+    mode: str = Field(..., pattern=r'^(test|live)$')
+
+
+@router.put("/mollie/mode")
+async def set_mollie_mode(
+    body: MollieModeIn,
+    admin: dict = Depends(require_admin),
+):
+    """Switch Mollie between test and live keys.
+
+    Requires MOLLIE_API_KEY_TEST and MOLLIE_API_KEY_LIVE admin settings
+    to be configured first. Copies the selected key into MOLLIE_API_KEY.
+    """
+    from shared.settings_service import get_setting
+    source_key = f"MOLLIE_API_KEY_{body.mode.upper()}"
+    source_val = get_setting(source_key)
+    if not source_val:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Admin setting '{source_key}' is not configured. "
+                   f"Add it in Settings before switching.",
+        )
+    expected_prefix = f"{body.mode}_"
+    if not source_val.startswith(expected_prefix):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{source_key} must start with '{expected_prefix}'",
+        )
+    upsert_admin_setting(
+        key="MOLLIE_API_KEY",
+        value=source_val,
+        user_id=admin["user_id"],
+        is_secret=True,
+        category="billing",
+        description="Active Mollie API key (managed by test/live toggle)",
+    )
+    LOG.info("Mollie mode switched to %s by %s", body.mode, admin["user_id"])
+    return {"mode": body.mode}
+
+
 # ── System Info ──────────────────────────────────────────────────────
 
 @router.get("/system")
@@ -347,6 +401,7 @@ async def system_info(admin: dict = Depends(require_admin)):
         "bg_removal_provider": env_settings.BACKGROUND_REMOVAL_PROVIDER,
         "has_entra_config": bool(env_settings.ENTRA_ISSUER),
         "has_mollie_config": bool(get_setting('MOLLIE_API_KEY')),
+        "mollie_mode": _mollie_mode(),
         "has_shopify_config": bool(get_setting('SHOPIFY_API_KEY')),
         "has_fal_config": bool(get_setting('FAL_API_KEY')),
         "has_encryption_key": bool(get_setting('ENCRYPTION_KEY')),

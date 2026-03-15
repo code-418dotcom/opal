@@ -653,6 +653,13 @@ class ApiClient {
     return this.request('/v1/admin/system');
   }
 
+  async setMollieMode(mode: 'test' | 'live'): Promise<{ mode: string }> {
+    return this.request('/v1/admin/mollie/mode', {
+      method: 'PUT',
+      body: JSON.stringify({ mode }),
+    });
+  }
+
   async listAdminSettings(category?: string): Promise<AdminSetting[]> {
     const params = category ? `?category=${category}` : '';
     const resp = await this.request<{ settings: AdminSetting[] }>(`/v1/admin/settings${params}`);

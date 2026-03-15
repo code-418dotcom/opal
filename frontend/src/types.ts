@@ -318,6 +318,7 @@ export interface SystemInfo {
   bg_removal_provider: string;
   has_entra_config: boolean;
   has_mollie_config: boolean;
+  mollie_mode: 'test' | 'live' | null;
   has_shopify_config: boolean;
   has_fal_config: boolean;
   has_encryption_key: boolean;
