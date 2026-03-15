@@ -7,7 +7,7 @@ const msalConfig = {
   auth: {
     clientId: ENTRA_CLIENT_ID || '',
     authority: ENTRA_AUTHORITY || '',
-    redirectUri: `${window.location.origin}/blank.html`,
+    redirectUri: window.location.origin,
   },
   cache: {
     cacheLocation: 'sessionStorage' as const,
@@ -56,6 +56,7 @@ export async function login(): Promise<void> {
   await bootMsal();
   await msal().loginPopup({
     scopes: [`api://${ENTRA_CLIENT_ID}/access`],
+    redirectUri: `${window.location.origin}/blank.html`,
   });
 }
 
