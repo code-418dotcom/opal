@@ -7,7 +7,7 @@ const msalConfig = {
   auth: {
     clientId: ENTRA_CLIENT_ID || '',
     authority: ENTRA_AUTHORITY || '',
-    redirectUri: window.location.origin,
+    redirectUri: `${window.location.origin}/blank.html`,
   },
   cache: {
     cacheLocation: 'sessionStorage' as const,
