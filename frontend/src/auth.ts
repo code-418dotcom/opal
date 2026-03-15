@@ -66,7 +66,6 @@ export async function logout(): Promise<void> {
       // End both local and Entra SSO session so re-login requires credentials
       await msal().logoutPopup({
         account,
-        postLogoutRedirectUri: window.location.origin,
         mainWindowRedirectUri: window.location.origin,
       });
     } catch {
