@@ -56,7 +56,6 @@ export async function login(): Promise<void> {
   await bootMsal();
   await msal().loginPopup({
     scopes: [`api://${ENTRA_CLIENT_ID}/access`],
-    redirectUri: `${window.location.origin}/blank.html`,
   });
 }
 
