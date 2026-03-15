@@ -15,6 +15,7 @@ import IntegrationsPage from './components/IntegrationsPage';
 import ProductsPage from './components/ProductsPage';
 import BenchmarkPage from './components/BenchmarkPage';
 import AdminPage from './components/AdminPage';
+import AccountPage from './components/AccountPage';
 import SettingsPage from './components/SettingsPage';
 import LandingPage from './components/LandingPage';
 import PrivacyPage from './components/PrivacyPage';
@@ -205,6 +206,7 @@ function AppContent({
           {activePage === 'products' && <ProductsPage onJobCreated={handleJobCreated} />}
           {activePage === 'benchmarks' && <BenchmarkPage />}
           {activePage === 'billing' && <BillingPage />}
+          {activePage === 'account' && <AccountPage />}
           {activePage === 'settings' && <SettingsPage />}
           {activePage === 'admin' && <AdminPage />}
         </div>

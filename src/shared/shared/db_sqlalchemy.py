@@ -13,7 +13,7 @@ from .models import (
     AdminSetting, SubscriptionPlan, UserSubscription,
     CatalogJob, CatalogJobStatus, CatalogJobProduct, CatalogProductStatus,
     ABTest, ABTestStatus, ABTestMetric, ABTestVariantLog,
-    ImportedImage,
+    ImportedImage, Invoice,
 )
 from datetime import datetime, timedelta
 import logging
@@ -854,6 +854,12 @@ def create_payment(data: Dict[str, Any]) -> Dict[str, Any]:
             mollie_payment_id=data.get("mollie_payment_id"),
             amount_cents=data["amount_cents"],
             currency=data.get("currency", "EUR"),
+            amount_net_cents=data.get("amount_net_cents"),
+            vat_rate=data.get("vat_rate", 0),
+            vat_amount_cents=data.get("vat_amount_cents", 0),
+            buyer_vat_number=data.get("buyer_vat_number"),
+            vat_reverse_charged=data.get("vat_reverse_charged", False),
+            vat_exempt_reason=data.get("vat_exempt_reason"),
             status=PaymentStatus.pending,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -892,39 +898,37 @@ def update_payment_status(payment_id: str, status: str, mollie_payment_id: Optio
         }
 
 
+def _payment_to_dict(payment: Payment) -> Dict[str, Any]:
+    return {
+        "id": payment.id,
+        "user_id": payment.user_id,
+        "package_id": payment.package_id,
+        "mollie_payment_id": payment.mollie_payment_id,
+        "amount_cents": payment.amount_cents,
+        "currency": payment.currency,
+        "status": payment.status.value,
+        "amount_net_cents": payment.amount_net_cents,
+        "vat_rate": float(payment.vat_rate) if payment.vat_rate else 0,
+        "vat_amount_cents": payment.vat_amount_cents or 0,
+        "buyer_vat_number": payment.buyer_vat_number,
+        "vat_reverse_charged": payment.vat_reverse_charged or False,
+        "vat_exempt_reason": payment.vat_exempt_reason,
+        "created_at": payment.created_at.isoformat() if payment.created_at else None,
+    }
+
+
 def get_payment_by_id(payment_id: str) -> Optional[Dict[str, Any]]:
     """Look up a payment by its internal ID."""
     with SessionLocal() as session:
         payment = session.query(Payment).filter(Payment.id == payment_id).first()
-        if not payment:
-            return None
-        return {
-            "id": payment.id,
-            "user_id": payment.user_id,
-            "package_id": payment.package_id,
-            "mollie_payment_id": payment.mollie_payment_id,
-            "amount_cents": payment.amount_cents,
-            "currency": payment.currency,
-            "status": payment.status.value,
-            "created_at": payment.created_at.isoformat() if payment.created_at else None,
-        }
+        return _payment_to_dict(payment) if payment else None
 
 
 def get_payment_by_mollie_id(mollie_id: str) -> Optional[Dict[str, Any]]:
     """Look up a payment by Mollie payment ID."""
     with SessionLocal() as session:
         payment = session.query(Payment).filter(Payment.mollie_payment_id == mollie_id).first()
-        if not payment:
-            return None
-        return {
-            "id": payment.id,
-            "user_id": payment.user_id,
-            "package_id": payment.package_id,
-            "mollie_payment_id": payment.mollie_payment_id,
-            "amount_cents": payment.amount_cents,
-            "currency": payment.currency,
-            "status": payment.status.value,
-        }
+        return _payment_to_dict(payment) if payment else None
 
 
 def credit_tokens(user_id: str, amount: int, tx_type: str, description: str, reference_id: Optional[str] = None) -> int:
@@ -1007,6 +1011,112 @@ def list_token_transactions(user_id: str, limit: int = 50, offset: int = 0) -> L
             }
             for tx in txs
         ]
+
+
+# ── Invoice CRUD ────────────────────────────────────────────────────
+
+def _invoice_to_dict(inv: Invoice) -> Dict[str, Any]:
+    return {
+        "id": inv.id,
+        "invoice_number": inv.invoice_number,
+        "user_id": inv.user_id,
+        "payment_id": inv.payment_id,
+        "amount_net_cents": inv.amount_net_cents,
+        "vat_rate": float(inv.vat_rate) if inv.vat_rate else 0,
+        "vat_amount_cents": inv.vat_amount_cents,
+        "amount_total_cents": inv.amount_total_cents,
+        "currency": inv.currency,
+        "vat_reverse_charged": inv.vat_reverse_charged,
+        "vat_exempt_reason": inv.vat_exempt_reason,
+        "buyer_name": inv.buyer_name,
+        "buyer_company": inv.buyer_company,
+        "buyer_vat_number": inv.buyer_vat_number,
+        "buyer_country": inv.buyer_country,
+        "description": inv.description,
+        "pdf_blob_path": inv.pdf_blob_path,
+        "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
+        "created_at": inv.created_at.isoformat() if inv.created_at else None,
+    }
+
+
+def next_invoice_number() -> str:
+    """Generate sequential invoice number like OPAL-2026-0001."""
+    with SessionLocal() as session:
+        result = session.execute(text("SELECT nextval('invoice_number_seq')"))
+        seq = result.scalar()
+        year = datetime.utcnow().year
+        return f"OPAL-{year}-{seq:04d}"
+
+
+def create_invoice(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create an invoice record."""
+    with SessionLocal() as session:
+        inv = Invoice(
+            id=data["id"],
+            invoice_number=data["invoice_number"],
+            user_id=data["user_id"],
+            payment_id=data["payment_id"],
+            amount_net_cents=data["amount_net_cents"],
+            vat_rate=data.get("vat_rate", 0),
+            vat_amount_cents=data.get("vat_amount_cents", 0),
+            amount_total_cents=data["amount_total_cents"],
+            currency=data.get("currency", "EUR"),
+            vat_reverse_charged=data.get("vat_reverse_charged", False),
+            vat_exempt_reason=data.get("vat_exempt_reason"),
+            buyer_name=data.get("buyer_name"),
+            buyer_company=data.get("buyer_company"),
+            buyer_vat_number=data.get("buyer_vat_number"),
+            buyer_address_line1=data.get("buyer_address_line1"),
+            buyer_address_line2=data.get("buyer_address_line2"),
+            buyer_city=data.get("buyer_city"),
+            buyer_postal_code=data.get("buyer_postal_code"),
+            buyer_country=data.get("buyer_country"),
+            buyer_email=data.get("buyer_email"),
+            description=data.get("description"),
+            pdf_blob_path=data.get("pdf_blob_path"),
+            issued_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+        )
+        session.add(inv)
+        session.commit()
+        session.refresh(inv)
+        return _invoice_to_dict(inv)
+
+
+def get_invoice_by_id(invoice_id: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        inv = session.get(Invoice, invoice_id)
+        return _invoice_to_dict(inv) if inv else None
+
+
+def get_invoice_by_payment_id(payment_id: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        inv = session.query(Invoice).filter(Invoice.payment_id == payment_id).first()
+        return _invoice_to_dict(inv) if inv else None
+
+
+def list_user_invoices(user_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    with SessionLocal() as session:
+        invoices = (
+            session.query(Invoice)
+            .filter(Invoice.user_id == user_id)
+            .order_by(Invoice.issued_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [_invoice_to_dict(inv) for inv in invoices]
+
+
+def update_invoice_pdf_path(invoice_id: str, pdf_blob_path: str) -> Optional[Dict[str, Any]]:
+    with SessionLocal() as session:
+        inv = session.get(Invoice, invoice_id)
+        if not inv:
+            return None
+        inv.pdf_blob_path = pdf_blob_path
+        session.commit()
+        session.refresh(inv)
+        return _invoice_to_dict(inv)
 
 
 # ── Integration CRUD ─────────────────────────────────────────────────
@@ -1317,7 +1427,9 @@ def platform_stats() -> Dict[str, Any]:
     with SessionLocal() as session:
         total_users = session.query(func.count(User.id)).scalar() or 0
         total_jobs = session.query(func.count(Job.id)).scalar() or 0
-        total_tokens_in_circulation = session.query(func.coalesce(func.sum(User.token_balance), 0)).scalar()
+        total_tokens_in_circulation = session.query(
+            func.coalesce(func.sum(User.token_balance), 0)
+        ).filter(User.token_balance < 999999).scalar()
         total_tokens_spent = session.query(
             func.coalesce(func.sum(func.abs(TokenTransaction.amount)), 0)
         ).filter(TokenTransaction.amount < 0).scalar()

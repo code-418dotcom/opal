@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from shared.db_sqlalchemy import get_user_by_id, update_user_profile
+from shared.vat import validate_vat_number
 from web_api.auth import get_current_user
 
 LOG = logging.getLogger(__name__)
@@ -63,3 +64,14 @@ async def update_profile(
         raise HTTPException(status_code=404, detail="User not found")
     LOG.info("Profile updated for user %s", user["user_id"])
     return ProfileOut(**result).model_dump()
+
+
+class VATValidateIn(BaseModel):
+    vat_number: str = Field(..., min_length=4, max_length=20)
+
+
+@router.post("/validate-vat")
+async def validate_vat(body: VATValidateIn, user: dict = Depends(get_current_user)):
+    """Validate an EU VAT number via VIES."""
+    result = validate_vat_number(body.vat_number)
+    return result

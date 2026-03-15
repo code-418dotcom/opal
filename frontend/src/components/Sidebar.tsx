@@ -11,6 +11,7 @@ import {
   CreditCard,
   Settings,
   SlidersHorizontal,
+  User,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -29,6 +30,7 @@ export type Page =
   | 'products'
   | 'benchmarks'
   | 'billing'
+  | 'account'
   | 'settings'
   | 'admin';
 
@@ -67,6 +69,7 @@ export default function Sidebar({
     ...(hasConnectedStores ? [{ id: 'products' as Page, icon: ShoppingBag, label: t('nav.products', { defaultValue: 'Products' }) }] : []),
     { id: 'benchmarks' as Page, icon: Target, label: t('nav.benchmarks', { defaultValue: 'Image Score' }) },
     { id: 'billing' as Page, icon: CreditCard, label: t('nav.billing', { defaultValue: 'Billing' }) },
+    { id: 'account' as Page, icon: User, label: t('nav.account', { defaultValue: 'Account' }) },
     { id: 'settings' as Page, icon: SlidersHorizontal, label: t('nav.settings', { defaultValue: 'Settings' }) },
     ...(isAdmin ? [{ id: 'admin' as Page, icon: Settings, label: t('nav.admin', { defaultValue: 'Admin' }) }] : []),
   ];

@@ -5,9 +5,10 @@ import {
   Coins, ArrowUpRight, ArrowDownRight, Gift, RotateCcw,
   CheckCircle, XCircle, Clock, Crown, Check, Zap, Repeat,
   ShoppingBag, Key, Plus, Copy, Trash2, AlertTriangle,
+  FileText, Download,
 } from 'lucide-react';
 import { api } from '../api';
-import type { TokenPackage, TokenTransaction, ApiKeyCreateResponse } from '../types';
+import type { TokenPackage, TokenTransaction, ApiKeyCreateResponse, Invoice } from '../types';
 
 type PricingTab = 'subscriptions' | 'packs';
 
@@ -294,6 +295,11 @@ export default function BillingPage() {
     queryFn: () => api.listTransactions(),
   });
 
+  const { data: invoices } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: () => api.listInvoices(),
+  });
+
   const handlePurchase = async (pkg: TokenPackage) => {
     setPurchaseLoading(pkg.id);
     try {
@@ -540,6 +546,69 @@ export default function BillingPage() {
           <Coins size={48} />
           <p>{t('billing.noTransactions')}</p>
         </div>
+      )}
+
+      {/* Invoices */}
+      {invoices && invoices.length > 0 && (
+        <>
+          <h2 className="billing-section-title" style={{ marginTop: '2rem' }}>
+            <FileText size={20} />
+            Invoices
+          </h2>
+          <div className="billing-transactions">
+            <table className="billing-tx-table">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Net</th>
+                  <th>VAT</th>
+                  <th>Total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv: Invoice) => (
+                  <tr key={inv.id}>
+                    <td><code style={{ fontSize: '0.85em' }}>{inv.invoice_number}</code></td>
+                    <td>{new Date(inv.issued_at).toLocaleDateString()}</td>
+                    <td>{inv.description || '—'}</td>
+                    <td>{formatPrice(inv.amount_net_cents, inv.currency)}</td>
+                    <td>
+                      {inv.vat_amount_cents > 0
+                        ? formatPrice(inv.vat_amount_cents, inv.currency)
+                        : inv.vat_reverse_charged
+                          ? 'RC'
+                          : '—'}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{formatPrice(inv.amount_total_cents, inv.currency)}</td>
+                    <td>
+                      {inv.pdf_blob_path && (
+                        <button
+                          className="apikey-revoke-btn"
+                          style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+                          title="Download PDF"
+                          onClick={async () => {
+                            try {
+                              const url = await api.getInvoicePdfUrl(inv.id);
+                              window.open(url, '_blank');
+                            } catch {
+                              alert('Could not download invoice');
+                            }
+                          }}
+                        >
+                          <Download size={14} />
+                          PDF
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* API Keys Section */}

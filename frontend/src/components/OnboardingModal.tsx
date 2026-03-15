@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Building2, MapPin, ArrowRight } from 'lucide-react';
+import { Loader2, Building2, MapPin, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '../api';
 import type { UserProfile } from '../types';
 
@@ -35,6 +35,8 @@ export default function OnboardingModal({ profile, onComplete }: Props) {
   const [step, setStep] = useState<1 | 2>(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [vatStatus, setVatStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [vatError, setVatError] = useState('');
 
   const [form, setForm] = useState({
     display_name: profile.display_name || '',
@@ -48,8 +50,29 @@ export default function OnboardingModal({ profile, onComplete }: Props) {
     country: profile.country || '',
   });
 
-  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
+    if (field === 'vat_number') { setVatStatus('idle'); setVatError(''); }
+  };
+
+  const handleValidateVat = async () => {
+    const vat = form.vat_number.trim();
+    if (!vat || vat.length < 4) return;
+    setVatStatus('checking');
+    setVatError('');
+    try {
+      const result = await api.validateVat(vat);
+      if (result.valid) {
+        setVatStatus('valid');
+      } else {
+        setVatStatus('invalid');
+        setVatError(result.error || 'Invalid VAT number');
+      }
+    } catch {
+      setVatStatus('invalid');
+      setVatError('Could not validate');
+    }
+  };
 
   const step1Valid = form.display_name.trim() && form.company_name.trim();
   const step2Valid = form.address_line1.trim() && form.city.trim() && form.postal_code.trim() && form.country;
@@ -104,8 +127,24 @@ export default function OnboardingModal({ profile, onComplete }: Props) {
 
             <label className="onboarding-label">
               {t('onboarding.vatNumber', { defaultValue: 'VAT number' })}
-              <input className="onboarding-input" value={form.vat_number} onChange={set('vat_number')}
-                placeholder="NL123456789B01" />
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input className="onboarding-input" style={{ flex: 1, marginBottom: 0 }} value={form.vat_number} onChange={set('vat_number')}
+                  placeholder="NL123456789B01" />
+                {form.vat_number.trim().length >= 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ whiteSpace: 'nowrap', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                    onClick={handleValidateVat}
+                    disabled={vatStatus === 'checking'}
+                  >
+                    {vatStatus === 'checking' ? <Loader2 size={14} className="spin" /> : 'Verify'}
+                  </button>
+                )}
+                {vatStatus === 'valid' && <CheckCircle size={18} style={{ color: '#4ade80', flexShrink: 0 }} />}
+                {vatStatus === 'invalid' && <XCircle size={18} style={{ color: '#f87171', flexShrink: 0 }} />}
+              </div>
+              {vatError && <span style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '0.25rem' }}>{vatError}</span>}
             </label>
 
             <label className="onboarding-label">

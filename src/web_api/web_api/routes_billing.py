@@ -25,7 +25,14 @@ from shared.db_sqlalchemy import (
     update_subscription,
     get_user_mollie_customer_id,
     set_user_mollie_customer_id,
+    create_invoice,
+    next_invoice_number,
+    list_user_invoices,
+    get_invoice_by_id,
+    get_invoice_by_payment_id,
+    update_invoice_pdf_path,
 )
+from shared.vat import calculate_vat, validate_vat_number
 from shared.mollie_client import (
     create_mollie_payment, get_mollie_payment,
     create_mollie_customer, create_first_payment,
@@ -87,6 +94,14 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
     if not get_setting('MOLLIE_API_KEY'):
         raise HTTPException(status_code=503, detail="Payment provider not configured")
 
+    # Calculate VAT based on buyer profile
+    buyer = get_user_by_id(user["user_id"]) or {}
+    vat = calculate_vat(
+        price_cents=pkg["price_cents"],
+        buyer_country=buyer.get("country"),
+        buyer_vat_number=buyer.get("vat_number"),
+    )
+
     public_base = get_setting('PUBLIC_BASE_URL')
     webhook_url = f"{public_base}/v1/billing/mollie/webhook" if public_base else None
 
@@ -96,7 +111,7 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
 
     try:
         mollie = create_mollie_payment(
-            amount_cents=pkg["price_cents"],
+            amount_cents=vat.total_cents,
             currency=pkg["currency"],
             description=f"Opal {pkg['name']} — {pkg['tokens']} tokens",
             redirect_url=redirect_with_id,
@@ -107,14 +122,20 @@ def purchase_tokens(body: PurchaseIn, user: dict = Depends(get_current_user)):
         LOG.error("Mollie payment creation failed: %s", e)
         raise HTTPException(status_code=502, detail="Payment provider error")
 
-    # Store payment record
+    # Store payment record with VAT details
     create_payment({
         "id": payment_id,
         "user_id": user["user_id"],
         "package_id": body.package_id,
         "mollie_payment_id": mollie["id"],
-        "amount_cents": pkg["price_cents"],
+        "amount_cents": vat.total_cents,
         "currency": pkg["currency"],
+        "amount_net_cents": vat.net_cents,
+        "vat_rate": vat.vat_rate,
+        "vat_amount_cents": vat.vat_cents,
+        "buyer_vat_number": buyer.get("vat_number"),
+        "vat_reverse_charged": vat.reverse_charged,
+        "vat_exempt_reason": vat.exempt_reason,
     })
 
     return {"payment_url": mollie["checkout_url"], "payment_id": payment_id}
@@ -267,6 +288,9 @@ async def mollie_webhook(request: Request):
             LOG.info("Credited %d tokens to user %s (balance: %d)",
                      pkg["tokens"], payment["user_id"], new_balance)
 
+        # Generate invoice
+        _generate_invoice(payment, pkg)
+
         # Check if this was a first payment for a subscription
         payment_metadata = mollie_payment.get("metadata") or {}
         sub_id = payment_metadata.get("subscription_id")
@@ -274,6 +298,59 @@ async def mollie_webhook(request: Request):
             _activate_subscription(sub_id, payment_metadata)
 
     return {"ok": True}
+
+
+def _generate_invoice(payment: dict, pkg: dict) -> None:
+    """Generate invoice record + PDF after successful payment."""
+    try:
+        # Skip if invoice already exists for this payment
+        if get_invoice_by_payment_id(payment["id"]):
+            return
+
+        buyer = get_user_by_id(payment["user_id"]) or {}
+        invoice_number = next_invoice_number()
+
+        invoice_data = {
+            "id": new_id("inv"),
+            "invoice_number": invoice_number,
+            "user_id": payment["user_id"],
+            "payment_id": payment["id"],
+            "amount_net_cents": payment.get("amount_net_cents") or payment["amount_cents"],
+            "vat_rate": payment.get("vat_rate", 0),
+            "vat_amount_cents": payment.get("vat_amount_cents", 0),
+            "amount_total_cents": payment["amount_cents"],
+            "currency": payment.get("currency", "EUR"),
+            "vat_reverse_charged": payment.get("vat_reverse_charged", False),
+            "vat_exempt_reason": payment.get("vat_exempt_reason"),
+            "buyer_name": buyer.get("display_name"),
+            "buyer_company": buyer.get("company_name"),
+            "buyer_vat_number": buyer.get("vat_number"),
+            "buyer_address_line1": buyer.get("address_line1"),
+            "buyer_address_line2": buyer.get("address_line2"),
+            "buyer_city": buyer.get("city"),
+            "buyer_postal_code": buyer.get("postal_code"),
+            "buyer_country": buyer.get("country"),
+            "buyer_email": buyer.get("email"),
+            "description": f"Opal {pkg['name']} — {pkg['tokens']} tokens",
+        }
+
+        invoice = create_invoice(invoice_data)
+
+        # Generate PDF and store in blob storage
+        try:
+            from shared.invoice_pdf import generate_invoice_pdf
+            from shared.storage import upload_blob
+            pdf_bytes = generate_invoice_pdf(invoice)
+            blob_path = f"invoices/{payment['user_id']}/{invoice_number}.pdf"
+            upload_blob("exports", blob_path, pdf_bytes, content_type="application/pdf")
+            update_invoice_pdf_path(invoice["id"], blob_path)
+            LOG.info("Invoice %s generated for payment %s", invoice_number, payment["id"])
+        except Exception as e:
+            LOG.warning("PDF generation failed for invoice %s: %s", invoice_number, e)
+            # Invoice record still exists, PDF can be regenerated later
+
+    except Exception as e:
+        LOG.error("Invoice generation failed for payment %s: %s", payment["id"], e)
 
 
 def _activate_subscription(sub_id: str, metadata: dict) -> None:
@@ -432,3 +509,61 @@ def cancel_subscription(user: dict = Depends(get_current_user)):
     update_subscription(sub["id"], {"status": "canceled"})
     LOG.info("Subscription %s canceled for user %s", sub["id"], user["user_id"])
     return {"ok": True, "subscription_id": sub["id"]}
+
+
+# ── Invoice Endpoints ─────────────────────────────────────────────
+
+@router.get("/invoices")
+def get_invoices(user: dict = Depends(get_current_user)):
+    """List all invoices for the current user."""
+    invoices = list_user_invoices(user["user_id"])
+    return {"invoices": invoices}
+
+
+@router.get("/invoices/{invoice_id}/pdf")
+def download_invoice_pdf(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Download invoice PDF. Returns a redirect to a SAS URL for the blob."""
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice["user_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not your invoice")
+    if not invoice.get("pdf_blob_path"):
+        raise HTTPException(status_code=404, detail="PDF not yet generated")
+
+    from shared.storage import generate_read_sas
+    sas_url = generate_read_sas(
+        "exports",
+        invoice["pdf_blob_path"],
+        expiry_minutes=60,
+    )
+    return {"download_url": sas_url}
+
+
+# ── VAT Preview ───────────────────────────────────────────────────
+
+@router.get("/vat-preview")
+def vat_preview(
+    package_id: str = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    """Preview VAT calculation for a package based on user profile."""
+    pkg = get_token_package(package_id)
+    if not pkg or not pkg.get("active"):
+        raise HTTPException(status_code=404, detail="Package not found")
+
+    buyer = get_user_by_id(user["user_id"]) or {}
+    vat = calculate_vat(
+        price_cents=pkg["price_cents"],
+        buyer_country=buyer.get("country"),
+        buyer_vat_number=buyer.get("vat_number"),
+    )
+    return {
+        "net_cents": vat.net_cents,
+        "vat_rate": vat.vat_rate,
+        "vat_cents": vat.vat_cents,
+        "total_cents": vat.total_cents,
+        "reverse_charged": vat.reverse_charged,
+        "exempt_reason": vat.exempt_reason,
+        "currency": pkg["currency"],
+    }

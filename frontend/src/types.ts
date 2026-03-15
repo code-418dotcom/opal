@@ -403,6 +403,30 @@ export interface PipelinePerformance {
   daily_averages: Array<Record<string, number | string>>;
 }
 
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  amount_net_cents: number;
+  vat_rate: number;
+  vat_amount_cents: number;
+  amount_total_cents: number;
+  currency: string;
+  vat_reverse_charged: boolean;
+  description?: string;
+  pdf_blob_path?: string;
+  issued_at: string;
+}
+
+export interface VATPreview {
+  net_cents: number;
+  vat_rate: number;
+  vat_cents: number;
+  total_cents: number;
+  reverse_charged: boolean;
+  exempt_reason: string;
+  currency: string;
+}
+
 export interface UserProfile {
   display_name: string | null;
   email: string;

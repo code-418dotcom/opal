@@ -1,4 +1,4 @@
-import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse, PipelinePerformance, UserProfile } from './types';
+import type { Job, CreateJobResponse, BrandProfile, SceneTemplate, TokenPackage, TokenTransaction, Integration, ShopifyProduct, IntegrationCosts, PushBackItem, AdminSetting, AdminUser, SystemInfo, PlatformStats, AdminJob, AdminIntegration, AdminTokenPackage, AdminTransaction, AdminPayment, CatalogEstimate, CatalogJob, CatalogJobDetail, ABTest, ABTestDetail, ABTestMetric, ImageBenchmark, CategoryBenchmark, ApiKey, ApiKeyCreateResponse, PipelinePerformance, UserProfile, Invoice, VATPreview } from './types';
 
 const API_URL = (import.meta.env.VITE_API_URL as string) || '';
 const API_KEY = import.meta.env.VITE_API_KEY as string;
@@ -336,6 +336,29 @@ class ApiClient {
 
   async cancelSubscription(): Promise<{ ok: boolean }> {
     return this.request('/v1/billing/subscription/cancel', { method: 'POST' });
+  }
+
+  // ── Invoices & VAT ─────────────────────────────────────────────
+
+  async listInvoices(): Promise<Invoice[]> {
+    const resp = await this.request<{ invoices: Invoice[] }>('/v1/billing/invoices');
+    return resp.invoices;
+  }
+
+  async getInvoicePdfUrl(invoiceId: string): Promise<string> {
+    const resp = await this.request<{ download_url: string }>(`/v1/billing/invoices/${invoiceId}/pdf`);
+    return resp.download_url;
+  }
+
+  async getVatPreview(packageId: string): Promise<VATPreview> {
+    return this.request(`/v1/billing/vat-preview?package_id=${packageId}`);
+  }
+
+  async validateVat(vatNumber: string): Promise<{ valid: boolean; name: string | null; address: string | null; error: string | null }> {
+    return this.request('/v1/account/validate-vat', {
+      method: 'POST',
+      body: JSON.stringify({ vat_number: vatNumber }),
+    });
   }
 
   // ── Integrations ──────────────────────────────────────────────────

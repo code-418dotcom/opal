@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum as SQLEnum, JSON, ARRAY, Numeric
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -110,8 +110,43 @@ class Payment(Base):
     amount_cents = Column(Integer, nullable=False)
     currency = Column(String, nullable=False, default='EUR')
     status = Column(SQLEnum(PaymentStatus), nullable=False, default=PaymentStatus.pending)
+    amount_net_cents = Column(Integer, nullable=True)
+    vat_rate = Column(Numeric(5, 2), nullable=True, default=0)
+    vat_amount_cents = Column(Integer, nullable=True, default=0)
+    buyer_vat_number = Column(String, nullable=True)
+    vat_reverse_charged = Column(Boolean, nullable=True, default=False)
+    vat_exempt_reason = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Invoice(Base):
+    __tablename__ = 'invoices'
+
+    id = Column(String, primary_key=True)
+    invoice_number = Column(String(30), unique=True, nullable=False)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)
+    payment_id = Column(String, ForeignKey('payments.id'), nullable=False)
+    amount_net_cents = Column(Integer, nullable=False)
+    vat_rate = Column(Numeric(5, 2), nullable=False, default=0)
+    vat_amount_cents = Column(Integer, nullable=False, default=0)
+    amount_total_cents = Column(Integer, nullable=False)
+    currency = Column(String(3), nullable=False, default='EUR')
+    vat_reverse_charged = Column(Boolean, nullable=False, default=False)
+    vat_exempt_reason = Column(String, nullable=True)
+    buyer_name = Column(String, nullable=True)
+    buyer_company = Column(String, nullable=True)
+    buyer_vat_number = Column(String, nullable=True)
+    buyer_address_line1 = Column(String, nullable=True)
+    buyer_address_line2 = Column(String, nullable=True)
+    buyer_city = Column(String, nullable=True)
+    buyer_postal_code = Column(String, nullable=True)
+    buyer_country = Column(String(2), nullable=True)
+    buyer_email = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    pdf_blob_path = Column(String, nullable=True)
+    issued_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class BrandProfile(Base):
