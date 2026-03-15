@@ -17,6 +17,7 @@ router = APIRouter(prefix="/v1/account", tags=["account"])
 class ProfileOut(BaseModel):
     display_name: Optional[str] = None
     email: str
+    account_type: Optional[str] = None
     company_name: Optional[str] = None
     vat_number: Optional[str] = None
     phone: Optional[str] = None
@@ -39,6 +40,7 @@ async def get_profile(user: dict = Depends(get_current_user)):
 
 class ProfileUpdateIn(BaseModel):
     display_name: Optional[str] = Field(None, max_length=200)
+    account_type: Optional[str] = Field(None, pattern=r'^(consumer|business)$')
     company_name: Optional[str] = Field(None, max_length=200)
     vat_number: Optional[str] = Field(None, max_length=50)
     phone: Optional[str] = Field(None, max_length=30)

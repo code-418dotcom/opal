@@ -32,6 +32,7 @@ class User(Base):
     token_balance = Column(Integer, nullable=False, default=0)
     is_admin = Column(Boolean, nullable=False, default=False)
     mollie_customer_id = Column(String, nullable=True)
+    account_type = Column(String, nullable=True, default='business')
     company_name = Column(String, nullable=True)
     vat_number = Column(String, nullable=True)
     phone = Column(String, nullable=True)

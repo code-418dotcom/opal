@@ -278,6 +278,7 @@ def _user_to_dict(u: User) -> Dict[str, Any]:
         "display_name": u.display_name,
         "token_balance": u.token_balance,
         "is_admin": u.is_admin,
+        "account_type": u.account_type,
         "company_name": u.company_name,
         "vat_number": u.vat_number,
         "phone": u.phone,
@@ -348,7 +349,7 @@ def create_user(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 _PROFILE_FIELDS = {
-    "display_name", "company_name", "vat_number", "phone",
+    "display_name", "account_type", "company_name", "vat_number", "phone",
     "address_line1", "address_line2", "city", "postal_code", "country",
     "onboarding_completed",
 }

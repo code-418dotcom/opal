@@ -430,6 +430,7 @@ export interface VATPreview {
 export interface UserProfile {
   display_name: string | null;
   email: string;
+  account_type: 'consumer' | 'business' | null;
   company_name: string | null;
   vat_number: string | null;
   phone: string | null;

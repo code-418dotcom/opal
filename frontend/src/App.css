@@ -1132,6 +1132,44 @@ body {
   appearance: auto;
 }
 
+.onboarding-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.onboarding-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: rgba(200, 205, 224, 0.7);
+  text-align: center;
+}
+.onboarding-type-card strong {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+.onboarding-type-card span {
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+.onboarding-type-card:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.05);
+}
+.onboarding-type-card.selected {
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(139, 92, 246, 0.1);
+  color: rgba(200, 205, 224, 0.9);
+}
+
 @media (max-width: 600px) {
   .onboarding-modal {
     padding: 1.5rem;

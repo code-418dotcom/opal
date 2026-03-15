@@ -103,6 +103,26 @@ export default function AccountPage() {
         <p>{t('account.subtitle', 'Manage your business details and billing information')}</p>
       </div>
 
+      {/* Account Type */}
+      <div className="settings-section">
+        <h3 className="settings-section-title">
+          {t('account.accountType', 'Account Type')}
+        </h3>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {(['consumer', 'business'] as const).map(type => (
+            <button
+              key={type}
+              className={`onboarding-type-card ${formData.account_type === type ? 'selected' : ''}`}
+              style={{ flex: 1, padding: '1rem' }}
+              onClick={() => { setForm(prev => ({ ...(prev ?? profile ?? {}), account_type: type } as typeof prev)); setSaved(false); }}
+            >
+              {type === 'consumer' ? <User size={20} /> : <Building2 size={20} />}
+              <strong>{type === 'consumer' ? 'Personal' : 'Business'}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Personal Info */}
       <div className="settings-section">
         <h3 className="settings-section-title">
