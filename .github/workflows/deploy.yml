@@ -325,14 +325,6 @@ jobs:
                 --max-delivery-count 5 --lock-duration PT5M --default-message-time-to-live P7D
           done
 
-      - name: Whitelist runner IP on Storage firewall
-        run: |
-          set -euo pipefail
-          echo "Adding runner IP ${RUNNER_IP} to Storage firewall..."
-          az storage account network-rule add -g "${RG}" --account-name "${STORAGE}" \
-            --ip-address "${RUNNER_IP}" -o none 2>/dev/null || true
-          sleep 10
-
       - name: Ensure blob containers
         run: |
           set -euo pipefail
@@ -340,12 +332,6 @@ jobs:
             az storage container show --account-name "${STORAGE}" --name "${C}" --auth-mode login >/dev/null 2>&1 || \
               az storage container create --account-name "${STORAGE}" --name "${C}" --auth-mode login --public-access off
           done
-
-      - name: Remove runner IP from Storage firewall
-        if: always()
-        run: |
-          az storage account network-rule remove -g "${RG}" --account-name "${STORAGE}" \
-            --ip-address "${RUNNER_IP}" -o none 2>/dev/null || true
 
       - name: Seed Key Vault secrets
         env:
@@ -649,6 +635,13 @@ jobs:
             deploy_shopify "opal-shopify-app-${ENV_NAME}" "${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}"
 
           echo "All deployments complete."
+
+      - name: Lock down Storage network
+        run: |
+          set -euo pipefail
+          echo "Applying Storage network restrictions (defaultAction=Deny)..."
+          az storage account update -g "${RG}" -n "${STORAGE}" \
+            --default-action Deny --bypass AzureServices -o none
 
       - name: Print endpoints
         run: |
