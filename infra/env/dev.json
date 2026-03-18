@@ -15,6 +15,8 @@
     "budgetAmount": { "value": 100 },
     "postgresBackupRetentionDays": { "value": 7 },
     "postgresGeoRedundantBackup": { "value": "Disabled" },
-    "postgresHighAvailability": { "value": "Disabled" }
+    "postgresHighAvailability": { "value": "Disabled" },
+    "vnetEnabled": { "value": true },
+    "vnetContainerApps": { "value": false }
   }
 }
