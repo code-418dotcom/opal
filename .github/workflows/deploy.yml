@@ -567,8 +567,11 @@ jobs:
             "entra-client-id=keyvaultref:${KV_URI}/secrets/entra-client-id,identityref:system"
             "entra-issuer=keyvaultref:${KV_URI}/secrets/entra-issuer,identityref:system"
           )
+          WEBAPI_EXTRA_KV_SECRETS=()
+          WEBAPI_EXTRA_ENV_VARS=()
           if [ -n "${REDIS_NAME}" ]; then
-            PYTHON_KV_SECRETS+=("redis-url=keyvaultref:${KV_URI}/secrets/redis-url,identityref:system")
+            WEBAPI_EXTRA_KV_SECRETS+=("redis-url=keyvaultref:${KV_URI}/secrets/redis-url,identityref:system")
+            WEBAPI_EXTRA_ENV_VARS+=("REDIS_URL=secretref:redis-url")
           fi
 
           SHOPIFY_KV_SECRETS=(
@@ -584,6 +587,17 @@ jobs:
             ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
             set_kv_secrets "${NAME}" "${PYTHON_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}"
+            sleep 10
+            wait_ready "${NAME}" "${MAX}"
+          }
+
+          deploy_webapi () {
+            local NAME="$1" IMAGE="$2" MAX="${3:-30}"
+            echo "Deploying ${NAME} → ${IMAGE}"
+            ensure_identity "${NAME}"
+            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
+            set_kv_secrets "${NAME}" "${PYTHON_KV_SECRETS[@]}" "${WEBAPI_EXTRA_KV_SECRETS[@]}"
+            update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}" "${WEBAPI_EXTRA_ENV_VARS[@]}"
             sleep 10
             wait_ready "${NAME}" "${MAX}"
           }
@@ -625,9 +639,6 @@ jobs:
             "ENCRYPTION_KEY=secretref:encryption-key"
             "CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}"
           )
-          if [ -n "${REDIS_NAME}" ]; then
-            PYTHON_ENV_VARS+=("REDIS_URL=secretref:redis-url")
-          fi
 
           SHOPIFY_ENV_VARS=(
             "NODE_ENV=production"
@@ -658,7 +669,7 @@ jobs:
           BUILT_SHOPIFY="${{ needs.build.outputs.shopify_app }}"
 
           [ "${BUILT_WEB}" = "true" ] && \
-            deploy_python "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
+            deploy_webapi "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
 
           [ "${BUILT_BILLING}" = "true" ] && \
             deploy_python "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}"
