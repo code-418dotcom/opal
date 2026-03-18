@@ -22,3 +22,5 @@ Pillow==11.1.0
 PyJWT[crypto]==2.12.0
 
 fpdf2==2.8.1
+
+redis==5.2.1

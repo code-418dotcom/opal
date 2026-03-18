@@ -13,9 +13,9 @@
     "postgresTier": { "value": "Burstable" },
     "storageSku": { "value": "Standard_ZRS" },
     "budgetAmount": { "value": 100 },
-    "budgetAlertEmails": { "value": [] },
+    "budgetAlertEmails": { "value": ["support@opaloptics.com"] },
     "postgresBackupRetentionDays": { "value": 7 },
-    "postgresGeoRedundantBackup": { "value": "Disabled" },
+    "postgresGeoRedundantBackup": { "value": "Enabled" },
     "postgresHighAvailability": { "value": "Disabled" }
   }
 }

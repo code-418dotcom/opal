@@ -42,7 +42,9 @@ class TestGetBalance:
         mock_get.return_value = {"token_balance": 75, "is_admin": False}
         resp = client.get("/v1/billing/balance")
         assert resp.status_code == 200
-        assert resp.json() == {"token_balance": 75, "is_admin": False}
+        data = resp.json()
+        assert data["token_balance"] == 75
+        assert data["is_admin"] is False
 
     @patch("web_api.routes_billing.get_user_by_id")
     def test_returns_zero_for_unknown_user(self, mock_get, client):
@@ -59,7 +61,8 @@ class TestPurchaseTokens:
     @patch("web_api.routes_billing.create_mollie_payment")
     @patch("web_api.routes_billing.get_setting")
     @patch("web_api.routes_billing.get_token_package")
-    def test_successful_purchase(self, mock_pkg, mock_setting, mock_mollie, mock_create, client):
+    @patch("web_api.routes_billing.get_user_by_id", return_value=None)
+    def test_successful_purchase(self, mock_user, mock_pkg, mock_setting, mock_mollie, mock_create, client):
         mock_pkg.return_value = {
             "id": "pkg_1", "name": "Starter", "tokens": 50,
             "price_cents": 990, "currency": "EUR", "active": True,
@@ -114,7 +117,8 @@ class TestPurchaseTokens:
     @patch("web_api.routes_billing.create_mollie_payment")
     @patch("web_api.routes_billing.get_setting")
     @patch("web_api.routes_billing.get_token_package")
-    def test_purchase_mollie_error_502(self, mock_pkg, mock_setting, mock_mollie, client):
+    @patch("web_api.routes_billing.get_user_by_id", return_value=None)
+    def test_purchase_mollie_error_502(self, mock_user, mock_pkg, mock_setting, mock_mollie, client):
         mock_pkg.return_value = {
             "id": "pkg_1", "name": "Starter", "tokens": 50,
             "price_cents": 990, "currency": "EUR", "active": True,
@@ -141,7 +145,8 @@ class TestPurchaseTokens:
     @patch("web_api.routes_billing.create_mollie_payment")
     @patch("web_api.routes_billing.get_setting")
     @patch("web_api.routes_billing.get_token_package")
-    def test_purchase_appends_payment_id_to_redirect(self, mock_pkg, mock_setting, mock_mollie, mock_create, client):
+    @patch("web_api.routes_billing.get_user_by_id", return_value=None)
+    def test_purchase_appends_payment_id_to_redirect(self, mock_user, mock_pkg, mock_setting, mock_mollie, mock_create, client):
         mock_pkg.return_value = {
             "id": "pkg_1", "name": "Starter", "tokens": 50,
             "price_cents": 990, "currency": "EUR", "active": True,

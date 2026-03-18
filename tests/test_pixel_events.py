@@ -60,6 +60,7 @@ MOCK_RUNNING_TEST = {
 def test_pixel_events_valid_key(pixel_client):
     """Valid pixel key + events → 202 with accepted count."""
     with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION), \
+         patch("web_api.routes_pixel_events.get_integration_event_limit", return_value=None), \
          patch("web_api.routes_pixel_events.find_running_test", return_value=MOCK_RUNNING_TEST), \
          patch("web_api.routes_pixel_events.get_active_variant_at", return_value="a"), \
          patch("web_api.routes_pixel_events.increment_ab_test_metric") as mock_inc:
@@ -112,7 +113,8 @@ def test_pixel_events_invalid_key(pixel_client):
 
 def test_pixel_events_empty_batch(pixel_client):
     """Empty events list → 202 with 0 accepted."""
-    with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION):
+    with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION), \
+         patch("web_api.routes_pixel_events.get_integration_event_limit", return_value=None):
         resp = pixel_client.post("/v1/ab-tests/pixel-events", json={
             "shop_domain": "test-store.myshopify.com",
             "events": [],
@@ -125,6 +127,7 @@ def test_pixel_events_empty_batch(pixel_client):
 def test_pixel_events_no_running_test(pixel_client):
     """Events for a product with no running test → skipped."""
     with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION), \
+         patch("web_api.routes_pixel_events.get_integration_event_limit", return_value=None), \
          patch("web_api.routes_pixel_events.find_running_test", return_value=None), \
          patch("web_api.routes_pixel_events.increment_ab_test_metric") as mock_inc:
 
@@ -153,6 +156,7 @@ def test_pixel_events_missing_header(pixel_client):
 def test_pixel_events_add_to_cart(pixel_client):
     """add_to_cart event type increments correct metric."""
     with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION), \
+         patch("web_api.routes_pixel_events.get_integration_event_limit", return_value=None), \
          patch("web_api.routes_pixel_events.find_running_test", return_value=MOCK_RUNNING_TEST), \
          patch("web_api.routes_pixel_events.get_active_variant_at", return_value="b"), \
          patch("web_api.routes_pixel_events.increment_ab_test_metric") as mock_inc:
@@ -179,6 +183,7 @@ def test_variant_attribution_uses_log(pixel_client):
     test_with_a_active = {**MOCK_RUNNING_TEST, "active_variant": "a"}
 
     with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION), \
+         patch("web_api.routes_pixel_events.get_integration_event_limit", return_value=None), \
          patch("web_api.routes_pixel_events.find_running_test", return_value=test_with_a_active), \
          patch("web_api.routes_pixel_events.get_active_variant_at", return_value="b"), \
          patch("web_api.routes_pixel_events.increment_ab_test_metric") as mock_inc:
@@ -201,6 +206,7 @@ def test_variant_attribution_fallback(pixel_client):
     test_with_b_active = {**MOCK_RUNNING_TEST, "active_variant": "b"}
 
     with patch("web_api.routes_pixel_events.get_integration_by_pixel_key", return_value=MOCK_INTEGRATION), \
+         patch("web_api.routes_pixel_events.get_integration_event_limit", return_value=None), \
          patch("web_api.routes_pixel_events.find_running_test", return_value=test_with_b_active), \
          patch("web_api.routes_pixel_events.get_active_variant_at", return_value=None), \
          patch("web_api.routes_pixel_events.increment_ab_test_metric") as mock_inc:

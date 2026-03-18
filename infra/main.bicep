@@ -442,6 +442,105 @@ resource budget 'Microsoft.CostManagement/budgets@2023-11-01' = if (!empty(budge
   }
 }
 
+// ── Redis Cache ──
+
+var redisName = take('${baseName}-redis', 63)
+
+resource redis 'Microsoft.Cache/redis@2024-03-01' = {
+  name: redisName
+  location: location
+  properties: {
+    sku: {
+      name: 'Basic'
+      family: 'C'
+      capacity: 0
+    }
+    enableNonSslPort: false
+    minimumTlsVersion: '1.2'
+    redisConfiguration: {
+      'maxmemory-policy': 'allkeys-lru'
+    }
+  }
+}
+
+// ── Diagnostic Settings ──
+
+resource pgDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'pg-diagnostics'
+  scope: postgres
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      { categoryGroup: 'allLogs', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+  }
+}
+
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-01-01' existing = {
+  parent: storage
+  name: 'default'
+}
+
+resource storageBlobDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'storage-blob-diagnostics'
+  scope: blobService
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      { category: 'StorageRead', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'StorageWrite', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'StorageDelete', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+    metrics: [
+      { category: 'Transaction', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+  }
+}
+
+resource sbDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'sb-diagnostics'
+  scope: serviceBus
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      { categoryGroup: 'allLogs', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+  }
+}
+
+resource kvDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'kv-diagnostics'
+  scope: keyVault
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      { categoryGroup: 'allLogs', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+  }
+}
+
+resource redisDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'redis-diagnostics'
+  scope: redis
+  properties: {
+    workspaceId: logAnalytics.id
+    metrics: [
+      { category: 'AllMetrics', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+  }
+}
+
+output redisHostName string = redis.properties.hostName
+output redisName string = redis.name
 output keyVaultName string = keyVault.name
 output containerAppsEnvironmentName string = containerAppsEnv.name
 output acrLoginServer string = acr.properties.loginServer

@@ -57,7 +57,8 @@ class TestOpenRedirect:
     @patch("web_api.routes_billing.create_mollie_payment")
     @patch("web_api.routes_billing.get_setting")
     @patch("web_api.routes_billing.get_token_package")
-    def test_accept_allowed_origin_redirect(self, mock_pkg, mock_setting, mock_mollie, mock_create, client):
+    @patch("web_api.routes_billing.get_user_by_id", return_value=None)
+    def test_accept_allowed_origin_redirect(self, mock_user, mock_pkg, mock_setting, mock_mollie, mock_create, client):
         """Purchase endpoint accepts redirect URLs matching CORS origins."""
         mock_pkg.return_value = {
             "id": "pkg_1", "name": "Starter", "tokens": 50,
