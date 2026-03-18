@@ -1,5 +1,8 @@
 """Etsy Open API v3 client for listing image operations."""
+import hashlib
+import base64
 import logging
+import secrets as _secrets
 from typing import Any, Optional
 from urllib.parse import urlencode
 
@@ -12,18 +15,27 @@ LOG = logging.getLogger(__name__)
 ETSY_API_BASE = "https://openapi.etsy.com/v3"
 
 
-def build_oauth_url(state: str, redirect_uri: str) -> str:
-    """Build Etsy OAuth2 authorization URL (PKCE flow)."""
+def _generate_pkce() -> tuple[str, str]:
+    """Generate PKCE code_verifier and S256 code_challenge."""
+    code_verifier = _secrets.token_urlsafe(64)
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return code_verifier, code_challenge
+
+
+def build_oauth_url(state: str, redirect_uri: str) -> tuple[str, str]:
+    """Build Etsy OAuth2 authorization URL (PKCE flow). Returns (url, code_verifier)."""
+    code_verifier, code_challenge = _generate_pkce()
     params = {
         "response_type": "code",
         "client_id": get_setting("ETSY_API_KEY"),
         "redirect_uri": redirect_uri,
         "scope": "listings_r listings_w images_r images_w",
         "state": state,
-        "code_challenge": state,  # Simplified — production should use proper PKCE
+        "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
-    return f"https://www.etsy.com/oauth/connect?{urlencode(params)}"
+    return f"https://www.etsy.com/oauth/connect?{urlencode(params)}", code_verifier
 
 
 async def exchange_token(code: str, redirect_uri: str, code_verifier: str) -> dict[str, Any]:

@@ -15,11 +15,15 @@ def test_woocommerce_oauth_url():
 def test_etsy_oauth_url():
     with patch("shared.settings_service.get_setting", return_value="etsy_test_key"):
         from shared.etsy_client import build_oauth_url
-        url = build_oauth_url("state123", "https://opal.io/callback")
+        url, code_verifier = build_oauth_url("state123", "https://opal.io/callback")
         assert "etsy.com/oauth/connect" in url
         assert "etsy_test_key" in url
         assert "state123" in url
         assert "listings_r" in url
+        assert len(code_verifier) > 32
+        # code_challenge must differ from state (proper S256 PKCE)
+        challenge = url.split("code_challenge=")[1].split("&")[0]
+        assert challenge != "state123"
 
 
 def test_woocommerce_client_init():

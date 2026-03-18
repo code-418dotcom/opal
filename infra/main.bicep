@@ -44,6 +44,21 @@ param postgresHighAvailability string = 'Disabled'
 @description('Availability zone for the HA standby replica (1, 2, or 3). Only used when postgresHighAvailability is ZoneRedundant.')
 param postgresStandbyAvailabilityZone string = '2'
 
+@description('Enable VNet integration with private endpoints for PG and Storage. Phase 1: deploy VNet+PEs alongside public access. Phase 2: set vnetContainerApps=true to migrate Container Apps into VNet.')
+param vnetEnabled bool = false
+
+@description('When true, Container Apps Environment is (re)created inside the VNet. Requires vnetEnabled=true. WARNING: recreates the CAE, changing all app FQDNs.')
+param vnetContainerApps bool = false
+
+@description('VNet address space')
+param vnetAddressPrefix string = '10.0.0.0/16'
+
+@description('Subnet for Container Apps (/23 = 512 IPs)')
+param subnetContainerAppsPrefix string = '10.0.0.0/23'
+
+@description('Subnet for private endpoints (/24 = 256 IPs)')
+param subnetPrivateEndpointsPrefix string = '10.0.2.0/24'
+
 var rgName = resourceGroup().name
 var suffix = toLower('${uniqueString(subscription().id, rgName, envName)}')
 var baseName = toLower('${namePrefix}-${envName}-${suffix}')
@@ -64,6 +79,9 @@ var pgServerName = postgresNameSuffix == ''
 
 var pgDbName = 'opal'
 var amlName = take('${baseName}-aml', 32)
+var vnetName = '${baseName}-vnet'
+// When vnetContainerApps is true, use a new CAE name to force recreation inside VNet
+var caEnvNameVnet = take('${baseName}-cae-v', 32)
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: laName
@@ -163,8 +181,136 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
 }
 
+// ── VNet + Private Endpoints (deployed when vnetEnabled=true) ──
+
+resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = if (vnetEnabled) {
+  name: vnetName
+  location: location
+  properties: {
+    addressSpace: { addressPrefixes: [vnetAddressPrefix] }
+    subnets: [
+      {
+        name: 'snet-container-apps'
+        properties: {
+          addressPrefix: subnetContainerAppsPrefix
+          delegations: [
+            {
+              name: 'Microsoft.App.environments'
+              properties: { serviceName: 'Microsoft.App/environments' }
+            }
+          ]
+        }
+      }
+      {
+        name: 'snet-private-endpoints'
+        properties: {
+          addressPrefix: subnetPrivateEndpointsPrefix
+        }
+      }
+    ]
+  }
+}
+
+// ── Private DNS Zones ──
+
+resource dnsZonePg 'Microsoft.Network/privateDnsZones@2020-06-01' = if (vnetEnabled) {
+  name: 'privatelink.postgres.database.azure.com'
+  location: 'global'
+}
+
+resource dnsZonePgLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = if (vnetEnabled) {
+  parent: dnsZonePg
+  name: 'pg-vnet-link'
+  location: 'global'
+  properties: {
+    virtualNetwork: { id: vnet.id }
+    registrationEnabled: false
+  }
+}
+
+resource dnsZoneBlob 'Microsoft.Network/privateDnsZones@2020-06-01' = if (vnetEnabled) {
+  name: 'privatelink.blob.core.windows.net'
+  location: 'global'
+}
+
+resource dnsZoneBlobLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = if (vnetEnabled) {
+  parent: dnsZoneBlob
+  name: 'blob-vnet-link'
+  location: 'global'
+  properties: {
+    virtualNetwork: { id: vnet.id }
+    registrationEnabled: false
+  }
+}
+
+// ── Private Endpoints ──
+
+resource pePg 'Microsoft.Network/privateEndpoints@2023-11-01' = if (vnetEnabled) {
+  name: '${baseName}-pe-pg'
+  location: location
+  properties: {
+    subnet: { id: vnet.properties.subnets[1].id }
+    privateLinkServiceConnections: [
+      {
+        name: 'pg-connection'
+        properties: {
+          privateLinkServiceId: postgres.id
+          groupIds: ['postgresqlServer']
+        }
+      }
+    ]
+  }
+}
+
+resource pePgDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (vnetEnabled) {
+  parent: pePg
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'pg-dns-config'
+        properties: { privateDnsZoneId: dnsZonePg.id }
+      }
+    ]
+  }
+}
+
+resource peStorage 'Microsoft.Network/privateEndpoints@2023-11-01' = if (vnetEnabled) {
+  name: '${baseName}-pe-sa'
+  location: location
+  properties: {
+    subnet: { id: vnet.properties.subnets[1].id }
+    privateLinkServiceConnections: [
+      {
+        name: 'storage-connection'
+        properties: {
+          privateLinkServiceId: storage.id
+          groupIds: ['blob']
+        }
+      }
+    ]
+  }
+}
+
+resource peStorageDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = if (vnetEnabled) {
+  parent: peStorage
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'blob-dns-config'
+        properties: { privateDnsZoneId: dnsZoneBlob.id }
+      }
+    ]
+  }
+}
+
+// ── Container Apps Environment ──
+// When vnetContainerApps=true, a NEW environment is created inside the VNet.
+// The old environment (caEnvName) must be deleted manually after apps are migrated.
+
 resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: caEnvName
+  name: vnetContainerApps ? caEnvNameVnet : caEnvName
   location: location
   properties: {
     appLogsConfiguration: {
@@ -178,6 +324,10 @@ resource containerAppsEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
       { name: 'consumption', workloadProfileType: 'Consumption' }
       { name: 'dedicated', workloadProfileType: 'D4', minimumCount: 0, maximumCount: 1 }
     ]
+    vnetConfiguration: vnetContainerApps ? {
+      infrastructureSubnetId: vnet.properties.subnets[0].id
+      internal: false
+    } : null
   }
 }
 

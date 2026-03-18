@@ -843,7 +843,8 @@ async def etsy_connect(
     }
 
     redirect_uri = f"{get_setting('PUBLIC_BASE_URL')}/v1/integrations/etsy/callback"
-    auth_url = etsy_build_oauth_url(state, redirect_uri)
+    auth_url, code_verifier = etsy_build_oauth_url(state, redirect_uri)
+    _oauth_states[state]["code_verifier"] = code_verifier
     return {"auth_url": auth_url}
 
 
@@ -862,7 +863,7 @@ async def etsy_callback(
     from shared.etsy_client import exchange_token as etsy_exchange_token
 
     redirect_uri = f"{get_setting('PUBLIC_BASE_URL')}/v1/integrations/etsy/callback"
-    token_data = await etsy_exchange_token(code, redirect_uri, code_verifier=state)
+    token_data = await etsy_exchange_token(code, redirect_uri, code_verifier=oauth_data["code_verifier"])
 
     import json
     token_payload = json.dumps({

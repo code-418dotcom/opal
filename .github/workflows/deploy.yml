@@ -271,7 +271,11 @@ jobs:
           [ -n "${KV}" ] || { echo "ERROR: No Key Vault in ${RG}"; exit 1; }
           KV_ID=$(az keyvault show -g "${RG}" -n "${KV}" --query id -o tsv)
 
-          CAE=$(az containerapp env list -g "${RG}" --query "[0].name" -o tsv)
+          # Prefer VNet-enabled CAE (name ends with -cae-v) if it exists, otherwise first CAE
+          CAE=$(az containerapp env list -g "${RG}" --query "[?ends_with(name, '-cae-v')].name | [0]" -o tsv 2>/dev/null)
+          if [ -z "${CAE}" ]; then
+            CAE=$(az containerapp env list -g "${RG}" --query "[0].name" -o tsv)
+          fi
           [ -n "${CAE}" ] || { echo "ERROR: No Container Apps Environment in ${RG}"; exit 1; }
 
           PG_SERVER=$(az resource list -g "${RG}" \
