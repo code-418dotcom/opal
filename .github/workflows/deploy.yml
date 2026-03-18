@@ -325,6 +325,17 @@ jobs:
                 --max-delivery-count 5 --lock-duration PT5M --default-message-time-to-live P7D
           done
 
+      - name: Open Storage firewall for runner
+        run: |
+          set -euo pipefail
+          az storage account network-rule add -g "${RG}" --account-name "${STORAGE}" \
+            --ip-address "${RUNNER_IP}" -o none 2>/dev/null || true
+          # Also ensure default action allows our whitelisted IP
+          az storage account update -g "${RG}" -n "${STORAGE}" \
+            --default-action Deny --bypass AzureServices -o none 2>/dev/null || true
+          echo "Waiting for firewall rule to propagate..."
+          sleep 30
+
       - name: Ensure blob containers
         run: |
           set -euo pipefail
@@ -637,9 +648,12 @@ jobs:
           echo "All deployments complete."
 
       - name: Lock down Storage network
+        if: always()
         run: |
           set -euo pipefail
-          echo "Applying Storage network restrictions (defaultAction=Deny)..."
+          echo "Removing runner IP and enforcing Storage network restrictions..."
+          az storage account network-rule remove -g "${RG}" --account-name "${STORAGE}" \
+            --ip-address "${RUNNER_IP}" -o none 2>/dev/null || true
           az storage account update -g "${RG}" -n "${STORAGE}" \
             --default-action Deny --bypass AzureServices -o none
 
