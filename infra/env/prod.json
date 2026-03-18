@@ -11,7 +11,7 @@
     "postgresAdminPassword": { "value": "" },
     "postgresSkuName": { "value": "Standard_B1ms" },
     "postgresTier": { "value": "Burstable" },
-    "storageSku": { "value": "Standard_LRS" },
+    "storageSku": { "value": "Standard_ZRS" },
     "budgetAmount": { "value": 100 },
     "budgetAlertEmails": { "value": [] },
     "postgresBackupRetentionDays": { "value": 7 },

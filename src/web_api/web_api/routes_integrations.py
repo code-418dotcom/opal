@@ -761,11 +761,11 @@ async def woocommerce_connect(
 async def woocommerce_callback(request: Request):
     """Handle WooCommerce REST API key callback."""
     data = await request.json()
-    user_id = data.get("user_id", "")  # WooCommerce returns this as our state
+    state = data.get("user_id", "")  # WooCommerce maps our state token to "user_id"
     consumer_key = data.get("consumer_key", "")
     consumer_secret = data.get("consumer_secret", "")
 
-    oauth_data = _oauth_states.pop(user_id, None)
+    oauth_data = _oauth_states.pop(state, None)
     if not oauth_data or oauth_data.get("provider") != "woocommerce":
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
     if time.time() - oauth_data.get("created_at", 0) > _OAUTH_STATE_TTL:

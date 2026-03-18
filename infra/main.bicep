@@ -92,6 +92,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     sku: { family: 'A', name: 'standard' }
     accessPolicies: []
     enableRbacAuthorization: true
+    enableSoftDelete: true
+    enablePurgeProtection: true
   }
 }
 
@@ -102,8 +104,13 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   kind: 'StorageV2'
   properties: {
     allowBlobPublicAccess: false
+    allowSharedKeyAccess: false
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
   }
 }
 
@@ -126,7 +133,9 @@ resource serviceBus 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: sbName
   location: location
   sku: { name: 'Standard', tier: 'Standard' }
-  properties: {}
+  properties: {
+    disableLocalAuth: true
+  }
 }
 
 resource queueJobs 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
@@ -287,6 +296,7 @@ resource budget 'Microsoft.CostManagement/budgets@2023-11-01' = if (!empty(budge
   }
 }
 
+output keyVaultName string = keyVault.name
 output containerAppsEnvironmentName string = containerAppsEnv.name
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name

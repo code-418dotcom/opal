@@ -267,6 +267,10 @@ jobs:
           [ -n "${SB}" ] || { echo "ERROR: No Service Bus in ${RG}"; exit 1; }
           SB_ID=$(az servicebus namespace show -g "${RG}" -n "${SB}" --query id -o tsv)
 
+          KV=$(az keyvault list -g "${RG}" --query "[0].name" -o tsv)
+          [ -n "${KV}" ] || { echo "ERROR: No Key Vault in ${RG}"; exit 1; }
+          KV_ID=$(az keyvault show -g "${RG}" -n "${KV}" --query id -o tsv)
+
           CAE=$(az containerapp env list -g "${RG}" --query "[0].name" -o tsv)
           [ -n "${CAE}" ] || { echo "ERROR: No Container Apps Environment in ${RG}"; exit 1; }
 
@@ -275,7 +279,7 @@ jobs:
             --query "[0].name" -o tsv)
           [ -n "${PG_SERVER}" ] || { echo "ERROR: No Postgres in ${RG}"; exit 1; }
 
-          for VAR in ACR_NAME ACR_LOGIN ACR_ID STORAGE SB SB_ID CAE PG_SERVER; do
+          for VAR in ACR_NAME ACR_LOGIN ACR_ID STORAGE SB SB_ID KV KV_ID CAE PG_SERVER; do
             echo "${VAR}=${!VAR}" >> "$GITHUB_ENV"
           done
           echo "RG=${RG}" >> "$GITHUB_ENV"
@@ -328,6 +332,43 @@ jobs:
             az storage container show --account-name "${STORAGE}" --name "${C}" --auth-mode login >/dev/null 2>&1 || \
               az storage container create --account-name "${STORAGE}" --name "${C}" --auth-mode login --public-access off
           done
+
+      - name: Seed Key Vault secrets
+        env:
+          DB_PASS: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "Seeding secrets into Key Vault ${KV}..."
+
+          seed_secret () {
+            local NAME="$1" VALUE="$2"
+            if [ -z "${VALUE}" ]; then
+              echo "  SKIP ${NAME} (empty)"
+              return 0
+            fi
+            az keyvault secret set --vault-name "${KV}" --name "${NAME}" \
+              --value "${VALUE}" -o none 2>/dev/null || \
+              echo "  WARN: Could not set ${NAME}"
+          }
+
+          PG_HOST="${PG_SERVER}.postgres.database.azure.com"
+          DB_URL="postgresql+psycopg://opaladmin:${DB_PASS}@${PG_HOST}:5432/opal?sslmode=require"
+
+          seed_secret "database-url"       "${DB_URL}"
+          seed_secret "fal-api-key"        "${{ secrets.FAL_API_KEY }}"
+          seed_secret "aml-endpoint-url"   "${{ secrets.AML_ENDPOINT_URL }}"
+          seed_secret "aml-endpoint-key"   "${{ secrets.AML_ENDPOINT_KEY }}"
+          seed_secret "mollie-api-key"     "${{ secrets.MOLLIE_API_KEY }}"
+          seed_secret "shopify-api-key"    "${{ secrets.SHOPIFY_API_KEY }}"
+          seed_secret "shopify-api-secret" "${{ secrets.SHOPIFY_API_SECRET }}"
+          seed_secret "encryption-key"     "${{ secrets.ENCRYPTION_KEY }}"
+          seed_secret "api-keys"           "${{ secrets.API_KEYS }}"
+          seed_secret "entra-tenant-id"    "${{ secrets.ENTRA_TENANT_ID }}"
+          seed_secret "entra-client-id"    "${{ secrets.ENTRA_CLIENT_ID }}"
+          seed_secret "entra-issuer"       "${{ secrets.ENTRA_ISSUER }}"
+          seed_secret "opal-service-key"   "${{ secrets.OPAL_SERVICE_KEY }}"
+
+          echo "Key Vault seeding complete."
 
       - name: Refresh Azure auth
         uses: azure/login@v2
@@ -447,6 +488,7 @@ jobs:
             ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Delegator"
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
             ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
+            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
 
             if [ "${INGRESS}" != "none" ]; then
               az containerapp ingress enable -g "${RG}" -n "${NAME}" \
@@ -467,9 +509,42 @@ jobs:
             echo "WARN: ${NAME} update failed after 5 attempts, continuing..."
           }
 
+          KV_URI="https://${KV}.vault.azure.net"
+
+          set_kv_secrets () {
+            local NAME="$1"; shift
+            local SECRET_ARGS=("$@")
+            echo "  Setting Key Vault-backed secrets on ${NAME}..."
+            az containerapp secret set -g "${RG}" -n "${NAME}" \
+              --secrets "${SECRET_ARGS[@]}" >/dev/null 2>&1 || \
+              echo "  WARN: secret set returned non-zero for ${NAME}"
+          }
+
+          PYTHON_KV_SECRETS=(
+            "database-url=keyvaultref:${KV_URI}/secrets/database-url,identityref:system"
+            "fal-api-key=keyvaultref:${KV_URI}/secrets/fal-api-key,identityref:system"
+            "aml-endpoint-url=keyvaultref:${KV_URI}/secrets/aml-endpoint-url,identityref:system"
+            "aml-endpoint-key=keyvaultref:${KV_URI}/secrets/aml-endpoint-key,identityref:system"
+            "mollie-api-key=keyvaultref:${KV_URI}/secrets/mollie-api-key,identityref:system"
+            "shopify-api-key=keyvaultref:${KV_URI}/secrets/shopify-api-key,identityref:system"
+            "shopify-api-secret=keyvaultref:${KV_URI}/secrets/shopify-api-secret,identityref:system"
+            "encryption-key=keyvaultref:${KV_URI}/secrets/encryption-key,identityref:system"
+            "api-keys=keyvaultref:${KV_URI}/secrets/api-keys,identityref:system"
+            "entra-tenant-id=keyvaultref:${KV_URI}/secrets/entra-tenant-id,identityref:system"
+            "entra-client-id=keyvaultref:${KV_URI}/secrets/entra-client-id,identityref:system"
+            "entra-issuer=keyvaultref:${KV_URI}/secrets/entra-issuer,identityref:system"
+          )
+
+          SHOPIFY_KV_SECRETS=(
+            "shopify-api-key=keyvaultref:${KV_URI}/secrets/shopify-api-key,identityref:system"
+            "shopify-api-secret=keyvaultref:${KV_URI}/secrets/shopify-api-secret,identityref:system"
+            "opal-service-key=keyvaultref:${KV_URI}/secrets/opal-service-key,identityref:system"
+          )
+
           deploy_python () {
             local NAME="$1" IMAGE="$2" MAX="${3:-30}"
             echo "Deploying ${NAME} → ${IMAGE}"
+            set_kv_secrets "${NAME}" "${PYTHON_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}"
             sleep 10
             wait_ready "${NAME}" "${MAX}"
@@ -478,6 +553,7 @@ jobs:
           deploy_shopify () {
             local NAME="$1" IMAGE="$2"
             echo "Deploying ${NAME} → ${IMAGE}"
+            set_kv_secrets "${NAME}" "${SHOPIFY_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${SHOPIFY_ENV_VARS[@]}"
             sleep 10
             wait_ready "${NAME}"
@@ -485,37 +561,37 @@ jobs:
 
           # ── Build env var arrays ──
 
-          DB_PASS="${{ secrets.POSTGRES_ADMIN_PASSWORD }}"
-          DATABASE_URL="postgresql+psycopg://opaladmin:${DB_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/opal?sslmode=require"
+          # Sensitive values are now sourced from Key Vault via secretref.
+          # Only non-sensitive config values are passed as plain env vars.
 
           PYTHON_ENV_VARS=(
             "ENV_NAME=${ENV_NAME}"
-            "DATABASE_URL=${DATABASE_URL}"
+            "DATABASE_URL=secretref:database-url"
             "STORAGE_ACCOUNT_NAME=${STORAGE}"
             "SERVICEBUS_NAMESPACE=${SB}"
-            "AML_ENDPOINT_URL=${{ secrets.AML_ENDPOINT_URL }}"
-            "AML_ENDPOINT_KEY=${{ secrets.AML_ENDPOINT_KEY }}"
+            "AML_ENDPOINT_URL=secretref:aml-endpoint-url"
+            "AML_ENDPOINT_KEY=secretref:aml-endpoint-key"
             "BACKGROUND_REMOVAL_PROVIDER=${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'birefnet' }}"
             "IMAGE_GEN_PROVIDER=${{ secrets.IMAGE_GEN_PROVIDER || 'fal-flux2' }}"
-            "FAL_API_KEY=${{ secrets.FAL_API_KEY }}"
-            "ENTRA_TENANT_ID=${{ secrets.ENTRA_TENANT_ID }}"
-            "ENTRA_CLIENT_ID=${{ secrets.ENTRA_CLIENT_ID }}"
-            "ENTRA_ISSUER=${{ secrets.ENTRA_ISSUER }}"
-            "API_KEYS=${{ secrets.API_KEYS }}"
-            "MOLLIE_API_KEY=${{ secrets.MOLLIE_API_KEY }}"
+            "FAL_API_KEY=secretref:fal-api-key"
+            "ENTRA_TENANT_ID=secretref:entra-tenant-id"
+            "ENTRA_CLIENT_ID=secretref:entra-client-id"
+            "ENTRA_ISSUER=secretref:entra-issuer"
+            "API_KEYS=secretref:api-keys"
+            "MOLLIE_API_KEY=secretref:mollie-api-key"
             "PUBLIC_BASE_URL=${{ secrets.PUBLIC_BASE_URL }}"
-            "SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}"
-            "SHOPIFY_API_SECRET=${{ secrets.SHOPIFY_API_SECRET }}"
-            "ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}"
+            "SHOPIFY_API_KEY=secretref:shopify-api-key"
+            "SHOPIFY_API_SECRET=secretref:shopify-api-secret"
+            "ENCRYPTION_KEY=secretref:encryption-key"
             "CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}"
           )
 
           SHOPIFY_ENV_VARS=(
             "NODE_ENV=production"
-            "SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}"
-            "SHOPIFY_API_SECRET=${{ secrets.SHOPIFY_API_SECRET }}"
+            "SHOPIFY_API_KEY=secretref:shopify-api-key"
+            "SHOPIFY_API_SECRET=secretref:shopify-api-secret"
             "OPAL_API_URL=${{ secrets.OPAL_API_URL }}"
-            "OPAL_SERVICE_KEY=${{ secrets.OPAL_SERVICE_KEY }}"
+            "OPAL_SERVICE_KEY=secretref:opal-service-key"
           )
 
           SCOPE="${{ needs.resolve.outputs.scope }}"
