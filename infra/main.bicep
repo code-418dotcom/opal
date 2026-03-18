@@ -41,6 +41,9 @@ param postgresGeoRedundantBackup string = 'Disabled'
 @description('Postgres high availability mode (Disabled or ZoneRedundant)')
 param postgresHighAvailability string = 'Disabled'
 
+@description('Availability zone for the HA standby replica (1, 2, or 3). Only used when postgresHighAvailability is ZoneRedundant.')
+param postgresStandbyAvailabilityZone string = '2'
+
 var rgName = resourceGroup().name
 var suffix = toLower('${uniqueString(subscription().id, rgName, envName)}')
 var baseName = toLower('${namePrefix}-${envName}-${suffix}')
@@ -186,7 +189,10 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview'
     version: '15'
     storage: { storageSizeGB: 64 }
     backup: { backupRetentionDays: postgresBackupRetentionDays, geoRedundantBackup: postgresGeoRedundantBackup }
-    highAvailability: { mode: postgresHighAvailability }
+    highAvailability: {
+      mode: postgresHighAvailability
+      standbyAvailabilityZone: postgresHighAvailability == 'ZoneRedundant' ? postgresStandbyAvailabilityZone : ''
+    }
   }
 }
 

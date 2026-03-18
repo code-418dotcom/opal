@@ -9,12 +9,12 @@
     "postgresNameSuffix": { "value": "ne" },
     "namePrefix": { "value": "opal" },
     "postgresAdminPassword": { "value": "" },
-    "postgresSkuName": { "value": "Standard_D2ds_v4" },
-    "postgresTier": { "value": "GeneralPurpose" },
-    "storageSku": { "value": "Standard_ZRS" },
-    "budgetAmount": { "value": 400 },
+    "postgresSkuName": { "value": "Standard_B1ms" },
+    "postgresTier": { "value": "Burstable" },
+    "storageSku": { "value": "Standard_LRS" },
+    "budgetAmount": { "value": 100 },
     "budgetAlertEmails": { "value": [] },
-    "postgresBackupRetentionDays": { "value": 35 },
+    "postgresBackupRetentionDays": { "value": 7 },
     "postgresGeoRedundantBackup": { "value": "Disabled" },
     "postgresHighAvailability": { "value": "Disabled" }
   }
