@@ -544,6 +544,8 @@ jobs:
           deploy_python () {
             local NAME="$1" IMAGE="$2" MAX="${3:-30}"
             echo "Deploying ${NAME} → ${IMAGE}"
+            ensure_identity "${NAME}"
+            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
             set_kv_secrets "${NAME}" "${PYTHON_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}"
             sleep 10
@@ -553,6 +555,8 @@ jobs:
           deploy_shopify () {
             local NAME="$1" IMAGE="$2"
             echo "Deploying ${NAME} → ${IMAGE}"
+            ensure_identity "${NAME}"
+            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
             set_kv_secrets "${NAME}" "${SHOPIFY_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${SHOPIFY_ENV_VARS[@]}"
             sleep 10
