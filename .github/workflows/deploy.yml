@@ -338,13 +338,10 @@ jobs:
       - name: Open Storage firewall for runner
         run: |
           set -euo pipefail
-          az storage account network-rule add -g "${RG}" --account-name "${STORAGE}" \
-            --ip-address "${RUNNER_IP}" -o none 2>/dev/null || true
-          # Also ensure default action allows our whitelisted IP
+          # Ensure storage is accessible (Allow until Container Apps are in VNet)
           az storage account update -g "${RG}" -n "${STORAGE}" \
-            --default-action Deny --bypass AzureServices -o none 2>/dev/null || true
-          echo "Waiting for firewall rule to propagate..."
-          sleep 30
+            --default-action Allow -o none 2>/dev/null || true
+          sleep 5
 
       - name: Ensure blob containers
         run: |
@@ -490,6 +487,18 @@ jobs:
             echo "WARN: AcrPull not confirmed for ${NAME}, continuing anyway..."
           }
 
+          STORAGE_ID=$(az storage account show -g "${RG}" -n "${STORAGE}" --query id -o tsv)
+
+          ensure_all_roles () {
+            local NAME="$1"
+            ensure_identity "${NAME}"
+            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
+            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Delegator"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
+            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
+          }
+
           ensure_app () {
             local NAME="$1" INGRESS="$2" PORT="$3"
 
@@ -511,17 +520,10 @@ jobs:
               sleep 5
             fi
 
-            ensure_identity "${NAME}"
+            ensure_all_roles "${NAME}"
             ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
             wait_for_acr_pull "${NAME}"
             ensure_registry "${NAME}"
-
-            STORAGE_ID=$(az storage account show -g "${RG}" -n "${STORAGE}" --query id -o tsv)
-            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Data Contributor"
-            ensure_role "${NAME}" "${STORAGE_ID}" "Storage Blob Delegator"
-            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Receiver"
-            ensure_role "${NAME}" "${SB_ID}" "Azure Service Bus Data Sender"
-            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
 
             if [ "${INGRESS}" != "none" ]; then
               az containerapp ingress enable -g "${RG}" -n "${NAME}" \
@@ -583,8 +585,7 @@ jobs:
           deploy_python () {
             local NAME="$1" IMAGE="$2" MAX="${3:-30}"
             echo "Deploying ${NAME} → ${IMAGE}"
-            ensure_identity "${NAME}"
-            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
+            ensure_all_roles "${NAME}"
             set_kv_secrets "${NAME}" "${PYTHON_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}"
             sleep 10
@@ -594,8 +595,7 @@ jobs:
           deploy_webapi () {
             local NAME="$1" IMAGE="$2" MAX="${3:-30}"
             echo "Deploying ${NAME} → ${IMAGE}"
-            ensure_identity "${NAME}"
-            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
+            ensure_all_roles "${NAME}"
             set_kv_secrets "${NAME}" "${PYTHON_KV_SECRETS[@]}" "${WEBAPI_EXTRA_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${PYTHON_ENV_VARS[@]}" "${WEBAPI_EXTRA_ENV_VARS[@]}"
             sleep 10
@@ -605,8 +605,7 @@ jobs:
           deploy_shopify () {
             local NAME="$1" IMAGE="$2"
             echo "Deploying ${NAME} → ${IMAGE}"
-            ensure_identity "${NAME}"
-            ensure_role "${NAME}" "${KV_ID}" "Key Vault Secrets User"
+            ensure_all_roles "${NAME}"
             set_kv_secrets "${NAME}" "${SHOPIFY_KV_SECRETS[@]}"
             update_app "${NAME}" --image "${IMAGE}" --set-env-vars "${SHOPIFY_ENV_VARS[@]}"
             sleep 10
@@ -623,6 +622,7 @@ jobs:
             "DATABASE_URL=secretref:database-url"
             "STORAGE_ACCOUNT_NAME=${STORAGE}"
             "SERVICEBUS_NAMESPACE=${SB}"
+            "QUEUE_BACKEND=azure"
             "AML_ENDPOINT_URL=secretref:aml-endpoint-url"
             "AML_ENDPOINT_KEY=secretref:aml-endpoint-key"
             "BACKGROUND_REMOVAL_PROVIDER=${{ secrets.BACKGROUND_REMOVAL_PROVIDER || 'birefnet' }}"
@@ -686,15 +686,16 @@ jobs:
 
           echo "All deployments complete."
 
-      - name: Lock down Storage network
+      - name: Clean up Storage network rules
         if: always()
         run: |
           set -euo pipefail
-          echo "Removing runner IP and enforcing Storage network restrictions..."
+          echo "Removing runner IP from Storage firewall..."
           az storage account network-rule remove -g "${RG}" --account-name "${STORAGE}" \
             --ip-address "${RUNNER_IP}" -o none 2>/dev/null || true
-          az storage account update -g "${RG}" -n "${STORAGE}" \
-            --default-action Deny --bypass AzureServices -o none
+          # NOTE: Do NOT set default-action to Deny until Container Apps are
+          # inside the VNet (vnetContainerApps=true). Without VNet, apps access
+          # storage over public internet and would be blocked by Deny rules.
 
       - name: Print endpoints
         run: |
