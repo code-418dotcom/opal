@@ -17,6 +17,6 @@
     "postgresGeoRedundantBackup": { "value": "Disabled" },
     "postgresHighAvailability": { "value": "Disabled" },
     "vnetEnabled": { "value": true },
-    "vnetContainerApps": { "value": false }
+    "vnetContainerApps": { "value": true }
   }
 }
