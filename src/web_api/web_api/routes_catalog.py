@@ -280,8 +280,8 @@ async def _process_catalog_job(
                      catalog_job_id, cj["processed_count"], cj["failed_count"])
 
     except Exception as e:
-        LOG.error("Catalog job %s failed: %s", catalog_job_id, e)
-        update_catalog_job(catalog_job_id, {"status": "failed", "error_message": str(e)[:500]})
+        LOG.error("Catalog job %s failed: %s", catalog_job_id, e, exc_info=True)
+        update_catalog_job(catalog_job_id, {"status": "failed", "error_message": "Catalog processing failed unexpectedly"})
 
 
 async def _process_single_product(
@@ -415,10 +415,10 @@ async def _process_single_product(
             )
 
     except Exception as e:
-        LOG.error("Failed to process catalog product %s: %s", product_id, e)
+        LOG.error("Failed to process catalog product %s: %s", product_id, e, exc_info=True)
         update_catalog_job_product(product_entry["id"], {
             "status": "failed",
-            "error_message": str(e)[:500],
+            "error_message": "Product processing failed unexpectedly",
         })
         increment_catalog_job_counts(catalog_job_id, failed=1)
 

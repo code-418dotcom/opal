@@ -88,7 +88,8 @@ async def analyze_image(
             try:
                 image_bytes = download_file("raw", blob_path)
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Cannot download image: {e}")
+                LOG.error("Cannot download image for job_item %s: %s", body.job_item_id, e, exc_info=True)
+                raise HTTPException(status_code=400, detail="Cannot download image from storage")
         image_url = blob_path
     elif body.image_url:
         import httpx

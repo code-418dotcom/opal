@@ -366,8 +366,8 @@ async def push_original_images(
 
             results.append({"id": imp_id, "status": "success", "shopify_image_id": shopify_img["id"]})
         except Exception as e:
-            LOG.error("Push original failed for %s: %s", imp_id, e)
-            results.append({"id": imp_id, "status": "error", "error": str(e)})
+            LOG.error("Push original failed for %s: %s", imp_id, e, exc_info=True)
+            results.append({"id": imp_id, "status": "error", "error": "Failed to push image to store"})
 
     return {"results": results}
 
