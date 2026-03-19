@@ -70,9 +70,14 @@ async def get_current_user(
         check_rate_limit(user["user_id"])
         return user
 
-    # Path 3: No auth configured (dev mode)
+    # Path 3: No auth configured (local dev only)
     valid_keys = get_valid_api_keys()
     if not valid_keys and not settings.ENTRA_ISSUER:
+        if settings.ENV_NAME in ("production", "prod"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Auth not configured. Refusing anonymous access in production.",
+            )
         return {"user_id": "anonymous", "tenant_id": "default", "email": "", "token_balance": 999999}
 
     raise HTTPException(

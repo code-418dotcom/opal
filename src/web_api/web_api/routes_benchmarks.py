@@ -3,8 +3,10 @@
 Analyze product images for quality, compare against category averages,
 and generate improvement suggestions.
 """
+import ipaddress
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Form
 from pydantic import BaseModel
@@ -90,13 +92,29 @@ async def analyze_image(
         image_url = blob_path
     elif body.image_url:
         import httpx
+        import socket
+        parsed = urlparse(body.image_url)
+        if parsed.scheme not in ("https", "http"):
+            raise HTTPException(status_code=400, detail="Image URL must use HTTP(S)")
+        hostname = parsed.hostname or ""
+        blocked = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]"}
+        if hostname in blocked:
+            raise HTTPException(status_code=400, detail="Internal URLs not allowed")
         try:
-            with httpx.Client(timeout=30) as client:
+            addr = socket.getaddrinfo(hostname, None)[0][4][0]
+            if ipaddress.ip_address(addr).is_private:
+                raise HTTPException(status_code=400, detail="Internal URLs not allowed")
+        except (socket.gaierror, ValueError):
+            raise HTTPException(status_code=400, detail="Cannot resolve image URL hostname")
+        try:
+            with httpx.Client(timeout=30, follow_redirects=False) as client:
                 resp = client.get(body.image_url)
                 resp.raise_for_status()
                 image_bytes = resp.content
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Cannot fetch image: {e}")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=400, detail="Cannot fetch image from URL")
         image_url = body.image_url
     else:
         raise HTTPException(status_code=400, detail="Provide job_item_id or image_url")
@@ -120,7 +138,10 @@ async def analyze_upload(
     user: dict = Depends(get_current_user),
 ):
     """Analyze a directly uploaded product image."""
-    image_bytes = await file.read()
+    MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+    image_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
 

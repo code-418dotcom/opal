@@ -120,10 +120,11 @@ class TestSsrfProtection:
         })
         assert resp.status_code == 400
 
+    @patch("web_api.routes_jobs.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34",))])
     @patch("web_api.routes_jobs.create_job_item_records")
     @patch("web_api.routes_jobs.create_job_record")
     @patch("web_api.routes_jobs.debit_tokens")
-    def test_callback_url_allows_https(self, mock_debit, mock_job, mock_items, client):
+    def test_callback_url_allows_https(self, mock_debit, mock_job, mock_items, mock_dns, client):
         """Job creation accepts HTTPS callback URLs."""
         mock_debit.return_value = 99
         mock_job.return_value = {}
@@ -133,6 +134,15 @@ class TestSsrfProtection:
             "callback_url": "https://myapp.example.com/webhook",
         })
         assert resp.status_code == 200
+
+    @patch("web_api.routes_jobs.socket.getaddrinfo", return_value=[(None, None, None, None, ("10.0.0.5",))])
+    def test_callback_url_blocks_private_ip(self, mock_dns, client):
+        """Job creation rejects callback URLs that resolve to private IPs."""
+        resp = client.post("/v1/jobs", json={
+            "items": [{"filename": "test.jpg"}],
+            "callback_url": "https://evil.example.com/webhook",
+        })
+        assert resp.status_code == 400
 
 
 # ── Path Traversal Protection ───────────────────────────────────────

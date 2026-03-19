@@ -1,3 +1,5 @@
+import ipaddress
+import socket
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -58,8 +60,16 @@ def create_job(
         parsed = urlparse(body.callback_url)
         if parsed.scheme not in ("https", "http"):
             raise HTTPException(status_code=400, detail="Callback URL must use HTTP(S)")
-        if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]"):
+        hostname = parsed.hostname or ""
+        blocked = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]"}
+        if hostname in blocked:
             raise HTTPException(status_code=400, detail="Internal callback URLs not allowed")
+        try:
+            addr = socket.getaddrinfo(hostname, None)[0][4][0]
+            if ipaddress.ip_address(addr).is_private:
+                raise HTTPException(status_code=400, detail="Internal callback URLs not allowed")
+        except (socket.gaierror, ValueError):
+            raise HTTPException(status_code=400, detail="Cannot resolve callback URL hostname")
 
     # Validate brand profile exists (skip for backward-compat "default")
     if body.brand_profile_id != "default":

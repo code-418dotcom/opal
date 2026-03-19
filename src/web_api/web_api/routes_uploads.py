@@ -78,8 +78,11 @@ async def upload_direct(
     # Build storage path
     raw_path = build_raw_blob_path(tenant_id, job_id, item_id, file.filename or item["filename"])
 
-    # Read file content
-    file_content = await file.read()
+    # Read file content (50 MB limit)
+    MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+    file_content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(file_content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50 MB)")
 
     # Upload to storage
     storage_upload_file(
