@@ -668,6 +668,13 @@ jobs:
           BUILT_BILLING="${{ needs.build.outputs.billing_service }}"
           BUILT_SHOPIFY="${{ needs.build.outputs.shopify_app }}"
 
+          # Ensure apps exist (creates if missing, e.g., after CAE migration)
+          ensure_app "opal-web-api-${ENV_NAME}" external 8080
+          ensure_app "opal-billing-service-${ENV_NAME}" internal 8080
+          ensure_app "opal-pipeline-worker-${ENV_NAME}" none 0
+          ensure_app "opal-export-worker-${ENV_NAME}" none 0
+          ensure_app "opal-shopify-app-${ENV_NAME}" external 3000
+
           [ "${BUILT_WEB}" = "true" ] && \
             deploy_webapi "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
 
