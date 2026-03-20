@@ -407,9 +407,37 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy services
+      - name: Pre-register resource providers
         run: |
           set -euo pipefail
+          # Pre-register Microsoft.App to avoid Azure CLI bug in
+          # _register_resource_provider (Python 3.13 string format error)
+          # that triggers when auto-registration runs with an expired token.
+          az provider register --namespace Microsoft.App --wait || true
+          az provider register --namespace Microsoft.OperationalInsights --wait || true
+
+      - name: Deploy services
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+
+          # ── Inline OIDC token refresh ──
+          # Container app creation can take 20+ min each. OIDC tokens expire
+          # after ~60 min, so we refresh before each heavy operation.
+          refresh_az_login () {
+            echo "Refreshing Azure OIDC token..."
+            local TOKEN
+            TOKEN=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
+              | jq -r '.value')
+            az login --service-principal \
+              -u "${ARM_CLIENT_ID}" -t "${ARM_TENANT_ID}" \
+              --federated-token "${TOKEN}" >/dev/null
+            az account set -s "${ARM_SUBSCRIPTION_ID}" >/dev/null
+          }
 
           # ── Helper functions ──
 
@@ -701,12 +729,18 @@ jobs:
             fi
           }
 
+          refresh_az_login
           create_if_missing "opal-web-api-${ENV_NAME}" external 8080
+          refresh_az_login
           create_if_missing "opal-billing-service-${ENV_NAME}" internal 8080
+          refresh_az_login
           create_if_missing "opal-pipeline-worker-${ENV_NAME}" none 0
+          refresh_az_login
           create_if_missing "opal-export-worker-${ENV_NAME}" none 0
+          refresh_az_login
           create_if_missing "opal-shopify-app-${ENV_NAME}" external 3000
 
+          refresh_az_login
           [ "${BUILT_WEB}" = "true" ] && \
             deploy_webapi "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
 
