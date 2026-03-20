@@ -669,8 +669,10 @@ jobs:
           BUILT_SHOPIFY="${{ needs.build.outputs.shopify_app }}"
 
           # Create app if it doesn't exist (e.g., first deploy or CAE migration)
+          # Uses a public placeholder image first, then sets up identity/ACR/roles
+          # before the deploy functions swap to the real image.
           create_if_missing () {
-            local NAME="$1" IMAGE="$2" INGRESS="$3" PORT="$4"
+            local NAME="$1" INGRESS="$2" PORT="$3"
             if az containerapp show -g "${RG}" -n "${NAME}" >/dev/null 2>&1; then
               local STATE=$(az containerapp show -g "${RG}" -n "${NAME}" \
                 --query "properties.provisioningState" -o tsv 2>/dev/null || echo "Unknown")
@@ -679,27 +681,31 @@ jobs:
             fi
             if ! az containerapp show -g "${RG}" -n "${NAME}" >/dev/null 2>&1; then
               echo "Creating ${NAME} in ${CAE}..."
-              ensure_all_roles "${NAME}" 2>/dev/null || true
-              local CREATE_ARGS=(-g "${RG}" -n "${NAME}" --environment "${CAE}" --image "${IMAGE}" --min-replicas 1 --max-replicas 3)
+              local CREATE_ARGS=(-g "${RG}" -n "${NAME}" --environment "${CAE}")
+              CREATE_ARGS+=(--image "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest")
+              CREATE_ARGS+=(--min-replicas 1 --max-replicas 3 --system-assigned)
               if [ "${INGRESS}" != "none" ]; then
                 CREATE_ARGS+=(--ingress "${INGRESS}" --target-port "${PORT}")
               fi
-              az containerapp create "${CREATE_ARGS[@]}" --system-assigned -o none
+              az containerapp create "${CREATE_ARGS[@]}" -o none
               sleep 10
+              # Now identity exists — assign all roles including AcrPull
               ensure_all_roles "${NAME}"
               ensure_role "${NAME}" "${ACR_ID}" "AcrPull"
-              sleep 15
+              # Wait for AcrPull to propagate before setting registry
+              sleep 30
               az containerapp registry set -g "${RG}" -n "${NAME}" \
                 --server "${ACR_LOGIN}" --identity system -o none 2>/dev/null || true
               sleep 10
+              echo "Created ${NAME}"
             fi
           }
 
-          create_if_missing "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}" external 8080
-          create_if_missing "opal-billing-service-${ENV_NAME}" "${ACR_LOGIN}/opal/billing-service:${IMAGE_TAG}" internal 8080
-          create_if_missing "opal-pipeline-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/pipeline-worker:${IMAGE_TAG}" none 0
-          create_if_missing "opal-export-worker-${ENV_NAME}" "${ACR_LOGIN}/opal/export-worker:${IMAGE_TAG}" none 0
-          create_if_missing "opal-shopify-app-${ENV_NAME}" "${ACR_LOGIN}/opal/shopify-app:${IMAGE_TAG}" external 3000
+          create_if_missing "opal-web-api-${ENV_NAME}" external 8080
+          create_if_missing "opal-billing-service-${ENV_NAME}" internal 8080
+          create_if_missing "opal-pipeline-worker-${ENV_NAME}" none 0
+          create_if_missing "opal-export-worker-${ENV_NAME}" none 0
+          create_if_missing "opal-shopify-app-${ENV_NAME}" external 3000
 
           [ "${BUILT_WEB}" = "true" ] && \
             deploy_webapi "opal-web-api-${ENV_NAME}" "${ACR_LOGIN}/opal/web-api:${IMAGE_TAG}"
